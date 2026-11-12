@@ -98,33 +98,7 @@ export async function verifyOciAccess(
   transport: Transport = fetch,
 ) {
   parseOciConfig(config);
-  const key = createPrivateKey(
-    passphrase === undefined ? pem : { key: pem, passphrase },
-  );
-  if (
-    key.asymmetricKeyType !== "rsa" ||
-    (key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
-  ) {
-    throw new OciSetupError(
-      "An RSA signing key of at least 2048 bits is required",
-    );
-  }
-  // MD5 here is OCI's key identifier, not a cryptographic signature or password hash.
-  const fingerprint = createHash("md5")
-    .update(createPublicKey(key).export({ type: "spki", format: "der" }))
-    .digest("hex")
-    .match(/../g)
-    ?.join(":");
-  if (fingerprint !== config.fingerprint)
-    throw new OciSetupError("Signing key fingerprint mismatch");
-  const provider = new SimpleAuthenticationDetailsProvider(
-    config.tenancyOcid,
-    config.userOcid,
-    config.fingerprint,
-    key.export({ type: "pkcs8", format: "pem" }).toString(),
-    null,
-  );
-  const signer = new DefaultRequestSigner(provider);
+  const signer = createOciSigner(config, pem, passphrase);
   let requestsDispatched = 0;
   async function request(
     operation: string,
@@ -224,4 +198,38 @@ export async function verifyOciAccess(
       "Server-side credential deployment and administrative cleanup",
     ],
   };
+}
+
+export function createOciSigner(
+  config: Pick<OciConfig, "tenancyOcid" | "userOcid" | "fingerprint">,
+  pem: string,
+  passphrase?: string,
+) {
+  const key = createPrivateKey(
+    passphrase === undefined ? pem : { key: pem, passphrase },
+  );
+  if (
+    key.asymmetricKeyType !== "rsa" ||
+    (key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
+  ) {
+    throw new OciSetupError(
+      "An RSA signing key of at least 2048 bits is required",
+    );
+  }
+  // MD5 here is OCI's key identifier, not a cryptographic signature or password hash.
+  const fingerprint = createHash("md5")
+    .update(createPublicKey(key).export({ type: "spki", format: "der" }))
+    .digest("hex")
+    .match(/../g)
+    ?.join(":");
+  if (fingerprint !== config.fingerprint)
+    throw new OciSetupError("Signing key fingerprint mismatch");
+  const provider = new SimpleAuthenticationDetailsProvider(
+    config.tenancyOcid,
+    config.userOcid,
+    config.fingerprint,
+    key.export({ type: "pkcs8", format: "pem" }).toString(),
+    null,
+  );
+  return new DefaultRequestSigner(provider);
 }

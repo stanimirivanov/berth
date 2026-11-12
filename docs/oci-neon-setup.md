@@ -27,7 +27,9 @@ Neon does not supply a durable job queue through Functions. A successful request
 ### OCI
 
 Follow the step-by-step [restricted OCI identity guide](oci-bootstrap.md) for
-Console setup, offline policy generation and bounded read-only verification.
+automated administrator setup in the existing Default domain, offline policy
+generation and bounded read-only verification. The numbered items below describe
+the resulting resources; the administrator command performs their creation.
 
 1. Record whether the tenancy is Always Free-only, trial, or paid, its **home region**, and current Object Storage usage across the tenancy. Verify remaining storage and monthly request allowance. Account status changes allowance interpretation; do not infer it from a single bucket.
 2. Create an empty dedicated compartment `berth-trial`. Use it only for this disposable trial. The runtime does not need permission to create compartments, users, groups, or policies.

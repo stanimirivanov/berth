@@ -21,7 +21,7 @@ API keys, private keys and private credential files out of Git and GitHub.
 | No alternate injected owner credentials | Pending later deployment verification |
 | Schedules disabled | Pending owner check; script creates none |
 | Dated database/Functions/network allowance headroom | Pending owner check |
-| OCI identity, policy, home-region eligibility and aggregate headroom | Pending owner Console setup and read-only verifier from #18 |
+| OCI identity, policy, home-region eligibility and aggregate headroom | Pending owner-run administrator setup, effective-IAM review and read-only verifier from #18 |
 | Administrative cleanup ownership | Account owner; completion pending trial |
 
 The script's redacted result can establish database permissions only. Do not

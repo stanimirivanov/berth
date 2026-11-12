@@ -1,124 +1,156 @@
 # Restricted OCI trial identity — issue #18
 
-Use the OCI Console for administrator actions, then run the local verifier as the
-dedicated trial identity. The script never receives an administrator credential,
-changes IAM, creates a bucket/object, or enables a schedule. Live OCI readiness
-remains pending until you complete these steps and record the redacted evidence.
+The administrator setup command creates the dedicated compartment, API-only user,
+group, public-key registration and scoped policy in your **existing Default
+identity domain**. It does not create a domain, bucket, object or schedule.
+The separate verifier uses only the generated trial identity.
 
 Neon database apply/verify succeeded according to the owner's supplied result at
-2026-11-12T17:04:05.362Z. OCI is independent of Neon's Ohio region: select the
-**OCI tenancy's home region**. The current verifier supports commercial `oc1`
-regions known to the pinned OCI SDK, and rejects other realms/regions.
+2026-11-12T17:04:05.362Z. OCI is independent of Neon's Ohio region: use the
+**OCI tenancy's home region**. Commercial `oc1` regions known to the pinned SDK
+are supported. Legacy IAM tenancies and other realms are outside this command.
+Live OCI setup remains pending: automated tests use fake responses.
 
-## 1. Check the account and reserve the compartment
+## 1. Prepare the administrator credential and account checks
 
-As the account owner, record privately:
+Use your existing account-owner identity. It needs permission to read tenancy and
+domain details, create a compartment and policy at the tenancy root, and administer
+users, groups, capabilities and API keys in Default. The tenancy administrator
+with the appropriate Identity Domain Administrator access is the intended setup
+operator. Domain administration alone does not grant root compartment/policy
+creation. Do not give these permissions to the trial executor or automatically
+broaden a permission when an API rejects the request.
 
-- Whether the tenancy is Always Free-only, in a promotional trial, or paid.
-- The home region shown in tenancy details, and Object Storage namespace.
-- Current aggregate Object Storage storage/request consumption and remaining
-  Always Free allowance across the tenancy, with a UTC timestamp. A trial credit
-  balance does not establish ongoing free eligibility. Include other applications'
-  usage and recheck before the live trial.
+If you do not already have an administrator API signing key, create one in your
+own user's Console **API keys → Add API key** flow. Save its private PEM outside
+the repository and record its fingerprint and your **user OCID**. This initial
+credential must be established through your existing authenticated account; the
+script cannot create its own administrator authority. Never paste keys in chat,
+GitHub, command-line arguments or frontend configuration. Revoke a temporary
+administrator key after setup and any recovery are complete.
+
+In **Identity & Security → Domains → Default**, copy the **domain OCID**. The
+script retrieves its URL using signed IAM requests; no custom endpoint or ambient
+`~/.oci/config` fallback is accepted. It requires an active domain under the root.
+
+As owner, also check and record privately:
+
+- Account type: Always Free-only, promotional trial, or paid. Trial credits do not
+  establish ongoing free eligibility; do not upgrade a plan for this setup.
+- Actual tenancy home region and dated aggregate Object Storage storage/request
+  allowance headroom, including other applications' consumption.
 - Separate Monitoring and Neon allowance headroom. Compartment metrics are not
-  tenancy-wide billing evidence, and neither this policy nor the verifier caps
-  spending.
+  tenancy-wide billing evidence. The script and IAM policy are not spending caps.
 
-Under **Identity & Security → Compartments**, create `berth-trial` under the
-tenancy root, with a description identifying this disposable trial. Save its OCID
-privately. Keep it empty and reserved against concurrent owner writes. Do not put
-existing resources in it, create a bucket yet, or upgrade the tenancy/plan.
+## 2. Create the private administrator configuration
 
-## 2. Create a dedicated user and group
-
-In the intended existing identity domain (commonly Default), create:
-
-- User `berth-trial-executor`, for API access only.
-- Group `berth-trial-executor`, containing that user.
-
-Use the Console's Users/Groups pages for the selected domain; legacy tenancies
-may show those pages directly under Identity. Record the **user OCID** and
-**group OCID**, not the domain OCID or display names. Do not create a paid identity
-domain for the trial.
-
-Do not add this user to Administrators or domain-administration groups. Inspect
-all memberships, including automatically assigned groups such as All Domain
-Users. Review applicable tenancy/ancestor/compartment policies and grants to
-`any-user`: OCI policies are additive. The narrow policy below cannot cancel a
-broader grant. If the identity has broader effective access, resolve that before
-using it. Do not remove shared account policies indiscriminately.
-
-The executor needs no IAM user/group/policy administration, compartment creation,
-billing access, or tenancy-wide resource enumeration. The account owner performs
-setup, reviews aggregate allowance usage, and owns final credential revocation.
-
-## 3. Generate and register a dedicated signing key
-
-Keep secrets outside the checkout, using the same private directory as Neon if
-desired. This Linux/macOS example refuses to overwrite existing key files:
+Use an owner-only directory outside the checkout. Commands assume Linux/macOS
+and the pinned Node/pnpm toolchain:
 
 ```bash
 BERTH_PRIVATE_DIR="$HOME/.config/berth-trial"
 mkdir -p "$BERTH_PRIVATE_DIR"
 chmod 700 "$BERTH_PRIVATE_DIR"
-(
-  set -euC
-  umask 077
-  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 \
-    > "$BERTH_PRIVATE_DIR/oci-trial.pem"
-  openssl pkey -in "$BERTH_PRIVATE_DIR/oci-trial.pem" -pubout \
-    > "$BERTH_PRIVATE_DIR/oci-trial-public.pem"
-)
 ```
 
-In the dedicated user's **API keys** page, choose **Add API key** and upload
-`oci-trial-public.pem` only. Record the displayed fingerprint. The Console's
-configuration preview identifies the user and tenancy OCIDs; confirm those are
-the dedicated user and intended tenancy. Its selected region may differ from the
-home region, so check it explicitly.
-
-The private key stays local until the later server-side deployment step. Never
-paste it into chat, GitHub, shell arguments or frontend configuration. An encrypted
-PEM is also supported: keep its passphrase in a separate owner-only file and use
-the optional `passphraseFile` configuration entry. Do not put the passphrase in
-JSON itself.
-
-## 4. Prepare the private configuration and policy
-
-Create `$BERTH_PRIVATE_DIR/oci-trial.json` with your editor. Replace the example
-values privately; all paths must be absolute. No endpoint override or ambient
-`~/.oci/config` fallback is supported.
+Using your editor, create `$BERTH_PRIVATE_DIR/oci-admin.json`. Replace these
+placeholders privately. `userOcid` and `fingerprint` identify **your administrator**;
+the script will generate different trial credentials. Paths must be absolute.
 
 ```json
 {
   "tenancyOcid": "ocid1.tenancy.oc1..REPLACE",
   "userOcid": "ocid1.user.oc1..REPLACE",
-  "groupOcid": "ocid1.group.oc1..REPLACE",
-  "compartmentOcid": "ocid1.compartment.oc1..REPLACE",
+  "domainOcid": "ocid1.domain.oc1..REPLACE",
   "region": "eu-frankfurt-1",
-  "homeRegion": "eu-frankfurt-1",
-  "namespace": "REPLACE",
-  "fingerprint": "REPLACE_WITH_CONSOLE_FINGERPRINT",
-  "privateKeyFile": "/absolute/private/directory/oci-trial.pem"
+  "fingerprint": "REPLACE_WITH_ADMIN_KEY_FINGERPRINT",
+  "privateKeyFile": "/absolute/private/directory/oci-admin.pem",
+  "name": "berth-trial"
 }
 ```
 
-Frankfurt above is an example, not a requirement. Set **both** region fields to
-your tenancy's actual home region. The script checks consistency, not the truth
-of that owner-supplied home-region value. For an encrypted key, add
-`"passphraseFile": "/absolute/private/directory/passphrase"`.
+Frankfurt is an example; choose your actual home region. For an encrypted admin
+PEM, add `"passphraseFile": "/absolute/private/directory/admin-passphrase"`.
+The passphrase goes in that file, never in JSON. Protect all input files with
+`chmod 600`; symlink files, oversized files and files inside the checkout are
+rejected. The output parent must be owned by you, mode 700, outside the repository
+and have no symlinks in its path.
 
 ```bash
-chmod 600 "$BERTH_PRIVATE_DIR/oci-trial.json" "$BERTH_PRIVATE_DIR/oci-trial.pem"
-pnpm run setup:oci --config "$BERTH_PRIVATE_DIR/oci-trial.json" --mode plan
+chmod 600 "$BERTH_PRIVATE_DIR/oci-admin.json" "$BERTH_PRIVATE_DIR/oci-admin.pem"
+pnpm run setup:oci-admin --config "$BERTH_PRIVATE_DIR/oci-admin.json" --mode plan
 ```
 
-Plan is offline and does not read the key. Its three policy statements contain
-group/compartment OCIDs; keep that output private. As administrator, open
-**Identity & Security → Policies**, select the tenancy root, and create policy
-`berth-trial-objectstorage` using those statements in the manual editor. Every
-grant targets only the dedicated compartment, even though the policy is stored
-at the root. No additional `manage object-family` or tenancy-wide grant is needed.
+Plan is offline: it validates configuration and lists the intended operations,
+without reading the key or checking actual administrator access. It uses the name
+`berth-trial` for the compartment, `berth-trial-executor` for user/group, and
+`berth-trial-objectstorage` for the policy. Change `name` if these already exist;
+never adopt or overwrite existing resources. Do not run concurrent setups.
+
+## 3. Apply once and retain the recovery journal
+
+The output directory must **not yet exist**:
+
+```bash
+BERTH_OCI_RUN="$BERTH_PRIVATE_DIR/oci-bootstrap-01"
+pnpm run setup:oci-admin --config "$BERTH_PRIVATE_DIR/oci-admin.json" \
+  --output-dir "$BERTH_OCI_RUN" --mode apply
+```
+
+Apply checks the admin RSA key/fingerprint, verifies the actual tenancy home
+region, resolves the existing domain URL and reads the storage namespace. It then
+issues exactly five writes: compartment, service user, group including membership,
+public API key, and root policy. The user has API-key capability only; other
+credential capabilities and Console access are disabled and must be confirmed in
+the response. No password/email, domain administrator role or broad IAM policy is
+assigned. Requests are signed with the existing SDK, have 15-second timeouts,
+reject redirects and never retry. The happy path is eight requests, including one
+Object Storage namespace request. Allow for those requests in account headroom.
+
+The fresh directory contains owner-only files:
+
+- `trial.pem`: generated RSA 3072 private key, unencrypted and protected by mode 600.
+- `trial-public.pem`: the corresponding public key registered with the new user.
+- `journal.jsonl`: durable intent-before-dispatch records and returned identifiers.
+- `oci-trial.json`: generated runtime configuration after all five writes succeed.
+  It references the trial key and contains no administrator credential.
+
+Treat the entire directory as private. Keep the key and journal until the trial
+identity is revoked and all setup resources are reconciled. The journal contains
+identifiers, public-key material and policy text, not private keys/signatures.
+
+**If apply fails or is interrupted, do not retry in a new directory.** An intent
+without a confirmed result may have succeeded remotely. Even a confirmed HTTP
+response may fail subsequent response checks. Inspect the exact recorded names,
+SCIM IDs, OCIDs and fingerprint in the Console, including Audit events, and wait
+for propagation/late completion. Resolve every outstanding intent before further
+writes. Do not infer absence from one immediate listing. Existing output directories
+are deliberately rejected; there is no automatic resume, retry, adoption or rollback.
+
+The owner can finish a partial setup manually using the recorded resources/key
+and the three policy statements below, then construct the runtime configuration
+using the fields in `scripts/oci-access.ts` (`tenancyOcid`, `userOcid`, `groupOcid`,
+`compartmentOcid`, `region`, `homeRegion`, `namespace`, `fingerprint`,
+`privateKeyFile`). Alternatively, remove only confirmed dedicated setup resources
+in reverse dependency order, verify uncertain operations are settled, and start a
+fresh run. Never delete an existing shared identity/policy or the recovery files
+while ownership/outcomes remain unresolved. IAM setup recovery is an owner action;
+this is separate from the later hosted bucket/object teardown trial.
+
+## 4. Review effective access
+
+Keep the new compartment empty and reserved against concurrent owner writes.
+Inspect all executor memberships, including automatic groups such as All Domain
+Users, and tenancy/ancestor/compartment policies including grants to `any-user`.
+**OCI permissions are additive**: the narrow policy cannot cancel broader grants.
+Resolve excessive effective access before using the identity; do not remove shared
+account policies indiscriminately. This owner review is not automated.
+
+You can inspect the exact generated policy without reading the signing key:
+
+```bash
+pnpm run setup:oci --config "$BERTH_OCI_RUN/oci-trial.json" --mode plan
+```
 
 The approved permissions are:
 
@@ -139,7 +171,7 @@ resources. Inspect the installed policy and all effective grants as owner.
 After IAM changes have propagated:
 
 ```bash
-pnpm run setup:oci --config "$BERTH_PRIVATE_DIR/oci-trial.json" --mode verify
+pnpm run setup:oci --config "$BERTH_OCI_RUN/oci-trial.json" --mode verify
 ```
 
 The verifier first checks file protections, RSA key strength (at least 2048 bits)
@@ -188,3 +220,8 @@ Sources: [OCI API signing keys](https://docs.oracle.com/en-us/iaas/Content/API/C
 [Monitoring permissions](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/monitoringpolicyreference.htm),
 [Always Free eligibility](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm),
 [Monitoring query parameters](https://docs.oracle.com/en-us/iaas/tools/python/latest/api/monitoring/models/oci.monitoring.models.SummarizeMetricsDataDetails.html).
+
+Administrator API sources:
+[Identity Domains request-signature authorization](https://docs.oracle.com/en-us/iaas/Content/Identity/api-getstarted/api-managing-authorization.htm),
+[domain user capabilities](https://docs.oracle.com/en-us/iaas/tools/python/latest/api/identity_domains/models/oci.identity_domains.models.ExtensionCapabilitiesUser.html),
+[API-key schema and user linkage](https://docs.oracle.com/en-us/iaas/tools/terraform-provider-oci/latest/docs/r/identity_domains_api_key.html).
