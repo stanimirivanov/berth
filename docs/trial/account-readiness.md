@@ -1,26 +1,33 @@
-# Trial account readiness — issue #3
+# Trial account readiness — issues #3 and #18
 
-Status: **incomplete**. The owner reports a Neon project created in AWS Ohio
-(`aws-us-east-2`). No live setup script or permission checks have been run by the
-agent. The owner chose to run the Neon-only script locally.
+Status: **incomplete**. The owner reports successful Neon apply and verify in AWS
+Ohio (`aws-us-east-2`), with `databasePermissions: passed` at
+**2026-11-12T17:04:05.362Z**. The supplied redacted result confirms project/region,
+one branch/endpoint, scale-to-zero and database permission verification. This is
+owner-reported live evidence, not an independent agent run. PR #17 is merged;
+OCI preparation continues in #18.
 
 Record redacted outcomes here after verification; keep IDs, connection strings,
 API keys, private keys and private credential files out of Git and GitHub.
 
 | Check | Evidence/status |
 | --- | --- |
-| Neon project region | Ohio, owner-reported; API verification pending |
-| Free plan, no promotional-credit dependency | Pending owner console check |
-| One branch/endpoint, scale-to-zero | Pending script run |
+| Neon project region | Ohio; verified by owner-run script |
+| Free plan, no promotional-credit dependency | Owner-attested in successful script run; independent billing verification pending |
+| One branch/endpoint, scale-to-zero | Verified by owner-run script |
 | Functions and scheduled-trigger availability | Pending console/deployment check |
-| Restricted SQL role and owner-held schema | Pending script apply |
-| Actual runtime login, CRUD and denied DDL/admin | Pending script verification |
+| Restricted SQL role and owner-held schema | Applied and verified by owner-run script |
+| Actual runtime login, CRUD and denied DDL/admin | Passed in owner-provided result at timestamp above |
 | No alternate injected owner credentials | Pending later deployment verification |
 | Schedules disabled | Pending owner check; script creates none |
 | Dated database/Functions/network allowance headroom | Pending owner check |
-| OCI identity, policy, home-region eligibility and aggregate headroom | Pending separate OCI setup |
+| OCI identity, policy, home-region eligibility and aggregate headroom | Pending owner-run administrator setup, effective-IAM review and read-only verifier from #18 |
 | Administrative cleanup ownership | Account owner; completion pending trial |
 
 The script's redacted result can establish database permissions only. Do not
 infer complete issue acceptance from a successful command. Recheck allowance
 headroom before live cloud writes. See [bootstrap guide](../neon-bootstrap.md).
+
+Use the [OCI setup guide](../oci-bootstrap.md) next. OCI verification time,
+read-only result, effective-IAM review and allowance attestation remain pending.
+No bucket/object writes have been performed or claimed by this change.

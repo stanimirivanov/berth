@@ -1,6 +1,6 @@
 # OCI and Neon trial setup
 
-Status: Neon project created in Ohio (owner-reported); remaining setup and live verification pending. Sources checked 2026-11-12.
+Status: Neon database apply/verify passed at 2026-11-12T17:04:05.362Z (owner-reported); OCI setup and hosted credential verification remain pending. Sources checked 2026-11-12.
 
 ## Account owner actions
 
@@ -25,6 +25,11 @@ Configure a 15-minute trial trigger and a deployment-level four-hour expiry. Kee
 Neon does not supply a durable job queue through Functions. A successful request is insufficient: the trial must persist work and recover through a scheduled hosted invocation after the caller disconnects. Check trigger delivery, timeout and retry semantics before implementation.
 
 ### OCI
+
+Follow the step-by-step [restricted OCI identity guide](oci-bootstrap.md) for
+automated administrator setup in the existing Default domain, offline policy
+generation and bounded read-only verification. The numbered items below describe
+the resulting resources; the administrator command performs their creation.
 
 1. Record whether the tenancy is Always Free-only, trial, or paid, its **home region**, and current Object Storage usage across the tenancy. Verify remaining storage and monthly request allowance. Account status changes allowance interpretation; do not infer it from a single bucket.
 2. Create an empty dedicated compartment `berth-trial`. Use it only for this disposable trial. The runtime does not need permission to create compartments, users, groups, or policies.
