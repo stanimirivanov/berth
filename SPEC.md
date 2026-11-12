@@ -62,7 +62,7 @@ The account owner subsequently disables/deletes the Neon trigger, removes deploy
 
 ## Structure, commands and code style
 
-The repository has an offline Node 24 toolchain; it has no deployed application. `tests/` contains runtime smoke tests, and `docs/` contains setup and audit notes. Future implementation paths are `src/trial/` and `src/providers/oci/`. Exact package pins and working commands are documented in README.md: `npm ci`, `npm run build`, `npm run typecheck`, `npm run lint`, and `npm run test:smoke`. No deployment command exists yet. Document verification command: `git diff --check`.
+The repository has an offline Node 24 toolchain; it has no deployed application. `tests/` contains runtime smoke tests, and `docs/` contains setup and audit notes. Future implementation paths are `src/trial/` and `src/providers/oci/`. Exact package pins and working commands are documented in README.md: `pnpm install --frozen-lockfile`, `pnpm run build`, `pnpm run typecheck`, `pnpm run lint`, and `pnpm run test:smoke`. No deployment command exists yet. Document verification command: `git diff --check`.
 
 Use strict TypeScript and explicit Effect dependencies, typed failures and injected credentials. Keep identity data separate from authentication, for example:
 

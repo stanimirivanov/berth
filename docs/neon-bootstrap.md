@@ -7,7 +7,7 @@ owner runs the script and completes the console/deployment checks below.
 
 ## Prerequisites
 
-- Use the pinned Node/npm versions from `.nvmrc` and `package.json`, then `npm ci`.
+- Use the pinned Node/pnpm versions from `.nvmrc` and `package.json`, then `pnpm install --frozen-lockfile`.
 - Run commands from the berth repository root on Linux/macOS.
 - Confirm **Free**, current allowance headroom, and Functions availability in the
   Neon Console. `--confirm-free-plan` records your attestation; the script cannot
@@ -64,7 +64,7 @@ BERTH_PROJECT_ID='your-project-id'
 BERTH_BRANCH_ID='br-your-branch-id'
 BERTH_PRIVATE_DIR="$HOME/.config/berth-trial"
 
-npm run setup:neon -- \
+pnpm run setup:neon \
   --project "$BERTH_PROJECT_ID" --branch "$BERTH_BRANCH_ID" \
   --region aws-us-east-2 \
   --api-key-file "$BERTH_PRIVATE_DIR/neon-api-key" \
@@ -77,7 +77,7 @@ fetch a database credential or connect to Postgres. Database freshness is checke
 transactionally during `apply`.
 
 ```bash
-npm run setup:neon -- \
+pnpm run setup:neon \
   --project "$BERTH_PROJECT_ID" --branch "$BERTH_BRANCH_ID" \
   --region aws-us-east-2 \
   --api-key-file "$BERTH_PRIVATE_DIR/neon-api-key" \
@@ -112,7 +112,7 @@ the same direct endpoint, suitable for the small trial; pooling is a later
 deployment choice. Values are never printed.
 
 ```bash
-npm run setup:neon -- \
+pnpm run setup:neon \
   --project "$BERTH_PROJECT_ID" --branch "$BERTH_BRANCH_ID" \
   --region aws-us-east-2 \
   --api-key-file "$BERTH_PRIVATE_DIR/neon-api-key" \
@@ -158,13 +158,13 @@ started. This is not a spending cap.
 
 ## Local verification
 
-`npm test` runs offline validation and API-boundary tests; `npm run lint` and
-`npm run typecheck` cover the script. The explicit `test:setup-db` command needs
+`pnpm test` runs offline validation and API-boundary tests; `pnpm run lint` and
+`pnpm run typecheck` cover the script. The explicit `test:setup-db` command needs
 a fresh disposable local PostgreSQL instance bound to loopback, database
 `neondb`, user `postgres`, and the test-only password `berth-test-only`:
 
 ```bash
-BERTH_TEST_POSTGRES_PORT=your_local_port npm run test:setup-db
+BERTH_TEST_POSTGRES_PORT=your_local_port pnpm run test:setup-db
 ```
 
 The integration test creates a non-superuser owner, performs bootstrap and denial

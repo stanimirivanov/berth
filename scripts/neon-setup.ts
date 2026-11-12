@@ -151,7 +151,7 @@ export async function runSetup(args: string[]): Promise<void> {
   });
   if (values.help) {
     console.log(
-      "Usage: npm run setup:neon -- --project ID --branch br-ID --api-key-file /private/key --confirm-free-plan [--mode plan|apply|verify] [--secrets-dir /private/output] [--region aws-us-east-2] [--database neondb] [--owner neondb_owner] [--role berth_runtime] [--schema berth_trial]",
+      "Usage: pnpm run setup:neon --project ID --branch br-ID --api-key-file /private/key --confirm-free-plan [--mode plan|apply|verify] [--secrets-dir /private/output] [--region aws-us-east-2] [--database neondb] [--owner neondb_owner] [--role berth_runtime] [--schema berth_trial]",
     );
     return;
   }
