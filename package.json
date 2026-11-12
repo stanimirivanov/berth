@@ -1,0 +1,35 @@
+{
+  "name": "berth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": "24.22.3",
+    "npm": "11.19.1"
+  },
+  "packageManager": "npm@11.19.1",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check tests package.json tsconfig.json biome.json",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "test:smoke": "npm run build && node --test dist/tests/runtime-smoke.test.js",
+    "neon": "neon"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.1.4",
+    "alchemy": "2.0.0-beta.86",
+    "effect": "4.1.4",
+    "oci-common": "2.146.0",
+    "oci-objectstorage": "2.146.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@types/node": "24.19.2",
+    "@types/node-fetch": "2.6.13",
+    "@types/react": "19.3.0",
+    "neon": "9.4.0",
+    "typescript": "7.0.2"
+  }
+}
