@@ -3,7 +3,9 @@
 A planned single-user hosted application for provisioning and monitoring cloud
 resources within free-tier allowances. The first slice is an OCI Object Storage
 trial on Neon Free. This repository provides the trial toolchain and an opt-in
-Neon database bootstrap; it has no deployed application or live cloud validation.
+Neon database bootstrap plus OCI policy/read-only verification tooling. Neon
+database permissions have owner-reported live verification; hosted execution and
+OCI live readiness remain pending.
 
 ## Local toolchain
 
@@ -36,6 +38,8 @@ credentials are needed for installation, compilation or tests.
 | `pnpm test` | Build and run offline tests with Node's built-in test runner |
 | `pnpm run test:smoke` | Build and run only the runtime compatibility smoke tests |
 | `pnpm run neon --version` | Inspect the pinned local Neon CLI without logging in |
+| `pnpm run setup:oci --help` | Show offline OCI policy generation and read-only verification commands |
+| `pnpm run test:oci-setup` | Run focused offline OCI setup tests |
 | `pnpm run setup:neon --help` | Show the opt-in Neon setup command |
 | `pnpm run test:setup-db` | Test real permissions in an explicitly configured disposable local PostgreSQL database |
 
@@ -68,6 +72,7 @@ See [dependency audit notes](docs/toolchain-audit.md) for current CLI advisories
 
 - [Approved trial specification](SPEC.md)
 - [Account setup and permissions](docs/oci-neon-setup.md)
+- [Restricted OCI identity setup](docs/oci-bootstrap.md)
 - [Implementation plan and GitHub issue index](tasks/plan.md)
 - [Issue and PR workflow](AGENTS.md)
 

@@ -1,6 +1,6 @@
 # OCI Object Storage trial implementation plan
 
-Specification approved by the owner on 2026-11-12. This plan implements only the OCI Object Storage feasibility slice in berth. Implementation and live verification have not started.
+Specification approved by the owner on 2026-11-12. This plan implements only the OCI Object Storage feasibility slice in berth. The toolchain and Neon setup tooling are merged; the owner reports successful Neon database apply/verify. Hosted execution and OCI live verification remain pending.
 
 ## Task tracker
 
@@ -20,6 +20,7 @@ GitHub issues are authoritative for task status, acceptance criteria and verific
 |---|---|---|
 | [#2](https://github.com/stanimirivanov/berth/issues/2) | Establish the pinned Node 24 trial toolchain | None |
 | [#3](https://github.com/stanimirivanov/berth/issues/3) | Prepare Neon Free and the restricted OCI trial identity | None |
+| [#18](https://github.com/stanimirivanov/berth/issues/18) | Complete restricted OCI trial identity setup tooling (remaining work after #3 closed) | #2, merged #17; existing OCI tenancy |
 | [#4](https://github.com/stanimirivanov/berth/issues/4) | Prove authenticated Alchemy execution in Neon Functions | [#2](https://github.com/stanimirivanov/berth/issues/2), [#3](https://github.com/stanimirivanov/berth/issues/3) |
 | [#5](https://github.com/stanimirivanov/berth/issues/5) | Validate a free durable Alchemy state backend | [#4](https://github.com/stanimirivanov/berth/issues/4) |
 | [#6](https://github.com/stanimirivanov/berth/issues/6) | Checkpoint: decide whether the Neon and Alchemy trial is feasible | [#5](https://github.com/stanimirivanov/berth/issues/5) |
@@ -63,4 +64,7 @@ The approved trial limits remain: one bucket and one 1 MiB object; three attempt
 
 ## Repository documentation
 
-The approved SPEC.md and docs/oci-neon-setup.md remain local/uncommitted along with this plan. The tracker contains reviewable snapshots; publishing repository documentation is not part of issue creation. No implementation code, account secrets or cloud resource changes were made during planning.
+The approved specification, setup guides and this plan are published in the repository.
+The tracker retains the original planning snapshots. Use docs/trial/account-readiness.md
+for current redacted evidence; a merged tooling PR or closed issue does not establish
+live account readiness.
