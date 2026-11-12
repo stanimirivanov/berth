@@ -1,0 +1,26 @@
+engineStrict: true
+saveExact: true
+ignoreScripts: true
+# Preserve the already-reviewed npm graph where import chose older patch versions.
+overrides:
+  graceful-fs: 4.2.12
+  tar: 7.5.23
+# Exact versions retained from the pre-migration lockfile; no new package exceptions.
+minimumReleaseAgeStrict: true
+minimumReleaseAgeExclude:
+  - '@alchemy.run/node-utils@2.0.0-beta.86'
+  - '@biomejs/biome@2.6.7'
+  - '@biomejs/cli-android-arm64@2.6.7'
+  - '@biomejs/cli-android-x64@2.6.7'
+  - '@biomejs/cli-darwin-arm64@2.6.7'
+  - '@biomejs/cli-darwin-x64@2.6.7'
+  - '@biomejs/cli-linux-arm64-musl@2.6.7'
+  - '@biomejs/cli-linux-arm64@2.6.7'
+  - '@biomejs/cli-linux-x64-musl@2.6.7'
+  - '@biomejs/cli-linux-x64@2.6.7'
+  - '@biomejs/cli-win32-arm64@2.6.7'
+  - '@biomejs/cli-win32-x64@2.6.7'
+  - alchemy@2.0.0-beta.86
+  - graceful-fs@4.2.12
+  - neon@9.4.0
+  - tar@7.5.23

@@ -14,3 +14,4 @@ coverage/
 .alchemy/
 *.tsbuildinfo
 npm-debug.log*
+pnpm-debug.log*

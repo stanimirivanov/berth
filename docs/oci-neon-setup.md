@@ -1,12 +1,18 @@
 # OCI and Neon trial setup
 
-Status: preparation only; no accounts configured or live operations executed. Sources checked 2026-11-12.
+Status: Neon project created in Ohio (owner-reported); remaining setup and live verification pending. Sources checked 2026-11-12.
 
 ## Account owner actions
 
 ### Neon
 
-1. Create a Neon account and a project named `berth-trial` on the **Free** plan. Use AWS Frankfurt (`aws-eu-central-1`), currently a Functions-supported region. Confirm Functions and scheduled Function Triggers are available in the actual project before continuing. Do not upgrade if unavailable.
+For the existing Ohio project, use the parameterized [Neon bootstrap script](neon-bootstrap.md)
+to prepare and verify database permissions. Ohio is also a supported Functions
+region; recreating the project in Frankfurt is unnecessary. The script leaves
+deployment checks and OCI setup pending; track results in
+[account readiness](trial/account-readiness.md).
+
+1. Use the existing Neon project on the **Free** plan in AWS Ohio (`aws-us-east-2`), a Functions-supported region. AWS Frankfurt (`aws-eu-central-1`) is also supported for new projects. Confirm Functions and scheduled Function Triggers are available in the actual project before continuing. Do not upgrade if unavailable.
 2. Enable Postgres on one trial branch. Keep scale-to-zero enabled. Do not enable AI Gateway, paid services, or production branch copies for this trial.
 3. Use the owner's Neon login for initial deployment. If automation requires an API key, use the narrowest project scope offered; keep it in deployment tooling, never in the function runtime or Angular bundle.
 4. Create a dedicated runtime database role with CONNECT, schema USAGE and only the table/sequence or narrowly scoped function permissions needed for trial operations/state. It must not own schemas/tables, create or alter schema, create roles, bypass access controls, or access unrelated application data. Keep migrations under a separate owner credential. Replace the injected connection string if it grants broader rights, and ensure the execution deployment cannot access an injected owner connection through another variable. Verify positive CRUD/transaction behavior and negative DDL/admin tests before OCI writes. If the chosen Alchemy state backend requires runtime migrations or broader privileges, that is an unresolved compatibility issue, not permission to retain admin credentials.
