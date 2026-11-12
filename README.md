@@ -2,8 +2,8 @@
 
 A planned single-user hosted application for provisioning and monitoring cloud
 resources within free-tier allowances. The first slice is an OCI Object Storage
-trial on Neon Free. This repository currently provides the offline trial toolchain;
-it has no deployed application or live cloud validation.
+trial on Neon Free. This repository provides the trial toolchain and an opt-in
+Neon database bootstrap; it has no deployed application or live cloud validation.
 
 ## Local toolchain
 
@@ -26,17 +26,21 @@ credentials are needed for installation, compilation or tests.
 | Command | Behavior |
 |---|---|
 | `npm ci` | Clean locked dependency install, with dependency scripts disabled |
-| `npm run build` | Compile strict TypeScript tests into ignored `dist/` |
+| `npm run build` | Compile strict TypeScript scripts/tests into ignored `dist/` |
 | `npm run typecheck` | Check TypeScript, including dependency declarations, without emitting |
-| `npm run lint` | Check test code and tool configuration with Biome |
-| `npm test` | Build and run all current tests with Node's built-in test runner |
+| `npm run lint` | Check script/test code and tool configuration with Biome |
+| `npm test` | Build and run offline tests with Node's built-in test runner |
 | `npm run test:smoke` | Build and run only the runtime compatibility smoke tests |
 | `npm run neon -- --version` | Inspect the pinned local Neon CLI without logging in |
+| `npm run setup:neon -- --help` | Show the opt-in Neon setup command |
+| `npm run test:setup-db` | Test real permissions in an explicitly configured disposable local PostgreSQL database |
 
 The tests round-trip Alchemy in-memory state through Effect and cryptographically
 verify OCI signing with an ephemeral test key. They perform no cloud operations
 and do not prove Neon deployment, durable state, IAM permissions or provisioning.
-There is no deployment command or account bootstrap in this slice.
+The separate [Neon setup guide](docs/neon-bootstrap.md) walks through preview,
+apply and permission verification. Its live commands require an owner API key
+stored privately outside the repository. No deployment or schedule is created.
 
 ## Exact direct pins
 
@@ -49,6 +53,7 @@ There is no deployment command or account bootstrap in this slice.
 | Neon CLI | 9.4.0 |
 | TypeScript / Biome | 7.0.2 / 2.6.7 |
 | Node / node-fetch / React declarations | 24.19.2 / 2.6.13 / 19.3.0 |
+| PostgreSQL setup driver / declarations | 8.23.1 / 8.23.1 |
 
 Alchemy's public declarations reference React and OCI's reference node-fetch, so
 those type packages are required even though Berth has no React UI. Alchemy is a

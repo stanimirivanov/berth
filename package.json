@@ -12,10 +12,12 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check tests package.json tsconfig.json biome.json",
+    "lint": "biome check scripts tests package.json tsconfig.json biome.json",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "test:smoke": "npm run build && node --test dist/tests/runtime-smoke.test.js",
-    "neon": "neon"
+    "neon": "neon",
+    "setup:neon": "npm run build && node dist/scripts/neon-setup.js",
+    "test:setup-db": "npm run build && node --test dist/tests/integration/neon-database.test.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
@@ -28,8 +30,10 @@
     "@biomejs/biome": "2.6.7",
     "@types/node": "24.19.2",
     "@types/node-fetch": "2.6.13",
+    "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "neon": "9.4.0",
+    "pg": "8.23.1",
     "typescript": "7.0.2"
   }
 }
