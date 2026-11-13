@@ -6,6 +6,7 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/trial/ledger.ts": [],
   "src/trial/checkpoint-index.ts": ["node:crypto", "pg"],
   "src/trial/checkpoint-handler.ts": ["node:crypto"],
   "src/trial/checkpoint-run.ts": ["node:crypto", "effect"],

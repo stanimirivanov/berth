@@ -34,3 +34,9 @@ qualification and `fenced-lifecycle.ts` its real synthetic Alchemy lifecycle. On
 that orchestrator may reach the adapter/lifecycle; the handler has no DB/engine
 imports. SQL proof receipts preserve unfinished intents for inspection; they are
 not the later OCI workflow implementation. See docs/trial/feasibility-decision.md.
+
+`ledger.ts` owns only the parameterized operation-ledger interface; it has no package
+or local imports. `migrations/001_trial.sql` owns atomic intent, lease, attempt and
+budget rules under the separate owner role. Provider dispatch/settlement wiring is
+later work; preserve unresolved intents independently of lease expiry. See
+`docs/trial/operation-ledger.md` before adding a consumer.

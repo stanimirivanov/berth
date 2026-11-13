@@ -158,3 +158,8 @@ Live Neon proof remains opt-in; see docs/trial/fenced-postgres.md.
 `test:checkpoint-db` after the disposable DB bootstrap and adapter tests. Its
 HTTP/credential tests are included in `pnpm test`; cloud deployment and schedules
 are explicit operator actions outside all verification gates.
+
+`pnpm test:ledger-db` exercises the owner-installed operation ledger against the
+same disposable loopback PostgreSQL fixture, after `test:setup-db`. CI runs its
+concurrency, protected-budget and actual backend-termination tests without cloud
+credentials. `pnpm test` includes the ledger boundary's deterministic unit tests.

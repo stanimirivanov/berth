@@ -202,3 +202,19 @@ test("hosted checkpoint owns admission, orchestration and composition edges", ()
     }).some((x) => x.rule === "architecture"),
   );
 });
+
+test("ledger SQL port cannot import providers or administrator tooling", () => {
+  assert.deepEqual(
+    analyze({
+      "src/trial/ledger.ts":
+        "/** Parameterized port. */ export interface Port {}",
+    }),
+    [],
+  );
+  assert.ok(
+    analyze({
+      "src/trial/ledger.ts":
+        "import {ObjectStorageClient} from 'oci-objectstorage';",
+    }).some((x) => x.rule === "architecture"),
+  );
+});
