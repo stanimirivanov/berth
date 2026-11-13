@@ -5,6 +5,7 @@ import type { StackSpec } from "alchemy/Stack";
 import { State } from "alchemy/State";
 import * as Effect from "effect/Effect";
 
+/** Fixed marker resource with no provider credentials or remote persistence. */
 interface Synthetic
   extends ResourceLike<
     "Berth.Probe",
@@ -15,7 +16,12 @@ interface Synthetic
     never
   > {}
 const Synthetic = Resource<Synthetic>("Berth.Probe");
-/** A real Alchemy plan/apply lifecycle. Provider side effects are memory-only. */
+/**
+ * Runs real Alchemy create, refresh/read and destroy against isolated memory.
+ * State is per invocation; successful deletion is not a durable-backend proof.
+ * @returns Lifecycle and empty-state evidence without resource or credential payloads.
+ * @throws If the planner/provider fails or its five-second Effect budget expires.
+ */
 export async function runSyntheticLifecycle() {
   let remote: { marker: string } | undefined;
   let reads = 0;

@@ -1,0 +1,5 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+paths = ['''(^|/)(node_modules|dist|coverage)(/|$)''']

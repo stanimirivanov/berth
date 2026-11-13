@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+if ! git diff --quiet --; then
+  echo 'pre-commit: stage or isolate unstaged tracked changes before verification.' >&2
+  exit 1
+fi
+if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+  echo 'pre-commit: stage or isolate untracked files before verification.' >&2
+  exit 1
+fi
+exec pnpm run check:fast

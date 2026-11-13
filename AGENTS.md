@@ -39,3 +39,27 @@ work around unexpected state.
 Reuse the existing branch and issue. Inspect only relevant feedback/code, make
 corrections, verify, commit with the issue prefix and push. Add a PR comment
 explaining the issue and resolution, return the existing PR URL, and stop.
+
+## Context map and PEV
+
+Berth is a Node 24 / TypeScript ESM feasibility trial, with Effect, Alchemy,
+Neon Postgres/Functions and the OCI SDK. Pins live in package.json. No Angular
+application exists here yet. Read only the affected guide:
+
+| Change | Guide |
+| --- | --- |
+| Hosted trial code | [src/trial/AGENTS.md](src/trial/AGENTS.md) |
+| Local administrator/setup commands | [scripts/AGENTS.md](scripts/AGENTS.md) |
+| Tests and fixtures | [tests/AGENTS.md](tests/AGENTS.md) |
+| Checks, hooks or CI | [tools/AGENTS.md](tools/AGENTS.md), [HARNESS.md](HARNESS.md) |
+| Quality policy | [CONSTRAINTS.md](CONSTRAINTS.md) |
+
+- **Plan:** identify the owner, behavior, acceptance evidence and final checks in
+  the issue. Read the relevant SPEC.md section; preserve the approved trial bounds.
+- **Execute:** use TDD for behavior and sensors. Document contracts according to
+  [docs/comment-quality.md](docs/comment-quality.md). Do not silence failing gates.
+- **Verify:** run the focused test, then `pnpm check:fast` and `pnpm check` before
+  delivery. Read the first failure, distinguish environment failures from defects,
+  fix the cause and rerun the affected stage. Report incomplete checks explicitly.
+- Local/CI tests are not live acceptance evidence. Never deploy, create schedules,
+  use private credentials or mutate cloud resources merely to satisfy a harness gate.

@@ -84,3 +84,12 @@ placeholder `.env.example` files may be tracked. Never paste real credentials in
 issues, PRs, command arguments, logs or test fixtures.
 
 OCI diagnostics: see [the read-only doctor guide](docs/oci-doctor.md) for `pnpm run doctor:oci`, optional OCI CLI comparison and agent-operated verification.
+
+## Coding harness
+
+Start at [AGENTS.md](AGENTS.md), then the scoped guide for the affected code.
+[HARNESS.md](HARNESS.md) maps ownership, checks, hook setup, CI and remaining
+hardening work; [CONSTRAINTS.md](CONSTRAINTS.md) defines the enforced floor.
+Use `pnpm check:fast` during implementation and `pnpm check` before a PR.
+The full gate requires pinned Gitleaks on PATH and registry access for the audit.
+See [comment quality](docs/comment-quality.md) for declaration documentation.

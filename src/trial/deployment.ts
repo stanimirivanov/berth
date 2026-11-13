@@ -1,4 +1,12 @@
-/** Explicit allowlist: the management API key never belongs in function env. */
+/**
+ * Builds the only environment values admitted to the disposable Ohio probe.
+ * Both URLs must use the restricted role; unused injected services receive
+ * nonsecret disabling markers. Unknown inputs, including admin keys, are omitted.
+ * @param input - Privately loaded runtime credentials; never log the returned map.
+ * @param digest - SHA-256 of the uploaded ZIP, used to identify active revisions.
+ * @param expiresAt - Future Unix milliseconds, at most twenty minutes from now.
+ * @throws If a URL, token, digest or expiry violates the closed deployment contract.
+ */
 export function deploymentEnvironment(
   input: Record<string, unknown>,
   digest: string,

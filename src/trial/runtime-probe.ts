@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
+/** Fixed failure categories safe to return without exposing provider error bodies. */
 export type ProbeStage =
   | "runtime"
   | "credential-boundary"
@@ -10,17 +11,27 @@ export type ProbeStage =
   | "database"
   | "alchemy"
   | "signing";
+/** Carries only the reviewed stage; provider messages and credentials are discarded. */
 export class ProbeFailure extends Error {
   constructor(readonly stage: ProbeStage) {
     super("probe-failed");
   }
 }
 
+/** Immutable admission settings and the protected operation supplied by the runtime. */
 interface Options {
+  /** Private bearer token; fewer than 32 characters fails admission. */
   token: string;
+  /** Absolute Unix time in milliseconds; invalid or elapsed values fail closed. */
   expiresAt: number;
+  /** Runs only after manual authentication and empty-input checks; never from schedules. */
   run: () => Promise<unknown>;
 }
+/**
+ * Reads at most the byte limit, cancelling an oversized stream before parsing.
+ * A zero limit admits empty adapter streams while rejecting all caller input.
+ * @throws If the stream fails or exceeds the limit; callers return a fixed error.
+ */
 async function readBody(request: Request, limit: number) {
   const reader = request.body?.getReader();
   let text = "";
@@ -44,12 +55,27 @@ async function readBody(request: Request, limit: number) {
     reader?.releaseLock();
   }
 }
+/**
+ * Creates the fixed-route, expiring HTTP probe and its instance-local receipt map.
+ *
+ * @remarks
+ * Deploy only behind Neon’s edge, which strips client-supplied X-Neon headers.
+ * Scheduler receipts are bounded observations, not durable idempotency records.
+ * Expiry acknowledges schedules without work; it does not prevent billed requests.
+ * @param options - Bearer admission, absolute expiry and the protected operation.
+ * @returns A Fetch-compatible handler; errors expose only reviewed categories.
+ */
 export function makeProbe(options: Options) {
   const receipts = new Map<
     string,
     { deliveries: number; scheduledAt: string }
   >();
   return {
+    /**
+     * Admits only fixed POST routes: authenticated work/evidence/timeout or a
+     * Neon-attested no-write schedule. Rejects arbitrary query and body input.
+     * The first observed scheduled ID requests a retry; repeats acknowledge it.
+     */
     async fetch(request: Request) {
       const url = new URL(request.url);
       if (
