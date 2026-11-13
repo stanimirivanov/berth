@@ -40,3 +40,10 @@ or local imports. `migrations/001_trial.sql` owns atomic intent, lease, attempt 
 budget rules under the separate owner role. Provider dispatch/settlement wiring is
 later work; preserve unresolved intents independently of lease expiry. See
 `docs/trial/operation-ledger.md` before adding a consumer.
+
+`api.ts` owns fixed private admission routes, bounded bodies and signed previews;
+`preflight.ts` owns pure evidence/configuration checks and the common four-hour
+window projection. The handler may import only preflight and ledger types, never
+SDKs or admin tooling. Preview has no persistence; accepted submission atomically
+records the signed previewed intent. Cleanup admission skips creation headroom but
+requires a durable owned-operation port. See docs/trial/admission-api.md.

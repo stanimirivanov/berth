@@ -101,3 +101,8 @@ Issue #9 adds the fixed owned object probe and conditional cleanup. See
 `docs/trial/oci-object-probe.md` for persistence ordering, pending-upload recovery
 and stop codes. Concrete fenced journal/dispatch wiring and live OCI acceptance
 remain gated; offline contracts do not enable cloud writes.
+
+Issue #10 adds private signed preview and atomic ledger submission admission,
+with creation-only headroom checks and independent owned-cleanup admission. See
+`docs/trial/admission-api.md`; hosted composition, credential-check wiring and the
+cleanup executor remain gated follow-up work, not deployed by this API slice.

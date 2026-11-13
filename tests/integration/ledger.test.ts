@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
+import { makeTrialApi } from "../../src/trial/api.js";
 import { makeLedger } from "../../src/trial/ledger.js";
+import {
+  config as apiConfig,
+  evidence as apiEvidence,
+} from "../fakes/admission.js";
 
 test("ledger serializes active trials, fences stale writers and preserves unknown dispatches", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
@@ -465,6 +470,98 @@ test("ledger intent is immutable, time windows fail closed and reconciliation re
     );
   } finally {
     await db.end();
+    if (installed) await owner.query("DROP SCHEMA berth_ledger CASCADE");
+    await owner.end();
+  }
+});
+
+test("API instances concurrently submit one signed preview into one durable ledger intent", async () => {
+  const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
+  assert.ok(Number.isInteger(port) && port > 0 && port < 65536);
+  const connection = {
+    host: "127.0.0.1",
+    port,
+    database: "neondb",
+    connectionTimeoutMillis: 3000,
+    statement_timeout: 5000,
+  };
+  const owner = new Client({
+    ...connection,
+    user: "neondb_owner",
+    password: "berth-test-only",
+  });
+  const a = new Client({
+      ...connection,
+      user: "berth_runtime",
+      password: "test-runtime-only",
+    }),
+    b = new Client({
+      ...connection,
+      user: "berth_runtime",
+      password: "test-runtime-only",
+    });
+  let installed = false;
+  try {
+    await owner.connect();
+    await a.connect();
+    await b.connect();
+    await owner.query(await readFile("migrations/001_trial.sql", "utf8"));
+    installed = true;
+    const options = {
+      token: "a".repeat(40),
+      previewKey: "b".repeat(40),
+      configuration: apiConfig,
+      headroom: async () => ({ ...apiEvidence, checkedAt: Date.now() }),
+      verifyCredentials: async () => true,
+      async admitCleanup(): Promise<never> {
+        throw Error("not wired");
+      },
+    };
+    const left = makeTrialApi({ ...options, ledger: makeLedger(a) }),
+      right = makeTrialApi({ ...options, ledger: makeLedger(b) });
+    const request = (route: string, body: unknown = {}) =>
+      new Request(`https://trial.invalid/${route}`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${options.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    const preview = await (await left.fetch(request("preview"))).json();
+    assert.equal(
+      (
+        await owner.query(
+          "SELECT count(*)::int AS count FROM berth_ledger.trials",
+        )
+      ).rows[0].count,
+      0,
+    );
+    const responses = await Promise.all([
+      left.fetch(request("submit", { preview: preview.preview })),
+      right.fetch(request("submit", { preview: preview.preview })),
+    ]);
+    assert.deepEqual(
+      responses.map((r) => r.status),
+      [202, 202],
+    );
+    const [one, two] = await Promise.all(responses.map((r) => r.json()));
+    assert.deepEqual(one, two);
+    const stored = (await owner.query("SELECT * FROM berth_ledger.trials"))
+      .rows;
+    assert.equal(stored.length, 1);
+    assert.equal(stored[0].bucket, preview.proposal.bucket.name);
+    assert.equal(stored[0].digest, preview.proposal.object.sha256);
+    assert.equal(one.runtimeExpiresAt, stored[0].expires_at.toISOString());
+    assert.equal(one.deploymentExpiresAt, one.runtimeExpiresAt);
+    const other = await (await right.fetch(request("preview"))).json();
+    assert.equal(
+      (await right.fetch(request("submit", { preview: other.preview }))).status,
+      503,
+    );
+  } finally {
+    await a.end();
+    await b.end();
     if (installed) await owner.query("DROP SCHEMA berth_ledger CASCADE");
     await owner.end();
   }
