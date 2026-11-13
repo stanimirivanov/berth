@@ -121,6 +121,8 @@ test("creates only dedicated domain identity and scoped policy; journals before 
   }
   const user = JSON.parse(String(f.calls[4]?.init.body));
   assert.deepEqual(user[extension], capabilities);
+  // Oracle POST /admin/v1/Users requires name.familyName; displayName is not a substitute.
+  assert.deepEqual(user.name, { familyName: "berth-trial-executor" });
   assert.equal(user.password, undefined);
   const group = JSON.parse(String(f.calls[5]?.init.body));
   assert.deepEqual(group.members, [{ value: "user-scim-id", type: "User" }]);

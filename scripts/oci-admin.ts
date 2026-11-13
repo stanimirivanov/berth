@@ -228,6 +228,8 @@ export async function bootstrapOci(
       schemas: ["urn:ietf:params:scim:schemas:core:2.0:User", extension],
       userName: `${config.name}-executor`,
       displayName: `${config.name}-executor`,
+      // SCIM requires name.familyName even for service users; use a non-personal label.
+      name: { familyName: `${config.name}-executor` },
       active: true,
       userType: "Service",
       [extension]: capabilities,
