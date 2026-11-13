@@ -12,3 +12,11 @@ export const probeFunction = {
     (name) => ({ name, includeFiles: false }),
   ),
 };
+
+/** Dedicated ephemeral state probe; both deployed copies use only runtime credentials. */
+export const stateFunction = {
+  ...probeFunction,
+  slug: "berthstate32a",
+  name: "Berth Cloudflare state qualification",
+  source: "./src/trial/state-probe.ts",
+};

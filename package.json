@@ -34,7 +34,9 @@
     "security": "pnpm run secrets && pnpm audit --audit-level high",
     "check:fast": "pnpm run floor && pnpm run lint && pnpm run typecheck && pnpm run harness",
     "check": "pnpm run check:fast && pnpm test && pnpm run build:runtime-probe && pnpm run security",
-    "test:state-db": "pnpm run build && node --test dist/tests/integration/state-contract.test.js"
+    "test:state-db": "pnpm run build && node --test dist/tests/integration/state-contract.test.js",
+    "test:cloudflare-trial": "pnpm run build && node --test dist/tests/cloudflare-trial.test.js dist/tests/cloudflare-state-probe.test.js",
+    "build:state-probe": "pnpm run build && node dist/scripts/build-state-probe.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
@@ -44,6 +46,7 @@
     "oci-objectstorage": "2.146.0"
   },
   "devDependencies": {
+    "@alchemy.run/cloudflare": "2.0.0-beta.86",
     "@alchemy.run/sql": "2.0.0-beta.86",
     "@biomejs/biome": "2.6.7",
     "@effect/sql-pg": "4.1.4",

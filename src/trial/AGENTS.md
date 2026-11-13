@@ -17,3 +17,8 @@ Document exported declarations, types, methods and substantial named helpers usi
 [the comment standard](../../docs/comment-quality.md). Explain trust, state lifetime,
 bounds and safe failures; never put credentials in comments, errors or evidence.
 Run `pnpm run test:runtime-probe` for this slice, followed by canonical verification.
+
+`state-probe.ts` owns the ephemeral Cloudflare qualification handler and native
+Alchemy HTTP StateService adapter. Its fixed synthetic routes admit no caller
+payloads, administrator credentials or local module imports. It has no production
+lease/fencing contract: see docs/trial/cloudflare-state-evidence.md before reuse.

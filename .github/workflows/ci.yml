@@ -66,6 +66,7 @@ jobs:
             exit 1
           fi
       - run: pnpm check
+      - run: pnpm run build:state-probe
       - run: pnpm run test:setup-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
