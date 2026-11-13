@@ -6,6 +6,7 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/providers/oci/trial-object.ts": ["node:crypto", "node:stream"],
   "src/providers/oci/bucket.ts": ["alchemy", "effect"],
   "src/providers/oci/client.ts": ["oci-common", "oci-objectstorage"],
   "src/trial/ledger.ts": [],
@@ -134,6 +135,11 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
+            (file === "src/providers/oci/trial-object.ts" &&
+              [
+                "src/providers/oci/client.ts",
+                "src/providers/oci/bucket.ts",
+              ].includes(resolved)) ||
             (file === "src/providers/oci/bucket.ts" &&
               resolved === "src/providers/oci/client.ts") ||
             (file === "src/trial/checkpoint-index.ts" &&

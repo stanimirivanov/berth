@@ -241,3 +241,22 @@ test("OCI provider owns only engine and budgeted SDK boundary", () => {
       ),
     );
 });
+
+test("trial object helper owns hashing and cannot bypass the SDK boundary", () => {
+  const files = {
+    "src/providers/oci/trial-object.ts":
+      "import 'node:crypto'; import 'node:stream'; import './client.js'; import './bucket.js';",
+    "src/providers/oci/client.ts": "",
+    "src/providers/oci/bucket.ts": "",
+  };
+  assert.deepEqual(
+    analyze(files).filter((x) => x.rule === "architecture"),
+    [],
+  );
+  assert.ok(
+    analyze({
+      ...files,
+      "src/providers/oci/trial-object.ts": "import 'oci-objectstorage';",
+    }).some((x) => x.rule === "architecture"),
+  );
+});
