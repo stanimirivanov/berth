@@ -511,6 +511,8 @@ async function groupCreatedJournal(f: Awaited<ReturnType<typeof fixture>>) {
 test("confirmed group recovery verifies members explicitly and writes only key and policy", async () => {
   for (const variant of [
     "success",
+    "observed-group-header",
+    "key-page",
     "empty-page",
     "blank-page",
     "token-page",
@@ -550,8 +552,10 @@ test("confirmed group recovery verifies members explicitly and writes only key a
         }
         if (url.includes("/Groups/group-scim")) {
           f.calls.push({ url, init });
-          assert.ok(
-            new URL(url).searchParams.get("attributes")?.includes("members"),
+          assert.equal(
+            new URL(url).searchParams.get("attributes"),
+            "id,ocid,displayName,members",
+            "Request the full members attribute, without a member pagination filter",
           );
           return new Response(
             JSON.stringify({
@@ -579,7 +583,7 @@ test("confirmed group recovery verifies members explicitly and writes only key a
                             ? "null"
                             : "PRIVATE_TOKEN",
                   }
-                : {},
+                : { "opc-next-page": "MQ==" },
             },
           );
         }
@@ -590,6 +594,10 @@ test("confirmed group recovery verifies members explicitly and writes only key a
               totalResults: variant === "key-exists" ? 1 : 0,
               Resources: variant === "key-exists" ? [{}] : [],
             }),
+            {
+              headers:
+                variant === "key-page" ? { "opc-next-page": "MQ==" } : {},
+            },
           );
         }
         return f.transport(url, init);
@@ -598,7 +606,16 @@ test("confirmed group recovery verifies members explicitly and writes only key a
         ...f.args(mode),
         "--confirm-primary-email-rejection",
       ];
-      if (!["success", "empty-page", "blank-page"].includes(variant)) {
+      if (
+        ![
+          "success",
+          "observed-group-header",
+          "empty-page",
+          "blank-page",
+          "token-page",
+          "literal-null-page",
+        ].includes(variant)
+      ) {
         await assert.rejects(runOciAdmin(args("recover"), transport));
         assert.ok(f.calls.every((c) => c.init.method === "GET"));
         return;
@@ -627,7 +644,7 @@ test("confirmed group recovery verifies members explicitly and writes only key a
   }
 });
 
-test("group preflight reports safe response failure categories without mutations", async () => {
+test("preflight reports safe response failure categories without mutations", async () => {
   for (const variant of ["pagination", "json", "body"] as const) {
     await withFixture(async (f) => {
       const before = await groupCreatedJournal(f);
@@ -648,9 +665,15 @@ test("group preflight reports safe response failure categories without mutations
         if (url.includes("/Groups/group-scim")) {
           f.calls.push({ url, init });
           if (variant === "pagination")
-            return new Response("{}", {
-              headers: { "opc-next-page": "PRIVATE_TOKEN" },
-            });
+            return new Response(
+              JSON.stringify({
+                id: "group-scim",
+                ocid: id("group"),
+                displayName: "berth-trial-executor",
+                members: [{ value: "user-scim" }],
+              }),
+              { headers: { "opc-next-page": "MQ==" } },
+            );
           if (variant === "json") return new Response("PRIVATE_BODY");
           return new Response(
             new ReadableStream({
@@ -659,6 +682,12 @@ test("group preflight reports safe response failure categories without mutations
               },
             }),
           );
+        }
+        if (url.includes("/ApiKeys?") && variant === "pagination") {
+          f.calls.push({ url, init });
+          return new Response('{"totalResults":0,"Resources":[]}', {
+            headers: { "opc-next-page": "PRIVATE_TOKEN" },
+          });
         }
         return f.transport(url, init);
       };
@@ -675,7 +704,9 @@ test("group preflight reports safe response failure categories without mutations
         (error: unknown) => {
           assert.ok(error instanceof Error);
           assert.ok(
-            error.message.includes(`GetRecordedGroup (HTTP 200): ${reason}`),
+            error.message.includes(
+              `${variant === "pagination" ? "SearchRecordedUserKeys" : "GetRecordedGroup"} (HTTP 200): ${reason}`,
+            ),
           );
           assert.ok(
             error.message.includes(

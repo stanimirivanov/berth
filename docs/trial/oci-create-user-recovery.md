@@ -199,16 +199,24 @@ failure, occurs before the recovery marker or any cloud write. The journal and k
 remain unchanged. Setup and recovery requests use the administrator credential;
 the executor does not make requests until restricted verification is run.
 
-The revised error identifies a safe category: `nonempty pagination token present`,
-`invalid JSON response`, or `response body read failed`. It never prints header
-values, response bodies or transport error details. A nonempty pagination token still
-stops recovery; the command does not ignore it or follow it automatically. An
-absent, empty or HTTP-whitespace-only header is not a continuation token. Literal
-`null` and all other nonempty values still stop recovery. This matches the
-[Oracle CLI value check](https://github.com/oracle/oci-cli/blob/master/src/oci_cli/cli_util.py).
-The group must still contain exactly the recorded user, with all identity checks
-passing. The earlier `pagination header present` message does not establish
-whether the live header was empty; repeat only the read-only plan after updating.
+The revised error identifies safe response failures without printing header
+values, response bodies or transport details. Collection requests reject nonempty
+continuation tokens; they do not fetch another page automatically.
+
+**Recorded group GET:** the owner observed `opc-next-page: MQ==` (base64 `1`).
+That value alone does not establish a membership page. Oracle's
+[Get a Group contract](https://docs.oracle.com/en/cloud/paas/iam-domains-rest-api/op-admin-v1-groups-id-get.html)
+returns one Group and has no `page` parameter. The command requests
+`attributes=id,ocid,displayName,members`, with no member filter. Oracle documents
+[member pagination as an explicit attribute filter](https://docs.oracle.com/en-us/iaas/tools/python/latest/api/identity_domains/models/oci.identity_domains.models.Group.html);
+unfiltered requests exceeding 10,000 members fail rather than silently truncate.
+
+The earlier blanket list-pagination check was incorrect for this operation.
+Only `GetRecordedGroup` now disregards that incidental header. It still requires
+the recorded ID/OCID/name and exactly one member matching the recorded user.
+Missing, extra or different members stop recovery. No token is decoded or followed
+by the command, no additional request is added, and collection pagination guards
+remain in force. This correction is covered offline; live completion is pending.
 
 After updating the checkout, run **recover-plan**, using the same directory and
 flags in step 2. Share only the resulting safe error line. Do not run `recover`
@@ -226,7 +234,7 @@ not establish which of these response failures occurred.
 | `oci-trial.json` already exists | Do not overwrite it or rerun recovery. Inspect completion state; use the restricted verifier after successful completion. |
 
 All calls reject redirects and have a 15-second timeout; no automatic retries or
-pagination occur. Each complete preflight consumes two Object Storage reads and
+pagination requests occur. Collection continuation tokens stop recovery. Each complete preflight consumes two Object Storage reads and
 seven IAM/identity-domain reads for the confirmed-group state (six for older
 rejected-user states). Execution repeats those reads and adds two IAM writes
 (four for older states). Include repeated checks in allowance headroom. The bucket check does not

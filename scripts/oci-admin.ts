@@ -207,9 +207,15 @@ export async function bootstrapOci(
         await response.body?.cancel();
         throw new Error("HTTP failure");
       }
+      // GetRecordedGroup returns one Group, with the unfiltered members attribute.
+      // Its contract has no page parameter; member paging requires an explicit
+      // attributes filter, which this caller never sends. An incidental list
+      // header must not replace the identity and full-members checks below.
+      // https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/identity-domains/group/get.html
       if (
         recovery &&
         method === "GET" &&
+        operation !== "GetRecordedGroup" &&
         response.headers.get("opc-next-page")?.trim()
       ) {
         readFailure = "nonempty pagination token present";
