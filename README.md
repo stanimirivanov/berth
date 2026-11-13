@@ -38,7 +38,7 @@ credentials are needed for installation, compilation or tests.
 | `pnpm test` | Build and run offline tests with Node's built-in test runner |
 | `pnpm run test:smoke` | Build and run only the runtime compatibility smoke tests |
 | `pnpm run neon --version` | Inspect the pinned local Neon CLI without logging in |
-| `pnpm run setup:oci-admin --help` | Show automated administrator setup (existing Default domain) |
+| `pnpm run setup:oci-admin --help` | Show administrator setup and rejected-user recovery (existing Default domain) |
 | `pnpm run setup:oci --help` | Show offline OCI policy generation and read-only verification commands |
 | `pnpm run test:oci-setup` | Run focused offline OCI setup tests |
 | `pnpm run setup:neon --help` | Show the opt-in Neon setup command |

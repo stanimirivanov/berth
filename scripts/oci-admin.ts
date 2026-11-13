@@ -8,6 +8,9 @@ import {
   policyStatements,
 } from "./oci-access.js";
 
+import { captureUserRejection, OciUserRejection } from "./oci-diagnostics.js";
+import type { Recovery, RecoveryPlan } from "./oci-recovery.js";
+
 export interface AdminConfig {
   tenancyOcid: string;
   userOcid: string;
@@ -17,6 +20,7 @@ export interface AdminConfig {
   privateKeyFile: string;
   passphraseFile?: string;
   name: string;
+  trialEmail: string;
 }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -56,6 +60,7 @@ export function parseAdminConfig(value: unknown): AdminConfig {
     "fingerprint",
     "privateKeyFile",
     "name",
+    "trialEmail",
   ];
   if (
     required.some((k) => typeof v[k] !== "string") ||
@@ -77,6 +82,15 @@ export function parseAdminConfig(value: unknown): AdminConfig {
     throw new OciSetupError(
       "Invalid name, fingerprint or private credential path",
     );
+  if (
+    typeof v.trialEmail !== "string" ||
+    v.trialEmail.length > 254 ||
+    /\s/.test(v.trialEmail) ||
+    !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v.trialEmail)
+  )
+    throw new OciSetupError(
+      "Supply trialEmail as a plain primary email address you control",
+    );
   return v as unknown as AdminConfig;
 }
 export const capabilities = {
@@ -89,8 +103,28 @@ export const capabilities = {
   canUseOAuth2ClientCredentials: false,
   canUseSmtpCredentials: false,
 };
+const notificationExtension =
+  "urn:ietf:params:scim:schemas:oracle:idcs:extension:user:User";
 const extension =
   "urn:ietf:params:scim:schemas:oracle:idcs:extension:capabilities:User";
+export function userCreationBody(config: AdminConfig) {
+  return {
+    schemas: [
+      "urn:ietf:params:scim:schemas:core:2.0:User",
+      extension,
+      notificationExtension,
+    ],
+    userName: `${config.name}-executor`,
+    displayName: `${config.name}-executor`,
+    // SCIM requires name.familyName even for service users; use a non-personal label.
+    name: { familyName: `${config.name}-executor` },
+    emails: [{ value: config.trialEmail, type: "work", primary: true }],
+    [notificationExtension]: { bypassNotification: true },
+    active: true,
+    userType: "Service",
+    [extension]: capabilities,
+  };
+}
 type Journal = (event: Record<string, unknown>) => Promise<void>;
 type TrialKey = {
   publicKey: string;
@@ -105,15 +139,34 @@ function scimId(value: unknown): string {
   return value;
 }
 
-/** Fresh creation only. A durable journal must acknowledge intent before any write. */
+/** Fresh creation or narrowly validated partial-run recovery. A durable journal must acknowledge intent before any write. */
+type Transport = (url: string, init: RequestInit) => Promise<Response>;
+export function bootstrapOci(
+  config: AdminConfig,
+  pem: string,
+  passphrase: string | undefined,
+  trialKey: TrialKey,
+  journal: Journal,
+  transport?: Transport,
+): Promise<OciConfig>;
+export function bootstrapOci(
+  config: AdminConfig,
+  pem: string,
+  passphrase: string | undefined,
+  trialKey: TrialKey,
+  journal: Journal,
+  transport: Transport,
+  recovery: Recovery,
+): Promise<OciConfig | RecoveryPlan>;
 export async function bootstrapOci(
   config: AdminConfig,
   pem: string,
   passphrase: string | undefined,
   trialKey: TrialKey,
   journal: Journal,
-  transport: (url: string, init: RequestInit) => Promise<Response> = fetch,
-): Promise<OciConfig> {
+  transport: Transport = fetch,
+  recovery?: Recovery,
+): Promise<OciConfig | RecoveryPlan> {
   parseAdminConfig(config);
   const signer = createOciSigner(config, pem, passphrase);
   const identity = `https://identity.${config.region}.oci.oraclecloud.com/20160918`;
@@ -136,6 +189,7 @@ export async function bootstrapOci(
     if (body !== undefined)
       await journal({ phase: "intent", operation, url, body });
     let status: number | undefined;
+    let readFailure = "request failed before response";
     try {
       const response = await transport(url, {
         method,
@@ -145,11 +199,37 @@ export async function bootstrapOci(
         signal: AbortSignal.timeout(15_000),
       });
       status = response.status;
+      readFailure = "HTTP failure";
+      if (operation === "CreateUser" && response.status === 400) {
+        throw await captureUserRejection(response);
+      }
       if (!response.ok) {
         await response.body?.cancel();
         throw new Error("HTTP failure");
       }
-      const data: unknown = await response.json();
+      // GetRecordedGroup returns one Group, with the unfiltered members attribute.
+      // Its contract has no page parameter; member paging requires an explicit
+      // attributes filter, which this caller never sends. An incidental list
+      // header must not replace the identity and full-members checks below.
+      // https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/identity-domains/group/get.html
+      if (
+        recovery &&
+        method === "GET" &&
+        operation !== "GetRecordedGroup" &&
+        response.headers.get("opc-next-page")?.trim()
+      ) {
+        readFailure = "nonempty pagination token present";
+        await response.body?.cancel();
+        throw new Error("Ambiguous paginated response");
+      }
+      readFailure = "response body read failed";
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch (error) {
+        if (error instanceof SyntaxError) readFailure = "invalid JSON response";
+        throw error;
+      }
       // Persist only identifiers needed for reconciliation, never raw response bodies.
       if (body !== undefined) {
         const r = record(data);
@@ -162,7 +242,12 @@ export async function bootstrapOci(
         });
       }
       return data;
-    } catch {
+    } catch (error) {
+      if (error instanceof OciUserRejection) throw error;
+      if (recovery && method === "GET")
+        throw new OciSetupError(
+          `${operation}${status === undefined ? "" : ` (HTTP ${status})`}: ${readFailure}. Read-only request; no recovery writes dispatched. No retry; preserve the journal and keys.`,
+        );
       throw new OciSetupError(
         `${operation}${status === undefined ? "" : ` (HTTP ${status})`} failed or its outcome is uncertain. No retry. Reconcile journal before further setup.`,
       );
@@ -215,26 +300,160 @@ export async function bootstrapOci(
     throw new OciSetupError("Unexpected Object Storage namespace");
   const description =
     "Berth disposable Object Storage trial; owner-managed IAM cleanup";
-  const compartment = record(
-    await request("CreateCompartment", `${identity}/compartments`, {
-      compartmentId: config.tenancyOcid,
-      name: config.name,
-      description,
-    }),
-  );
-  const compartmentOcid = ocid(compartment.id, "compartment");
-  const user = record(
-    await request("CreateUser", `${scim}/Users`, {
-      schemas: ["urn:ietf:params:scim:schemas:core:2.0:User", extension],
-      userName: `${config.name}-executor`,
-      displayName: `${config.name}-executor`,
-      // SCIM requires name.familyName even for service users; use a non-personal label.
-      name: { familyName: `${config.name}-executor` },
-      active: true,
-      userType: "Service",
-      [extension]: capabilities,
-    }),
-  );
+  let compartmentOcid: string;
+  let recoveredUser: Record<string, unknown> | undefined;
+  let recoveredGroup: Record<string, unknown> | undefined;
+  if (recovery) {
+    if (recovery.userUrl !== `${scim}/Users`)
+      throw new OciSetupError(
+        "Journal domain URL differs from authenticated domain; no recovery writes",
+      );
+    compartmentOcid = ocid(recovery.compartmentOcid, "compartment");
+    const existing = record(
+      await request(
+        "GetCompartment",
+        `${identity}/compartments/${compartmentOcid}`,
+      ),
+    );
+    if (
+      existing.id !== compartmentOcid ||
+      existing.compartmentId !== config.tenancyOcid ||
+      existing.name !== config.name ||
+      existing.description !== description ||
+      existing.lifecycleState !== "ACTIVE"
+    )
+      throw new OciSetupError(
+        "Recorded compartment identity, parent, name, description or state mismatch; no recovery writes",
+      );
+    const buckets = await request(
+      "ListBuckets",
+      `https://objectstorage.${config.region}.oraclecloud.com/n/${encodeURIComponent(namespace)}/b?${new URLSearchParams({ compartmentId: compartmentOcid, limit: "1" })}`,
+    );
+    if (!Array.isArray(buckets) || buckets.length !== 0)
+      throw new OciSetupError(
+        "Recorded compartment is not proven bucket-empty; no recovery writes",
+      );
+    if (recovery.identities) {
+      const expected = recovery.identities;
+      recoveredUser = record(
+        await request(
+          "GetRecordedUser",
+          `${scim}/Users/${expected.userId}?${new URLSearchParams({ attributes: `id,ocid,userName,active,emails,${extension}` })}`,
+        ),
+      );
+      if (
+        recoveredUser.id !== expected.userId ||
+        recoveredUser.ocid !== expected.userOcid ||
+        recoveredUser.ocid === config.userOcid ||
+        recoveredUser.userName !== `${config.name}-executor` ||
+        recoveredUser.active !== true ||
+        !Array.isArray(recoveredUser.emails) ||
+        !recoveredUser.emails.some((value) => {
+          const email = record(value);
+          return email.primary === true && email.value === config.trialEmail;
+        })
+      )
+        throw new OciSetupError(
+          "Recorded user identity, active state or primary email mismatch; no recovery writes",
+        );
+      const actual = record(recoveredUser[extension]);
+      if (
+        Object.entries(capabilities).some(
+          ([key, value]) => actual[key] !== value,
+        )
+      )
+        throw new OciSetupError(
+          "Recorded user capabilities mismatch; no recovery writes",
+        );
+      recoveredGroup = record(
+        await request(
+          "GetRecordedGroup",
+          `${scim}/Groups/${expected.groupId}?${new URLSearchParams({ attributes: "id,ocid,displayName,members" })}`,
+        ),
+      );
+      if (
+        recoveredGroup.id !== expected.groupId ||
+        recoveredGroup.ocid !== expected.groupOcid ||
+        recoveredGroup.displayName !== `${config.name}-executor` ||
+        !Array.isArray(recoveredGroup.members) ||
+        recoveredGroup.members.length !== 1 ||
+        record(recoveredGroup.members[0]).value !== expected.userId
+      )
+        throw new OciSetupError(
+          "Recorded group identity or sole membership mismatch; no recovery writes",
+        );
+      const keys = record(
+        await request(
+          "SearchRecordedUserKeys",
+          `${scim}/ApiKeys?${new URLSearchParams({ filter: `user.value eq "${expected.userId}"`, count: "2", startIndex: "1" })}`,
+        ),
+      );
+      if (
+        keys.totalResults !== 0 ||
+        (keys.Resources !== undefined &&
+          (!Array.isArray(keys.Resources) || keys.Resources.length !== 0))
+      )
+        throw new OciSetupError(
+          "Recorded user already has keys or key absence is ambiguous; no recovery writes",
+        );
+    } else {
+      for (const [collection, field] of [
+        ["Users", "userName"],
+        ["Groups", "displayName"],
+      ]) {
+        const found = record(
+          await request(
+            `Search${collection}`,
+            `${scim}/${collection}?${new URLSearchParams({ filter: `${field} eq "${config.name}-executor"`, count: "2", startIndex: "1" })}`,
+          ),
+        );
+        // SCIM allows Resources to be omitted when totalResults is exactly zero.
+        if (
+          found.totalResults !== 0 ||
+          (found.Resources !== undefined &&
+            (!Array.isArray(found.Resources) || found.Resources.length !== 0))
+        )
+          throw new OciSetupError(
+            `${collection} already exists or absence is ambiguous; no recovery writes`,
+          );
+      }
+    }
+    const policies = await request(
+      "ListPolicies",
+      `${identity}/policies?${new URLSearchParams({ compartmentId: config.tenancyOcid, name: `${config.name}-objectstorage`, limit: "1" })}`,
+    );
+    if (!Array.isArray(policies) || policies.length !== 0)
+      throw new OciSetupError(
+        "Matching policy exists or absence is ambiguous; no recovery writes",
+      );
+    if (recovery.planOnly)
+      return {
+        recovery: "ready",
+        requestsDispatched: recovery.identities ? 9 : 8,
+        remainingWrites: recovery.identities ? 2 : 4,
+      };
+    await journal({
+      phase: "recovery-start",
+      originalJournalHash: recovery.journalHash,
+      compartmentOcid,
+      userCreateRejectedAttested: true,
+      primaryEmailRejectionAttested: recovery.rejectedAttempts === 2,
+    });
+  } else {
+    const compartment = record(
+      await request("CreateCompartment", `${identity}/compartments`, {
+        compartmentId: config.tenancyOcid,
+        name: config.name,
+        description,
+      }),
+    );
+    compartmentOcid = ocid(compartment.id, "compartment");
+  }
+  const user =
+    recoveredUser ??
+    record(
+      await request("CreateUser", `${scim}/Users`, userCreationBody(config)),
+    );
   const userOcid = ocid(user.ocid, "user");
   if (userOcid === config.userOcid)
     throw new OciSetupError(
@@ -250,13 +469,19 @@ export async function bootstrapOci(
     throw new OciSetupError(
       "API-only capabilities not confirmed; reconcile created user before proceeding",
     );
-  const group = record(
-    await request("CreateGroup", `${scim}/Groups`, {
-      schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
-      displayName: `${config.name}-executor`,
-      members: [{ value: userId, type: "User" }],
-    }),
-  );
+  const group =
+    recoveredGroup ??
+    record(
+      await request(
+        "CreateGroup",
+        `${scim}/Groups?${new URLSearchParams({ attributes: "id,ocid,displayName,members" })}`,
+        {
+          schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+          displayName: `${config.name}-executor`,
+          members: [{ value: userId, type: "User" }],
+        },
+      ),
+    );
   const groupOcid = ocid(group.ocid, "group");
   scimId(group.id);
   if (

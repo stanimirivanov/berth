@@ -13,7 +13,9 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { OciSetupError } from "./oci-access.js";
 import { bootstrapOci, parseAdminConfig } from "./oci-admin.js";
+import { saveUserRejection } from "./oci-diagnostics.js";
 import { readPrivateText } from "./oci-files.js";
+import { runOciRecovery } from "./oci-recovery.js";
 
 async function save(path: string, text: string) {
   const file = await open(path, "wx", 0o600);
@@ -69,19 +71,38 @@ export async function runOciAdmin(
       mode: { type: "string", default: "plan" },
       "output-dir": { type: "string" },
       help: { type: "boolean" },
+      "confirm-user-create-rejected": { type: "boolean" },
+      "confirm-primary-email-rejection": { type: "boolean" },
     },
   });
   if (values.help) {
     console.log(
-      "Usage: pnpm run setup:oci-admin --config /private/admin.json --mode plan|apply [--output-dir /private/new-run]",
+      "Usage: pnpm run setup:oci-admin --config /private/admin.json --mode plan|apply|recover-plan|recover [--output-dir /private/run] [--confirm-user-create-rejected] [--confirm-primary-email-rejection]",
     );
     return;
   }
-  if (!values.config || !["plan", "apply"].includes(values.mode))
-    throw new OciSetupError("Supply --config and mode plan or apply");
+  if (
+    !values.config ||
+    !["plan", "apply", "recover-plan", "recover"].includes(values.mode)
+  )
+    throw new OciSetupError(
+      "Supply --config and mode plan, apply, recover-plan or recover",
+    );
   const config = parseAdminConfig(
     JSON.parse(await readPrivateText(values.config)),
   );
+  if (values.mode === "recover-plan" || values.mode === "recover") {
+    if (!values["output-dir"])
+      throw new OciSetupError("Recovery requires the existing --output-dir");
+    return runOciRecovery(
+      config,
+      values["output-dir"],
+      values.mode === "recover-plan",
+      values["confirm-user-create-rejected"] === true,
+      transport,
+      values["confirm-primary-email-rejection"] === true,
+    );
+  }
   if (values.mode === "plan") {
     console.log(
       JSON.stringify(
@@ -176,6 +197,9 @@ export async function runOciAdmin(
         2,
       ),
     );
+  } catch (error) {
+    await saveUserRejection(output, error);
+    throw error;
   } finally {
     await journal.close();
   }
