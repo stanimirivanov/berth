@@ -199,10 +199,16 @@ failure, occurs before the recovery marker or any cloud write. The journal and k
 remain unchanged. Setup and recovery requests use the administrator credential;
 the executor does not make requests until restricted verification is run.
 
-The revised error identifies a safe category: `pagination header present`,
+The revised error identifies a safe category: `nonempty pagination token present`,
 `invalid JSON response`, or `response body read failed`. It never prints header
-values, response bodies or transport error details. A pagination header still
-stops recovery; the command does not ignore it or follow it automatically.
+values, response bodies or transport error details. A nonempty pagination token still
+stops recovery; the command does not ignore it or follow it automatically. An
+absent, empty or HTTP-whitespace-only header is not a continuation token. Literal
+`null` and all other nonempty values still stop recovery. This matches the
+[Oracle CLI value check](https://github.com/oracle/oci-cli/blob/master/src/oci_cli/cli_util.py).
+The group must still contain exactly the recorded user, with all identity checks
+passing. The earlier `pagination header present` message does not establish
+whether the live header was empty; repeat only the read-only plan after updating.
 
 After updating the checkout, run **recover-plan**, using the same directory and
 flags in step 2. Share only the resulting safe error line. Do not run `recover`

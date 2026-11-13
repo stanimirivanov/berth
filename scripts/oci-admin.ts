@@ -210,9 +210,9 @@ export async function bootstrapOci(
       if (
         recovery &&
         method === "GET" &&
-        response.headers.has("opc-next-page")
+        response.headers.get("opc-next-page")?.trim()
       ) {
-        readFailure = "pagination header present";
+        readFailure = "nonempty pagination token present";
         await response.body?.cancel();
         throw new Error("Ambiguous paginated response");
       }

@@ -511,6 +511,10 @@ async function groupCreatedJournal(f: Awaited<ReturnType<typeof fixture>>) {
 test("confirmed group recovery verifies members explicitly and writes only key and policy", async () => {
   for (const variant of [
     "success",
+    "empty-page",
+    "blank-page",
+    "token-page",
+    "literal-null-page",
     "members-omitted",
     "extra-member",
     "wrong-user",
@@ -563,6 +567,20 @@ test("confirmed group recovery verifies members explicitly and writes only key a
                         : [{ value: "user-scim" }],
                   }),
             }),
+            {
+              headers: variant.endsWith("-page")
+                ? {
+                    "opc-next-page":
+                      variant === "empty-page"
+                        ? ""
+                        : variant === "blank-page"
+                          ? "  "
+                          : variant === "literal-null-page"
+                            ? "null"
+                            : "PRIVATE_TOKEN",
+                  }
+                : {},
+            },
           );
         }
         if (url.includes("/ApiKeys?")) {
@@ -580,7 +598,7 @@ test("confirmed group recovery verifies members explicitly and writes only key a
         ...f.args(mode),
         "--confirm-primary-email-rejection",
       ];
-      if (variant !== "success") {
+      if (!["success", "empty-page", "blank-page"].includes(variant)) {
         await assert.rejects(runOciAdmin(args("recover"), transport));
         assert.ok(f.calls.every((c) => c.init.method === "GET"));
         return;
@@ -645,7 +663,7 @@ test("group preflight reports safe response failure categories without mutations
         return f.transport(url, init);
       };
       const reason = {
-        pagination: "pagination header present",
+        pagination: "nonempty pagination token present",
         json: "invalid JSON response",
         body: "response body read failed",
       }[variant];
