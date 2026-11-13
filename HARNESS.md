@@ -153,3 +153,8 @@ The fenced-state SQL sensor runs as `pnpm run test:fenced-db` after
 actual transactions, permissions, takeover and backend termination. CI invokes it
 explicitly; ordinary `pnpm test` runs only the adapter's deterministic unit tests.
 Live Neon proof remains opt-in; see docs/trial/fenced-postgres.md.
+
+`build:checkpoint` packages the independent hosted fenced-state proof. CI runs
+`test:checkpoint-db` after the disposable DB bootstrap and adapter tests. Its
+HTTP/credential tests are included in `pnpm test`; cloud deployment and schedules
+are explicit operator actions outside all verification gates.

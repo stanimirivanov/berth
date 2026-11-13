@@ -37,7 +37,9 @@
     "test:state-db": "pnpm run build && node --test dist/tests/integration/state-contract.test.js",
     "test:cloudflare-trial": "pnpm run build && node --test dist/tests/cloudflare-trial.test.js dist/tests/cloudflare-state-probe.test.js",
     "build:state-probe": "pnpm run build && node dist/scripts/build-state-probe.js",
-    "test:fenced-db": "pnpm run build && node --test dist/tests/integration/fenced-state.test.js"
+    "test:fenced-db": "pnpm run build && node --test dist/tests/integration/fenced-state.test.js",
+    "test:checkpoint-db": "pnpm run build && node --test dist/tests/integration/checkpoint.test.js",
+    "build:checkpoint": "pnpm run build && node dist/scripts/build-checkpoint.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",

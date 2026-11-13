@@ -6,6 +6,10 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/trial/checkpoint-index.ts": ["node:crypto", "pg"],
+  "src/trial/checkpoint-handler.ts": ["node:crypto"],
+  "src/trial/checkpoint-run.ts": ["node:crypto", "effect"],
+  "src/trial/fenced-lifecycle.ts": ["alchemy", "effect"],
   "src/trial/fenced-state.ts": ["alchemy", "effect"],
   "src/trial/state-probe.ts": ["node:crypto", "alchemy", "effect"],
   "src/trial/runtime-probe.ts": ["node:crypto", "node:timers/promises"],
@@ -127,11 +131,21 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
-            file === "src/trial/index.ts" &&
-            [
-              "src/trial/runtime-probe.ts",
-              "src/trial/synthetic-lifecycle.ts",
-            ].includes(resolved)
+            (file === "src/trial/checkpoint-index.ts" &&
+              [
+                "src/trial/checkpoint-handler.ts",
+                "src/trial/checkpoint-run.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/checkpoint-run.ts" &&
+              [
+                "src/trial/fenced-state.ts",
+                "src/trial/fenced-lifecycle.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/index.ts" &&
+              [
+                "src/trial/runtime-probe.ts",
+                "src/trial/synthetic-lifecycle.ts",
+              ].includes(resolved))
           )
         )
           fail(

@@ -20,3 +20,11 @@ export const stateFunction = {
   name: "Berth Cloudflare state qualification",
   source: "./src/trial/state-probe.ts",
 };
+
+/** Isolated fenced-state checkpoint; owner SQL and secrets are never bundled. */
+export const checkpointFunction = {
+  ...probeFunction,
+  slug: "berthcheckpoint6",
+  name: "Berth scheduled fenced-state checkpoint",
+  source: "./src/trial/checkpoint-index.ts",
+};
