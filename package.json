@@ -20,7 +20,9 @@
     "test:setup-db": "pnpm run build && node --test dist/tests/integration/neon-database.test.js",
     "setup:oci": "pnpm run build && node dist/scripts/oci-setup.js",
     "test:oci-setup": "pnpm run build && node --test dist/tests/oci-setup.test.js dist/tests/oci-admin.test.js dist/tests/oci-recovery.test.js dist/tests/oci-diagnostics.test.js",
-    "setup:oci-admin": "pnpm run build && node dist/scripts/oci-admin-setup.js"
+    "setup:oci-admin": "pnpm run build && node dist/scripts/oci-admin-setup.js",
+    "doctor:oci": "pnpm run build && node dist/scripts/oci-doctor.js",
+    "test:oci-doctor": "pnpm run build && node --test dist/tests/oci-doctor.test.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
