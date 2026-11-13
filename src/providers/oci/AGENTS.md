@@ -16,3 +16,10 @@ administrator, filesystem, environment reader or hosted handler belongs here.
   followed by canonical harness checks. No live cloud writes in this issue.
 
 See docs/trial/oci-bucket-provider.md for integration gates and limitations.
+
+`trial-object.ts` owns only deterministic `trial.bin`, intent/receipt journal ports,
+checksum streaming and conditional object cleanup. It may import hashing/streams,
+`bucket.ts` for saved bucket verification and `client.ts` for the budgeted object
+adapter; it cannot import SDKs directly. Reconciliation after a lost PUT requires
+precommitted pending intent, exact metadata/bytes and any saved revision. Never
+replay a pending absent upload. See docs/trial/oci-object-probe.md.

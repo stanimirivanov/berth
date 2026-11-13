@@ -96,3 +96,8 @@ Issue #8 adds the narrow OCI bucket provider with fake-cloud contracts and actua
 Alchemy/SDK boundary tests. See `docs/trial/oci-bucket-provider.md`. Ledger dispatch
 wiring, durable OCI state payloads and live conditional teardown remain gated;
 this implementation does not enable hosted OCI writes.
+
+Issue #9 adds the fixed owned object probe and conditional cleanup. See
+`docs/trial/oci-object-probe.md` for persistence ordering, pending-upload recovery
+and stop codes. Concrete fenced journal/dispatch wiring and live OCI acceptance
+remain gated; offline contracts do not enable cloud writes.

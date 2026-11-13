@@ -3,6 +3,7 @@ import {
   models as model,
   ObjectStorageClient,
   type requests,
+  type responses,
 } from "oci-objectstorage";
 
 /** Saved public intent; credentials and owner/admin identities never enter resource state. */
@@ -19,7 +20,9 @@ export type BucketAction =
   | "inspect"
   | "inspect_cleanup"
   | "create_bucket"
-  | "delete_bucket";
+  | "delete_bucket"
+  | "put_object"
+  | "delete_object";
 /**
  * Integration contract: reserve and commit before invoking send exactly once.
  * A missing/duplicate reservation must not invoke send. Keep ambiguous mutations
@@ -82,7 +85,8 @@ export type BucketFailureCode =
   | "not-empty"
   | "revision"
   | "unknown-outcome"
-  | "budget";
+  | "budget"
+  | "checksum";
 /** Compatible with Alchemy's public ProviderError contract. */
 export class BucketFailure extends Error {
   readonly _tag = "BucketFailure";
@@ -117,42 +121,7 @@ export function bucketClient(
   dispatcher: BudgetedDispatcher,
   homeRegion: string,
 ) {
-  if (!/^[a-z]{2}-[a-z]+-[1-9]$/.test(homeRegion))
-    throw new BucketFailure("invalid-intent");
-  const endpoint = `https://objectstorage.${homeRegion}.oraclecloud.com`;
-  sdk.endpoint = endpoint;
-  /** Catch only after the dispatcher has observed the original transport result for its journal. */
-  async function send<T>(
-    action: BucketAction,
-    work: () => Promise<T>,
-  ): Promise<T> {
-    let invoked = false;
-    try {
-      return await dispatcher.dispatch(action, async () => {
-        if (invoked || sdk.endpoint !== endpoint)
-          throw new BucketFailure("budget");
-        invoked = true;
-        return work();
-      });
-    } catch (error) {
-      if (error instanceof BucketFailure) throw error;
-      const status =
-        error && typeof error === "object" && "statusCode" in error
-          ? error.statusCode
-          : undefined;
-      throw new BucketFailure(
-        status === 403 || status === 401
-          ? "forbidden"
-          : status === 412
-            ? "precondition"
-            : status === 409
-              ? "collision"
-              : action === "create_bucket" || action === "delete_bucket"
-                ? "unknown-outcome"
-                : "unavailable",
-      );
-    }
-  }
+  const send = requestSender(sdk, dispatcher, homeRegion);
   const retryConfiguration = NoRetryConfigurationDetails;
   return {
     region: homeRegion,
@@ -272,4 +241,193 @@ export function safeBucketSdk(transport: HttpClient): ObjectStorageClient {
     },
     { retryConfiguration: NoRetryConfigurationDetails },
   );
+}
+
+/** Shared one-reservation/one-send boundary for bucket and object requests. */
+function requestSender(
+  sdk: { endpoint: string },
+  dispatcher: BudgetedDispatcher,
+  homeRegion: string,
+) {
+  if (!/^[a-z]{2}-[a-z]+-[1-9]$/.test(homeRegion))
+    throw new BucketFailure("invalid-intent");
+  const endpoint = `https://objectstorage.${homeRegion}.oraclecloud.com`;
+  sdk.endpoint = endpoint;
+  /** Catch only after the dispatcher has observed the original transport result for its journal. */
+  async function send<T>(
+    action: BucketAction,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    let invoked = false;
+    try {
+      return await dispatcher.dispatch(action, async () => {
+        if (invoked || sdk.endpoint !== endpoint)
+          throw new BucketFailure("budget");
+        invoked = true;
+        return work();
+      });
+    } catch (error) {
+      if (error instanceof BucketFailure) throw error;
+      const status =
+        error && typeof error === "object" && "statusCode" in error
+          ? error.statusCode
+          : undefined;
+      throw new BucketFailure(
+        status === 403 || status === 401
+          ? "forbidden"
+          : status === 412
+            ? "precondition"
+            : status === 409
+              ? "collision"
+              : [
+                    "create_bucket",
+                    "delete_bucket",
+                    "put_object",
+                    "delete_object",
+                  ].includes(action)
+                ? "unknown-outcome"
+                : "unavailable",
+      );
+    }
+  }
+  return send;
+}
+
+/** Metadata captured by HEAD/GET; headers alone do not prove the bytes. */
+export type ObjectObservation = Pick<
+  responses.HeadObjectResponse,
+  "eTag" | "opcMeta" | "contentLength"
+> &
+  Partial<
+    Pick<
+      responses.HeadObjectResponse,
+      "versionId" | "opcMultipartMd5" | "storageTier"
+    >
+  >;
+/** Narrow object API; no multipart writer or bulk-delete capability is exposed. */
+export interface ObjectSdk extends BucketSdk {
+  /** Complete bounded inventory, never prefix-only ownership evidence. */
+  listObjects(r: requests.ListObjectsRequest): Promise<{
+    listObjects: {
+      objects: { name: string }[];
+      prefixes?: string[];
+      nextStartWith?: string;
+    };
+  }>;
+  /** Any historic version or delete marker stops the trial. */
+  listObjectVersions(r: requests.ListObjectVersionsRequest): Promise<{
+    objectVersionCollection: {
+      items: Pick<
+        model.ObjectVersionSummary,
+        "name" | "versionId" | "isDeleteMarker"
+      >[];
+      prefixes?: string[];
+    };
+    opcNextPage?: string;
+  }>;
+  /** Upload one fixed byte buffer with create-only protection. */
+  putObject(r: requests.PutObjectRequest): Promise<{ eTag: string }>;
+  /** Inspect metadata before binding GET to this revision. */
+  headObject(r: requests.HeadObjectRequest): Promise<ObjectObservation>;
+  /** Caller consumes or cancels the returned stream within the byte bound. */
+  getObject(
+    r: requests.GetObjectRequest,
+  ): Promise<
+    ObjectObservation & { value: responses.GetObjectResponse["value"] }
+  >;
+  /** Delete only at an inspected revision, never by version ID. */
+  deleteObject(r: requests.DeleteObjectRequest): Promise<unknown>;
+}
+/** Budgeted object adapter using the same explicit endpoint and safe error contract. */
+export function objectClient(
+  sdk: ObjectSdk,
+  dispatcher: BudgetedDispatcher,
+  region: string,
+) {
+  const send = requestSender(sdk, dispatcher, region),
+    retryConfiguration = NoRetryConfigurationDetails;
+  /** Fixed target parameters; callers never supply SDK request options. */
+  const target = (i: BucketIntent) => ({
+    namespaceName: i.namespace,
+    bucketName: i.bucket,
+    retryConfiguration,
+  });
+  /** Reject a missing revision before reserving any request. */
+  const revision = (etag: string) => {
+    if (!etag.trim()) throw new BucketFailure("revision");
+    return etag;
+  };
+  return {
+    bucket: bucketClient(sdk, dispatcher, region),
+    /** Inspect all names with a bounded page; no pagination loop. */
+    list: (i: BucketIntent, cleanup: boolean) =>
+      send(cleanup ? "inspect_cleanup" : "inspect", () =>
+        sdk.listObjects({ ...target(i), limit: 2 }),
+      ),
+    /** Detect history even if current-object listing is empty. */
+    versions: (i: BucketIntent, cleanup: boolean) =>
+      send(cleanup ? "inspect_cleanup" : "inspect", () =>
+        sdk.listObjectVersions({ ...target(i), limit: 2 }),
+      ),
+    /** Unfinished multipart work is unexpected in this trial. */
+    uploads: (i: BucketIntent, cleanup: boolean) =>
+      send(cleanup ? "inspect_cleanup" : "inspect", () =>
+        sdk.listMultipartUploads({ ...target(i), limit: 1 }),
+      ),
+    /** Only the deterministic payload is supplied by the lifecycle helper. */
+    put: (i: BucketIntent, name: string, body: Uint8Array, digest: string) =>
+      send("put_object", () =>
+        sdk.putObject({
+          ...target(i),
+          objectName: name,
+          putObjectBody: body,
+          contentLength: body.length,
+          ifNoneMatch: "*",
+          contentType: "application/octet-stream",
+          storageTier: model.StorageTier.Standard,
+          opcMeta: {
+            "berth-operation": i.operation,
+            "berth-marker": i.marker,
+            "berth-sha256": digest,
+          },
+        }),
+      ),
+    /** Bind the subsequent body read to the inspected revision. */
+    head: (i: BucketIntent, name: string, cleanup: boolean) =>
+      send(cleanup ? "inspect_cleanup" : "inspect", async () =>
+        normalizeObject(
+          await sdk.headObject({ ...target(i), objectName: name }),
+        ),
+      ),
+    /** No range reads: caller checks exactly the fixed object length. */
+    get: (i: BucketIntent, name: string, etag: string, cleanup: boolean) => {
+      const ifMatch = revision(etag);
+      return send(cleanup ? "inspect_cleanup" : "inspect", async () =>
+        normalizeObject(
+          await sdk.getObject({ ...target(i), objectName: name, ifMatch }),
+        ),
+      );
+    },
+    /** No unconditional fallback after precondition failure. */
+    remove: (i: BucketIntent, name: string, etag: string) => {
+      const ifMatch = revision(etag);
+      return send("delete_object", () =>
+        sdk.deleteObject({ ...target(i), objectName: name, ifMatch }),
+      );
+    },
+  };
+}
+/** Lifecycle port carries no credentials and has no overwrite operation. */
+export type ObjectClient = ReturnType<typeof objectClient>;
+
+/** The pinned SDK retains opc-meta- on response keys but expects unprefixed PUT keys. */
+function normalizeObject<T extends ObjectObservation>(response: T): T {
+  return {
+    ...response,
+    opcMeta: Object.fromEntries(
+      Object.entries(response.opcMeta)
+        .filter(([key]) => key.startsWith("opc-meta-"))
+        .map(([key, value]) => [key.slice(9), value]),
+    ),
+  };
 }

@@ -5,6 +5,7 @@ import type {
   BucketIntent,
   BucketSdk,
   BudgetedDispatcher,
+  ObjectSdk,
 } from "../../src/providers/oci/client.js";
 export const intent: BucketIntent = {
   operation: "00000000-0000-4000-8000-000000000001",
@@ -101,7 +102,9 @@ export class FakeOci implements BucketSdk {
     this.record("retention", r);
     return { retentionRuleCollection: { items: this.retention } };
   }
-  async listObjects(r: requests.ListObjectsRequest) {
+  async listObjects(
+    r: requests.ListObjectsRequest,
+  ): ReturnType<BucketSdk["listObjects"]> {
     this.record("objects", r);
     if (this.changeDuringEmptyCheck && this.value) this.value.etag = "etag-2";
     return { listObjects: { objects: this.objects } };
@@ -115,5 +118,116 @@ export class FakeOci implements BucketSdk {
   ) {
     this.record("grants", r);
     return { items: this.grants };
+  }
+}
+
+export class FakeObjects extends FakeOci {
+  object:
+    | { meta: Record<string, string>; body: Uint8Array; etag: string }
+    | undefined;
+  puts = 0;
+  objectDeletes = 0;
+  losePut = false;
+  replaceOnDelete = false;
+  extra = false;
+  versions = false;
+  corrupt = false;
+  oversized = false;
+  beforePut: () => void = () => {};
+  lastPut: requests.PutObjectRequest | undefined;
+  lastDelete: requests.DeleteObjectRequest | undefined;
+  override async listObjects(r: requests.ListObjectsRequest) {
+    this.record("object-list", r);
+    return {
+      listObjects: {
+        objects: [
+          ...(this.object ? [{ name: "trial.bin" }] : []),
+          ...(this.extra ? [{ name: "foreign" }] : []),
+        ],
+      },
+    };
+  }
+  async listObjectVersions(r: requests.ListObjectVersionsRequest) {
+    this.record("versions", r);
+    return {
+      objectVersionCollection: {
+        items: this.versions
+          ? [
+              {
+                name: "trial.bin",
+                versionId: "historic",
+                isDeleteMarker: false,
+              },
+            ]
+          : [],
+      },
+    };
+  }
+  async putObject(r: requests.PutObjectRequest) {
+    this.record("put", r);
+    this.beforePut();
+    this.puts++;
+    this.lastPut = r;
+    if (r.ifNoneMatch !== "*" || this.object) throw { statusCode: 412 };
+    if (!(r.putObjectBody instanceof Uint8Array)) throw Error("fixture body");
+    this.object = {
+      body: Uint8Array.from(r.putObjectBody),
+      meta: { ...r.opcMeta },
+      etag: "object-1",
+    };
+    if (this.losePut) throw { statusCode: 500 };
+    return { eTag: this.object.etag };
+  }
+  async headObject(r: requests.HeadObjectRequest) {
+    this.record("head", r);
+    if (!this.object) throw { statusCode: 404 };
+    return {
+      eTag: this.object.etag,
+      opcMeta: Object.fromEntries(
+        Object.entries(this.object.meta).map(([key, value]) => [
+          `opc-meta-${key}`,
+          value,
+        ]),
+      ),
+      contentLength: 1048576,
+      storageTier: "Standard",
+    };
+  }
+  async getObject(
+    r: requests.GetObjectRequest,
+  ): ReturnType<ObjectSdk["getObject"]> {
+    this.record("get-object", r);
+    if (!this.object) throw { statusCode: 404 };
+    if (r.ifMatch !== this.object.etag) throw { statusCode: 412 };
+    const bytes = this.oversized
+      ? new Uint8Array(1048577)
+      : Uint8Array.from(this.object.body);
+    if (this.corrupt) bytes[0] = 255;
+    return {
+      eTag: this.object.etag,
+      opcMeta: Object.fromEntries(
+        Object.entries(this.object.meta).map(([key, value]) => [
+          `opc-meta-${key}`,
+          value,
+        ]),
+      ),
+      contentLength: 1048576,
+      storageTier: "Standard",
+      value: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes);
+          controller.close();
+        },
+      }),
+    };
+  }
+  async deleteObject(r: requests.DeleteObjectRequest) {
+    this.record("delete-object", r);
+    this.objectDeletes++;
+    this.lastDelete = r;
+    if (this.replaceOnDelete && this.object) this.object.etag = "replacement";
+    if (r.ifMatch !== this.object?.etag) throw { statusCode: 412 };
+    this.object = undefined;
+    return {};
   }
 }
