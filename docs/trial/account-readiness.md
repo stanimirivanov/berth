@@ -5,7 +5,9 @@ Ohio (`aws-us-east-2`), with `databasePermissions: passed` at
 **2026-11-12T17:04:05.362Z**. The supplied redacted result confirms project/region,
 one branch/endpoint, scale-to-zero and database permission verification. This is
 owner-reported live evidence, not an independent agent run. PR #17 is merged;
-OCI preparation continues in #18.
+The owner subsequently reported a confirmed OCI compartment creation followed by
+CreateUser HTTP 400 on 2026-11-12, and no matching user in the Console. Recovery
+is tracked in #24; this is still owner-reported evidence, not an agent-run check.
 
 Record redacted outcomes here after verification; keep IDs, connection strings,
 API keys, private keys and private credential files out of Git and GitHub.
@@ -21,7 +23,7 @@ API keys, private keys and private credential files out of Git and GitHub.
 | No alternate injected owner credentials | Pending later deployment verification |
 | Schedules disabled | Pending owner check; script creates none |
 | Dated database/Functions/network allowance headroom | Pending owner check |
-| OCI identity, policy, home-region eligibility and aggregate headroom | Pending owner-run administrator setup, effective-IAM review and read-only verifier from #18 |
+| OCI identity, policy, home-region eligibility and aggregate headroom | Partial: compartment created, user rejected; #24 recovery, effective-IAM review and restricted verification pending |
 | Administrative cleanup ownership | Account owner; completion pending trial |
 
 The script's redacted result can establish database permissions only. Do not

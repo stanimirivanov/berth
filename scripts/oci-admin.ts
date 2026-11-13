@@ -8,6 +8,8 @@ import {
   policyStatements,
 } from "./oci-access.js";
 
+import type { Recovery, RecoveryPlan } from "./oci-recovery.js";
+
 export interface AdminConfig {
   tenancyOcid: string;
   userOcid: string;
@@ -105,15 +107,34 @@ function scimId(value: unknown): string {
   return value;
 }
 
-/** Fresh creation only. A durable journal must acknowledge intent before any write. */
+/** Fresh creation or narrowly validated partial-run recovery. A durable journal must acknowledge intent before any write. */
+type Transport = (url: string, init: RequestInit) => Promise<Response>;
+export function bootstrapOci(
+  config: AdminConfig,
+  pem: string,
+  passphrase: string | undefined,
+  trialKey: TrialKey,
+  journal: Journal,
+  transport?: Transport,
+): Promise<OciConfig>;
+export function bootstrapOci(
+  config: AdminConfig,
+  pem: string,
+  passphrase: string | undefined,
+  trialKey: TrialKey,
+  journal: Journal,
+  transport: Transport,
+  recovery: Recovery,
+): Promise<OciConfig | RecoveryPlan>;
 export async function bootstrapOci(
   config: AdminConfig,
   pem: string,
   passphrase: string | undefined,
   trialKey: TrialKey,
   journal: Journal,
-  transport: (url: string, init: RequestInit) => Promise<Response> = fetch,
-): Promise<OciConfig> {
+  transport: Transport = fetch,
+  recovery?: Recovery,
+): Promise<OciConfig | RecoveryPlan> {
   parseAdminConfig(config);
   const signer = createOciSigner(config, pem, passphrase);
   const identity = `https://identity.${config.region}.oci.oraclecloud.com/20160918`;
@@ -149,6 +170,8 @@ export async function bootstrapOci(
         await response.body?.cancel();
         throw new Error("HTTP failure");
       }
+      if (recovery && method === "GET" && response.headers.has("opc-next-page"))
+        throw new Error("Ambiguous paginated response");
       const data: unknown = await response.json();
       // Persist only identifiers needed for reconciliation, never raw response bodies.
       if (body !== undefined) {
@@ -215,14 +238,83 @@ export async function bootstrapOci(
     throw new OciSetupError("Unexpected Object Storage namespace");
   const description =
     "Berth disposable Object Storage trial; owner-managed IAM cleanup";
-  const compartment = record(
-    await request("CreateCompartment", `${identity}/compartments`, {
-      compartmentId: config.tenancyOcid,
-      name: config.name,
-      description,
-    }),
-  );
-  const compartmentOcid = ocid(compartment.id, "compartment");
+  let compartmentOcid: string;
+  if (recovery) {
+    if (recovery.userUrl !== `${scim}/Users`)
+      throw new OciSetupError(
+        "Journal domain URL differs from authenticated domain; no recovery writes",
+      );
+    compartmentOcid = ocid(recovery.compartmentOcid, "compartment");
+    const existing = record(
+      await request(
+        "GetCompartment",
+        `${identity}/compartments/${compartmentOcid}`,
+      ),
+    );
+    if (
+      existing.id !== compartmentOcid ||
+      existing.compartmentId !== config.tenancyOcid ||
+      existing.name !== config.name ||
+      existing.description !== description ||
+      existing.lifecycleState !== "ACTIVE"
+    )
+      throw new OciSetupError(
+        "Recorded compartment identity, parent, name, description or state mismatch; no recovery writes",
+      );
+    const buckets = await request(
+      "ListBuckets",
+      `https://objectstorage.${config.region}.oraclecloud.com/n/${encodeURIComponent(namespace)}/b?${new URLSearchParams({ compartmentId: compartmentOcid, limit: "1" })}`,
+    );
+    if (!Array.isArray(buckets) || buckets.length !== 0)
+      throw new OciSetupError(
+        "Recorded compartment is not proven bucket-empty; no recovery writes",
+      );
+    for (const [collection, field] of [
+      ["Users", "userName"],
+      ["Groups", "displayName"],
+    ]) {
+      const found = record(
+        await request(
+          `Search${collection}`,
+          `${scim}/${collection}?${new URLSearchParams({ filter: `${field} eq "${config.name}-executor"`, count: "2", startIndex: "1" })}`,
+        ),
+      );
+      // SCIM allows Resources to be omitted when totalResults is exactly zero.
+      if (
+        found.totalResults !== 0 ||
+        (found.Resources !== undefined &&
+          (!Array.isArray(found.Resources) || found.Resources.length !== 0))
+      )
+        throw new OciSetupError(
+          `${collection} already exists or absence is ambiguous; no recovery writes`,
+        );
+    }
+    const policies = await request(
+      "ListPolicies",
+      `${identity}/policies?${new URLSearchParams({ compartmentId: config.tenancyOcid, name: `${config.name}-objectstorage`, limit: "1" })}`,
+    );
+    if (!Array.isArray(policies) || policies.length !== 0)
+      throw new OciSetupError(
+        "Matching policy exists or absence is ambiguous; no recovery writes",
+      );
+    if (recovery.planOnly)
+      return { recovery: "ready", requestsDispatched: 8, remainingWrites: 4 };
+    await journal({
+      phase: "recovery-start",
+      originalJournalHash: recovery.journalHash,
+      compartmentOcid,
+      userCreateRejectedAttested: true,
+    });
+  } else {
+    const compartment = record(
+      await request("CreateCompartment", `${identity}/compartments`, {
+        compartmentId: config.tenancyOcid,
+        name: config.name,
+        description,
+      }),
+    );
+    compartmentOcid = ocid(compartment.id, "compartment");
+  }
   const user = record(
     await request("CreateUser", `${scim}/Users`, {
       schemas: ["urn:ietf:params:scim:schemas:core:2.0:User", extension],
