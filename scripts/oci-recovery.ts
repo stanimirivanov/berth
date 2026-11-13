@@ -19,6 +19,7 @@ export interface Recovery {
   userUrl: string;
   journalHash: string;
   planOnly: boolean;
+  rejectedAttempts: 1 | 2;
 }
 export interface RecoveryPlan {
   recovery: "ready";
@@ -37,7 +38,7 @@ export function parseRecoveryJournal(
 ): Recovery {
   const fail = () =>
     new OciSetupError(
-      "Unsupported or mismatched recovery journal. Expected only start, compartment intent/confirmation and rejected user intent; do not edit the journal.",
+      "Unsupported or mismatched recovery journal. Expected the supported four-entry or six-entry legacy rejected-user journal; do not edit the journal.",
     );
   if (!text.endsWith("\n")) throw fail();
   let entries: Record<string, unknown>[];
@@ -61,7 +62,7 @@ export function parseRecoveryJournal(
   } catch {
     throw fail();
   }
-  if (entries.length !== 4) throw fail();
+  if (entries.length !== 4 && entries.length !== 6) throw fail();
   const [start, intent, confirmed, user] = entries;
   const identity = `https://identity.${config.region}.oci.oraclecloud.com/20160918`;
   if (
@@ -124,7 +125,28 @@ export function parseRecoveryJournal(
     })
   )
     throw fail();
+  if (entries.length === 6) {
+    const originalText = `${text.split("\n").slice(0, 4).join("\n")}\n`;
+    if (
+      !isDeepStrictEqual(entries[4], {
+        phase: "recovery-start",
+        originalJournalHash: createHash("sha256")
+          .update(originalText)
+          .digest("hex"),
+        compartmentOcid: confirmed.id,
+        userCreateRejectedAttested: true,
+      }) ||
+      !isDeepStrictEqual(entries[5], {
+        phase: "intent",
+        operation: "CreateUser",
+        url: user.url,
+        body: { ...body, name: { familyName: `${config.name}-executor` } },
+      })
+    )
+      throw fail();
+  }
   return {
+    rejectedAttempts: entries.length === 6 ? 2 : 1,
     compartmentOcid: confirmed.id,
     userUrl: user.url,
     journalHash: createHash("sha256").update(text).digest("hex"),
@@ -169,6 +191,7 @@ export async function runOciRecovery(
   planOnly: boolean,
   rejected: boolean,
   transport: (url: string, init: RequestInit) => Promise<Response>,
+  primaryEmailRejected = false,
 ) {
   if (!planOnly && !rejected)
     throw new OciSetupError(
@@ -236,6 +259,10 @@ export async function runOciRecovery(
       ...parseRecoveryJournal(text, config, fingerprint),
       planOnly,
     };
+    if (recovery.rejectedAttempts === 2 && !primaryEmailRejected)
+      throw new OciSetupError(
+        "This journal includes a rejected recovery. Supply --confirm-primary-email-rejection only after confirming its Audit message: The primary email must be specified. Do not attest an unknown outcome.",
+      );
     const pem = await readPrivateText(config.privateKeyFile);
     const passphrase =
       config.passphraseFile === undefined

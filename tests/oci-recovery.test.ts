@@ -41,6 +41,7 @@ async function fixture() {
     fingerprint: adminFingerprint,
     privateKeyFile: join(dir, "admin.pem"),
     name: "berth-trial",
+    trialEmail: "owner@example.test",
   };
   const events = [
     {
@@ -380,6 +381,67 @@ test("every remaining mutation failure preserves the original key and prevents r
 
       const count = f.calls.length;
       await assert.rejects(runOciAdmin(f.args("recover"), f.transport));
+      assert.equal(f.calls.length, count);
+    });
+  }
+});
+
+test("second legacy rejection needs its own attestation and exact journal linkage", async () => {
+  for (const variant of [
+    "success",
+    "missing-attestation",
+    "bad-hash",
+    "later",
+  ]) {
+    await withFixture(async (f) => {
+      const oldUser = JSON.parse(JSON.stringify(f.events[3]));
+      oldUser.body.name = { familyName: "berth-trial-executor" };
+      const marker = {
+        at: "2026-11-13T08:00:00.000Z",
+        phase: "recovery-start",
+        originalJournalHash: createHash("sha256")
+          .update(f.journal)
+          .digest("hex"),
+        compartmentOcid: id("compartment"),
+        userCreateRejectedAttested: true,
+      };
+      if (variant === "bad-hash") marker.originalJournalHash = "bad";
+      const text =
+        f.journal +
+        JSON.stringify(marker) +
+        "\n" +
+        JSON.stringify(oldUser) +
+        "\n" +
+        (variant === "later" ? "{}\n" : "");
+      await writeFile(join(f.out, "journal.jsonl"), text);
+      const args = [
+        ...f.args("recover"),
+        ...(variant === "missing-attestation"
+          ? []
+          : ["--confirm-primary-email-rejection"]),
+      ];
+      if (variant !== "success") {
+        await assert.rejects(runOciAdmin(args, f.transport));
+        assert.equal(f.calls.length, 0);
+        return;
+      }
+      await runOciAdmin(args, f.transport);
+      assert.equal(f.calls.length, 12);
+      const posted = JSON.parse(
+        String(
+          f.calls.find(
+            (c) => c.init.method === "POST" && c.url.endsWith("/Users"),
+          )?.init.body,
+        ),
+      );
+      assert.deepEqual(posted.emails, [
+        { value: f.config.trialEmail, type: "work", primary: true },
+      ]);
+      assert.ok(
+        (await readFile(join(f.out, "journal.jsonl"), "utf8")).startsWith(text),
+      );
+      const count = f.calls.length;
+      await assert.rejects(runOciAdmin(args, f.transport));
       assert.equal(f.calls.length, count);
     });
   }

@@ -22,6 +22,7 @@ const config = {
   fingerprint,
   privateKeyFile: "/private/admin.pem",
   name: "berth-trial",
+  trialEmail: "owner@example.test",
 };
 const capabilities = {
   canUseApiKeys: true,
@@ -123,6 +124,13 @@ test("creates only dedicated domain identity and scoped policy; journals before 
   assert.deepEqual(user[extension], capabilities);
   // Oracle POST /admin/v1/Users requires name.familyName; displayName is not a substitute.
   assert.deepEqual(user.name, { familyName: "berth-trial-executor" });
+  assert.deepEqual(user.emails, [
+    { value: config.trialEmail, type: "work", primary: true },
+  ]);
+  const notificationSchema =
+    "urn:ietf:params:scim:schemas:oracle:idcs:extension:user:User";
+  assert.ok(user.schemas.includes(notificationSchema));
+  assert.equal(user[notificationSchema].bypassNotification, true);
   assert.equal(user.password, undefined);
   const group = JSON.parse(String(f.calls[5]?.init.body));
   assert.deepEqual(group.members, [{ value: "user-scim-id", type: "User" }]);
@@ -363,5 +371,20 @@ test("successful CLI apply persists only trial credentials and a complete privat
   } finally {
     console.log = originalLog;
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("trial email is explicit, validated and never included in validation errors", () => {
+  for (const trialEmail of [
+    undefined,
+    "",
+    "owner@",
+    "owner@example.test\n",
+    "Owner <owner@example.test>",
+  ]) {
+    assert.throws(
+      () => parseAdminConfig({ ...config, trialEmail }),
+      (e) => e instanceof Error && !e.message.includes("owner@"),
+    );
   }
 });

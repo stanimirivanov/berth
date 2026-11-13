@@ -177,7 +177,8 @@ quotes and no comments or trailing commas.
   "region": "REPLACE_HOME_REGION_IDENTIFIER",
   "fingerprint": "REPLACE_ADMIN_KEY_FINGERPRINT",
   "privateKeyFile": "REPLACE_ABSOLUTE_ADMIN_PRIVATE_KEY_PATH",
-  "name": "berth-trial"
+  "name": "berth-trial",
+  "trialEmail": "REPLACE_WITH_EMAIL_YOU_CONTROL"
 }
 ```
 
@@ -190,6 +191,7 @@ quotes and no comments or trailing commas.
 | `fingerprint` | Administrator key fingerprint from step 3C, lowercase colon-separated hex |
 | `privateKeyFile` | Absolute path to `oci-admin.pem`, not the public file; e.g. `/home/izanagi/.config/berth-trial/oci-admin.pem` |
 | `name` | Keep `berth-trial` for a fresh setup; if already used, resolve the previous setup before choosing another name |
+| `trialEmail` | A real email address you control for the service user; required by the identity domain. Enter only the address, without a display name. The script requests suppression of the creation notification. Keep it in the private JSON, not chat or Git. |
 | `passphraseFile` | **Omit the property entirely** for the key generated above; do not add an empty string or `null` |
 
 - No required field may be blank.
@@ -235,7 +237,7 @@ Expected success: `"administratorSetup": "created"`, `"iamWrites": 5`.
 | Created item | Value chosen by the script; no Console form to fill |
 | --- | --- |
 | Compartment | `berth-trial`, parent = tenancy root |
-| User in Default | `berth-trial-executor`; service user; API keys enabled; Console and other credential capabilities disabled; no password/email supplied |
+| User in Default | `berth-trial-executor`; service user; API keys enabled; Console and other credential capabilities disabled; no password; configured primary email supplied with creation notification suppressed |
 | Group in Default | `berth-trial-executor`, containing that new user |
 | Trial API key | New RSA 3072 key; only its public part uploaded to the new user |
 | Policy at root | `berth-trial-objectstorage`; three statements limited to the trial compartment |

@@ -1,14 +1,16 @@
 # Recover `oci-bootstrap-02` after CreateUser HTTP 400
 
-**Latest owner result (2026-11-13):** recovery preflight passed, but the recovery
-CreateUser also returned HTTP 400. Its response detail was discarded by the
-version run. That directory now has a recovery-start entry and must not be replayed
-or edited back to four entries. The creation failure is unresolved; the commands
-below describe the originally supported prefix, not permission to repeat this run.
+**Confirmed cause (owner Audit evidence, 2026-11-13):** “The primary email must be
+specified.” The corrected request now supplies an explicit `trialEmail` and requests
+suppression of the creation notification. Your six-entry journal from the second
+rejection is supported after validation and explicit confirmation of this Audit
+message. Keep every journal entry and both keys unchanged. Live success remains
+unverified until you run the revised command.
 
-## Diagnosing the second rejection
+## Evidence and diagnostics
 
-- Do not rerun apply/recover, change the resource name, or remove recovery entries.
+- Do not repeat older apply/recover commands, change the resource name, or remove
+  recovery entries. Use only the revised, attested recovery procedure below.
 - Open **Observability & Management → Logging → Audit**, select the tenancy root and the home region,
   then choose **Edit → Custom**, enter a time range covering the failed recovery,
   and select **Update**. Leave User/Resource/Type filters unset initially. In
@@ -31,18 +33,41 @@ below describe the originally supported prefix, not permission to repeat this ru
   recreate already discarded responses and is not a reason to repeat a mutation.
 
 
-Use this procedure for the owner-reported run on 2026-11-12:
+Use this procedure for the owner-reported run and its rejected recovery:
 
 - `CreateCompartment` succeeded and its OCID was recorded.
 - `CreateUser` returned HTTP 400. The owner subsequently found no matching user.
 - No group, key registration or policy was attempted in that run.
-- The original four-entry journal and generated keys are still in `oci-bootstrap-02`.
+- The original journal and generated keys remain in `oci-bootstrap-02`; the failed
+  recovery appended one recovery-start record and one corrected CreateUser intent.
 
 Issue #22 added Oracle's required `name.familyName` to the service-user request.
-Issue #24 adds the narrow recovery below. This is not a general resume mechanism.
+Issue #24 adds the narrow recovery below, including the confirmed missing-email rejection. This is not a general resume mechanism.
 No live recovery has been performed by the agent.
 
-## 1. Keep the existing files and confirm the failure
+## 1. Add the required email, preserving recovery evidence
+
+Open the private administrator configuration:
+
+```bash
+BERTH_PRIVATE_DIR="$HOME/.config/berth-trial"
+nano "$BERTH_PRIVATE_DIR/oci-admin.json"
+```
+
+- Add a comma after `"name": "berth-trial"` and add
+  `"trialEmail": "YOUR_REAL_EMAIL_ADDRESS"` before the closing brace.
+- Replace the placeholder with an address you control. Do not include a display
+  name, surrounding whitespace or a fake/example address. Do not send the address
+  to chat or GitHub.
+- Leave the tenancy/user/domain OCIDs, region, administrator fingerprint and key
+  path unchanged. The email is not an administrator credential.
+- Save with Ctrl+O, Enter; exit with Ctrl+X. Keep the file mode 600.
+- The email is sent to OCI in the user request and recorded in the protected
+  journal. It is not printed in plan/success output or copied to runtime config.
+  User-creation notification is suppressed through Oracle's `bypassNotification`
+  flag; no email-send API is called.
+
+Then confirm the failure state:
 
 - Use the merged recovery code and the pinned Node/pnpm versions in the checkout.
 - Keep `journal.jsonl`, `trial.pem` and `trial-public.pem` unchanged. Do not copy a
@@ -57,9 +82,12 @@ No live recovery has been performed by the agent.
   (older layout: **Users** sidebar), confirm `berth-trial-executor` is absent.
   If present, stop; recovery does not adopt users, groups or policies.
 
-The old journal did not record the HTTP status. The execution flag in step 3 is
-an explicit owner attestation of the rejection and exclusive operation, not an
-API-derived fact or permission to bypass a conflicting resource.
+The old journal did not record the HTTP status. `--confirm-user-create-rejected`
+attests rejection and exclusive operation. For your six-entry journal,
+`--confirm-primary-email-rejection` additionally attests that the latest attempt
+was rejected with the Audit message above. Neither flag bypasses live conflict
+checks. Do not supply the second flag for a timeout, unknown outcome or different
+validation error. Four-entry journals from the first rejection do not need it.
 
 ## 2. Run the read-only cloud preflight
 
@@ -73,7 +101,8 @@ BERTH_OCI_RUN="$BERTH_PRIVATE_DIR/oci-bootstrap-02"
 pnpm run setup:oci-admin \
   --config "$BERTH_PRIVATE_DIR/oci-admin.json" \
   --output-dir "$BERTH_OCI_RUN" \
-  --mode recover-plan
+  --mode recover-plan \
+  --confirm-primary-email-rejection
 ```
 
 Use the **existing** directory. Do not create `oci-bootstrap-03` or run `apply`.
@@ -81,8 +110,10 @@ Use the **existing** directory. Do not create `oci-bootstrap-03` or run `apply`.
 Unlike the ordinary offline `plan`, `recover-plan` reads your keys and makes up to
 **eight signed GET requests**. It checks:
 
-1. Local directory/file ownership, permissions, symlinks, exact supported journal
-   sequence, target consistency and the original trial key pair/fingerprint.
+1. Local directory/file ownership, permissions, symlinks, exact supported four- or
+   six-entry legacy journal, target consistency and the original trial key pair.
+   For six entries, the existing recovery marker's hash must match the untouched
+   first four entries, and the last request must be the old name-only user payload.
 2. The administrator key, actual tenancy home region and authenticated domain URL.
 3. The recorded compartment's OCID, parent tenancy, name, description and ACTIVE state.
 4. No buckets in that compartment; no pagination marker.
@@ -113,13 +144,15 @@ pnpm run setup:oci-admin \
   --config "$BERTH_PRIVATE_DIR/oci-admin.json" \
   --output-dir "$BERTH_OCI_RUN" \
   --mode recover \
-  --confirm-user-create-rejected
+  --confirm-user-create-rejected \
+  --confirm-primary-email-rejection
 ```
 
 The command repeats all live checks, then appends and syncs a `recovery-start`
 record before any new mutation. It performs only these four writes:
 
-- Create the API-only service user with the corrected SCIM name.
+- Create the API-only service user with the corrected SCIM name, primary email
+  and creation-notification suppression.
 - Create the dedicated group with that user as its member.
 - Register the **existing** `trial-public.pem` with the new user.
 - Create the three scoped policy statements using the **existing** compartment OCID.
@@ -159,8 +192,8 @@ headroom and later live bucket/object creation/teardown checks remain required.
 
 | Result | Action |
 | --- | --- |
-| Local validation or preflight fails, with the original four-entry journal unchanged | Correct the reported condition or obtain a review. A read-only `recover-plan` can be repeated after the condition is resolved. Never bypass a mismatch by editing the journal. |
-| A `recovery-start` entry exists, even if no later confirmation exists | Stop. This version deliberately refuses any further recovery from that journal. Preserve all files and reconcile the new intents/results before further writes. |
+| Local validation or preflight fails, with the supported four- or six-entry journal unchanged | Correct the reported condition or obtain a review. A read-only `recover-plan` can be repeated after the condition is resolved. Never bypass a mismatch by editing the journal. |
+| Recovery fails after a new `recovery-start` from this revised command | Stop. No further replay is supported. Preserve the diagnostic, journal and keys. Only the exact older six-entry missing-email rejection is an exception, with the additional attestation above. |
 | Existing user/group/policy, wrong compartment details or nonempty bucket list | Stop; inspect the exact resource. No automatic adoption, deletion or permission broadening is performed. |
 | `recovery.lock` remains after a crash | Do not remove it based on age alone. Confirm no process is using the run and inspect the journal first. Removing a stale lock does not make a later-stage journal eligible for replay. |
 | `oci-trial.json` already exists | Do not overwrite it or rerun recovery. Inspect completion state; use the restricted verifier after successful completion. |
@@ -174,4 +207,6 @@ These checks do not implement a hard spending cap or enable schedules.
 
 Sources: Oracle [Create a User schema](https://docs.oracle.com/en/cloud/paas/iam-domains-rest-api/op-admin-v1-users-post.html),
 [domain query filters](https://docs.oracle.com/en-us/iaas/Content/Identity/api-getstarted/OCISQueryParameters.htm),
-[exact policy-name filtering](https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/iam/policy/list.html).
+[exact policy-name filtering](https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/iam/policy/list.html),
+[primary email example](https://docs.oracle.com/en-us/iaas/tools/terraform-provider-oci/latest/docs/r/identity_domains_user.html),
+[notification suppression](https://docs.oracle.com/en-us/iaas/Content/Identity/tutorials/okta/lifecycle_okta/okta-lifecycle.htm).

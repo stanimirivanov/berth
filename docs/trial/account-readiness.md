@@ -8,8 +8,8 @@ owner-reported live evidence, not an independent agent run. PR #17 is merged;
 The owner subsequently reported a confirmed OCI compartment creation followed by
 CreateUser HTTP 400 on 2026-11-12, and no matching user in the Console. Recovery
 is tracked in #24. On 2026-11-13 the owner reported eight recovery preflight reads
-passed, followed by another CreateUser HTTP 400 during recovery. The response
-reason and live recovery remain unresolved; do not replay the journal. This is
+passed, followed by another CreateUser HTTP 400 during recovery. The owner then found the Audit reason: primary email is required. The payload and
+validated recovery path were revised; live recovery success remains pending. This is
 owner-reported evidence, not an agent-run check.
 
 Record redacted outcomes here after verification; keep IDs, connection strings,

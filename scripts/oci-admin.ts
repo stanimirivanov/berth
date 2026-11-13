@@ -20,6 +20,7 @@ export interface AdminConfig {
   privateKeyFile: string;
   passphraseFile?: string;
   name: string;
+  trialEmail: string;
 }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -59,6 +60,7 @@ export function parseAdminConfig(value: unknown): AdminConfig {
     "fingerprint",
     "privateKeyFile",
     "name",
+    "trialEmail",
   ];
   if (
     required.some((k) => typeof v[k] !== "string") ||
@@ -80,6 +82,15 @@ export function parseAdminConfig(value: unknown): AdminConfig {
     throw new OciSetupError(
       "Invalid name, fingerprint or private credential path",
     );
+  if (
+    typeof v.trialEmail !== "string" ||
+    v.trialEmail.length > 254 ||
+    /\s/.test(v.trialEmail) ||
+    !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v.trialEmail)
+  )
+    throw new OciSetupError(
+      "Supply trialEmail as a plain primary email address you control",
+    );
   return v as unknown as AdminConfig;
 }
 export const capabilities = {
@@ -92,6 +103,8 @@ export const capabilities = {
   canUseOAuth2ClientCredentials: false,
   canUseSmtpCredentials: false,
 };
+const notificationExtension =
+  "urn:ietf:params:scim:schemas:oracle:idcs:extension:user:User";
 const extension =
   "urn:ietf:params:scim:schemas:oracle:idcs:extension:capabilities:User";
 type Journal = (event: Record<string, unknown>) => Promise<void>;
@@ -309,6 +322,7 @@ export async function bootstrapOci(
       originalJournalHash: recovery.journalHash,
       compartmentOcid,
       userCreateRejectedAttested: true,
+      primaryEmailRejectionAttested: recovery.rejectedAttempts === 2,
     });
   } else {
     const compartment = record(
@@ -322,11 +336,17 @@ export async function bootstrapOci(
   }
   const user = record(
     await request("CreateUser", `${scim}/Users`, {
-      schemas: ["urn:ietf:params:scim:schemas:core:2.0:User", extension],
+      schemas: [
+        "urn:ietf:params:scim:schemas:core:2.0:User",
+        extension,
+        notificationExtension,
+      ],
       userName: `${config.name}-executor`,
       displayName: `${config.name}-executor`,
       // SCIM requires name.familyName even for service users; use a non-personal label.
       name: { familyName: `${config.name}-executor` },
+      emails: [{ value: config.trialEmail, type: "work", primary: true }],
+      [notificationExtension]: { bypassNotification: true },
       active: true,
       userType: "Service",
       [extension]: capabilities,

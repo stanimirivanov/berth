@@ -72,11 +72,12 @@ export async function runOciAdmin(
       "output-dir": { type: "string" },
       help: { type: "boolean" },
       "confirm-user-create-rejected": { type: "boolean" },
+      "confirm-primary-email-rejection": { type: "boolean" },
     },
   });
   if (values.help) {
     console.log(
-      "Usage: pnpm run setup:oci-admin --config /private/admin.json --mode plan|apply|recover-plan|recover [--output-dir /private/run] [--confirm-user-create-rejected]",
+      "Usage: pnpm run setup:oci-admin --config /private/admin.json --mode plan|apply|recover-plan|recover [--output-dir /private/run] [--confirm-user-create-rejected] [--confirm-primary-email-rejection]",
     );
     return;
   }
@@ -99,6 +100,7 @@ export async function runOciAdmin(
       values.mode === "recover-plan",
       values["confirm-user-create-rejected"] === true,
       transport,
+      values["confirm-primary-email-rejection"] === true,
     );
   }
   if (values.mode === "plan") {
