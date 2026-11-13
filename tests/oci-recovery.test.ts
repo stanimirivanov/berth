@@ -608,3 +608,71 @@ test("confirmed group recovery verifies members explicitly and writes only key a
     });
   }
 });
+
+test("group preflight reports safe response failure categories without mutations", async () => {
+  for (const variant of ["pagination", "json", "body"] as const) {
+    await withFixture(async (f) => {
+      const before = await groupCreatedJournal(f);
+      const transport = async (url: string, init: RequestInit) => {
+        if (url.includes("/Users/user-scim")) {
+          f.calls.push({ url, init });
+          return new Response(
+            JSON.stringify({
+              id: "user-scim",
+              ocid: "ocid1.user.oc1..aaaaaaaatrial",
+              userName: "berth-trial-executor",
+              active: true,
+              emails: [{ value: f.config.trialEmail, primary: true }],
+              [extension]: capabilities,
+            }),
+          );
+        }
+        if (url.includes("/Groups/group-scim")) {
+          f.calls.push({ url, init });
+          if (variant === "pagination")
+            return new Response("{}", {
+              headers: { "opc-next-page": "PRIVATE_TOKEN" },
+            });
+          if (variant === "json") return new Response("PRIVATE_BODY");
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new Error("PRIVATE_STREAM_ERROR"));
+              },
+            }),
+          );
+        }
+        return f.transport(url, init);
+      };
+      const reason = {
+        pagination: "pagination header present",
+        json: "invalid JSON response",
+        body: "response body read failed",
+      }[variant];
+      await assert.rejects(
+        runOciAdmin(
+          [...f.args("recover-plan"), "--confirm-primary-email-rejection"],
+          transport,
+        ),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.ok(
+            error.message.includes(`GetRecordedGroup (HTTP 200): ${reason}`),
+          );
+          assert.ok(
+            error.message.includes(
+              "Read-only request; no recovery writes dispatched",
+            ),
+          );
+          assert.ok(!error.message.includes("PRIVATE"));
+          return true;
+        },
+      );
+      assert.ok(f.calls.every((c) => c.init.method === "GET"));
+      assert.equal(
+        await readFile(join(f.out, "journal.jsonl"), "utf8"),
+        before,
+      );
+    });
+  }
+});

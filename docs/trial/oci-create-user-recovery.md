@@ -192,6 +192,23 @@ not evidence of zero usage. Record redacted results in
 [account readiness](account-readiness.md). Account eligibility, aggregate allowance
 headroom and later live bucket/object creation/teardown checks remain required.
 
+## Read-only response failures
+
+A failure at `GetRecordedGroup`, including HTTP 200 followed by a response-validation
+failure, occurs before the recovery marker or any cloud write. The journal and keys
+remain unchanged. Setup and recovery requests use the administrator credential;
+the executor does not make requests until restricted verification is run.
+
+The revised error identifies a safe category: `pagination header present`,
+`invalid JSON response`, or `response body read failed`. It never prints header
+values, response bodies or transport error details. A pagination header still
+stops recovery; the command does not ignore it or follow it automatically.
+
+After updating the checkout, run **recover-plan**, using the same directory and
+flags in step 2. Share only the resulting safe error line. Do not run `recover`
+again until preflight reports ready. A generic HTTP 200 error from older code does
+not establish which of these response failures occurred.
+
 ## If recovery fails
 
 | Result | Action |

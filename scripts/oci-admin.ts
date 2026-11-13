@@ -189,6 +189,7 @@ export async function bootstrapOci(
     if (body !== undefined)
       await journal({ phase: "intent", operation, url, body });
     let status: number | undefined;
+    let readFailure = "request failed before response";
     try {
       const response = await transport(url, {
         method,
@@ -198,6 +199,7 @@ export async function bootstrapOci(
         signal: AbortSignal.timeout(15_000),
       });
       status = response.status;
+      readFailure = "HTTP failure";
       if (operation === "CreateUser" && response.status === 400) {
         throw await captureUserRejection(response);
       }
@@ -205,9 +207,23 @@ export async function bootstrapOci(
         await response.body?.cancel();
         throw new Error("HTTP failure");
       }
-      if (recovery && method === "GET" && response.headers.has("opc-next-page"))
+      if (
+        recovery &&
+        method === "GET" &&
+        response.headers.has("opc-next-page")
+      ) {
+        readFailure = "pagination header present";
+        await response.body?.cancel();
         throw new Error("Ambiguous paginated response");
-      const data: unknown = await response.json();
+      }
+      readFailure = "response body read failed";
+      let data: unknown;
+      try {
+        data = await response.json();
+      } catch (error) {
+        if (error instanceof SyntaxError) readFailure = "invalid JSON response";
+        throw error;
+      }
       // Persist only identifiers needed for reconciliation, never raw response bodies.
       if (body !== undefined) {
         const r = record(data);
@@ -222,6 +238,10 @@ export async function bootstrapOci(
       return data;
     } catch (error) {
       if (error instanceof OciUserRejection) throw error;
+      if (recovery && method === "GET")
+        throw new OciSetupError(
+          `${operation}${status === undefined ? "" : ` (HTTP ${status})`}: ${readFailure}. Read-only request; no recovery writes dispatched. No retry; preserve the journal and keys.`,
+        );
       throw new OciSetupError(
         `${operation}${status === undefined ? "" : ` (HTTP ${status})`} failed or its outcome is uncertain. No retry. Reconcile journal before further setup.`,
       );
