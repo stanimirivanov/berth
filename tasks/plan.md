@@ -91,3 +91,8 @@ Issue #7 adds the separate operation ledger and atomic dispatch budgets. See
 `docs/trial/operation-ledger.md` for lease/unknown-outcome semantics and consumer
 obligations. No provider dispatch or live schema installation is included; the
 later provider must reserve every request and establish evidence before settlement.
+
+Issue #8 adds the narrow OCI bucket provider with fake-cloud contracts and actual
+Alchemy/SDK boundary tests. See `docs/trial/oci-bucket-provider.md`. Ledger dispatch
+wiring, durable OCI state payloads and live conditional teardown remain gated;
+this implementation does not enable hosted OCI writes.
