@@ -186,9 +186,15 @@ importers:
         specifier: 2.146.0
         version: 2.146.0
     devDependencies:
+      '@alchemy.run/sql':
+        specifier: 2.0.0-beta.86
+        version: 2.0.0-beta.86(@effect/sql-pg@4.1.4(effect@4.1.4))(alchemy@2.0.0-beta.86(@effect/platform-node@4.1.4(effect@4.1.4)(redis@6.3.1))(@types/react@19.3.0)(effect@4.1.4)(ws@8.22.2))(effect@4.1.4)(pg@8.23.1)
       '@biomejs/biome':
         specifier: 2.6.7
         version: 2.6.7
+      '@effect/sql-pg':
+        specifier: 4.1.4
+        version: 4.1.4(effect@4.1.4)
       '@neon/config-runtime':
         specifier: 1.12.3
         version: 1.12.3
@@ -235,6 +241,28 @@ packages:
       '@types/react':
         optional: true
       react-devtools-core:
+        optional: true
+
+  '@alchemy.run/sql@2.0.0-beta.86':
+    resolution: {integrity: sha512-fkYV4hnrj+XgS63Tr8TFWYkEC1vHPrKL1J3S3c0jQAeqQsNBPSpp7rAWjj7g9msnAtTRwBn2YaSfbSMoPZFSIw==}
+    peerDependencies:
+      '@effect/sql-libsql': ^4.1.4
+      '@effect/sql-mysql2': ^4.1.4
+      '@effect/sql-pg': ^4.1.4
+      alchemy: 2.0.0-beta.86
+      effect: ^4.1.4
+      mysql2: ^3.24.2
+      pg: ^8.22.0
+    peerDependenciesMeta:
+      '@effect/sql-libsql':
+        optional: true
+      '@effect/sql-mysql2':
+        optional: true
+      '@effect/sql-pg':
+        optional: true
+      mysql2:
+        optional: true
+      pg:
         optional: true
 
   '@biomejs/biome@2.6.7':
@@ -330,6 +358,11 @@ packages:
     peerDependencies:
       effect: ^4.1.4
       redis: '>=5.1.0 <7.0.0'
+
+  '@effect/sql-pg@4.1.4':
+    resolution: {integrity: sha512-DHsmpIfJeCYiJVk3JwMQFAWaQAmKV/elUbBCjHFP7qeZtJ8dViUV/y/AHdUaZ+OmMwtr8J7ZXA7AlsKZ9hPiQA==}
+    peerDependencies:
+      effect: ^4.1.4
 
   '@esbuild/aix-ppc64@0.28.1':
     resolution: {integrity: sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ==}
@@ -1767,6 +1800,14 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
+  '@alchemy.run/sql@2.0.0-beta.86(@effect/sql-pg@4.1.4(effect@4.1.4))(alchemy@2.0.0-beta.86(@effect/platform-node@4.1.4(effect@4.1.4)(redis@6.3.1))(@types/react@19.3.0)(effect@4.1.4)(ws@8.22.2))(effect@4.1.4)(pg@8.23.1)':
+    dependencies:
+      alchemy: 2.0.0-beta.86(@effect/platform-node@4.1.4(effect@4.1.4)(redis@6.3.1))(@types/react@19.3.0)(effect@4.1.4)(ws@8.22.2)
+      effect: 4.1.4
+    optionalDependencies:
+      '@effect/sql-pg': 4.1.4(effect@4.1.4)
+      pg: 8.23.1
+
   '@biomejs/biome@2.6.7':
     optionalDependencies:
       '@biomejs/cli-android-arm64': 2.6.7
@@ -1850,6 +1891,10 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  '@effect/sql-pg@4.1.4(effect@4.1.4)':
+    dependencies:
+      effect: 4.1.4
 
   '@esbuild/aix-ppc64@0.28.1':
     optional: true
