@@ -73,3 +73,11 @@ The approved specification, setup guides and this plan are published in the repo
 The tracker retains the original planning snapshots. Use docs/trial/account-readiness.md
 for current redacted evidence; a merged tooling PR or closed issue does not establish
 live account readiness.
+
+## Fenced adapter follow-up
+
+[#34](https://github.com/stanimirivanov/berth/issues/34) follows the native-store
+rejections in #5/#32: narrow owner-installed Postgres functions plus immutable
+execution fencing, real SQL fault tests and live Neon persistence evidence.
+See docs/trial/fenced-postgres.md. #6 must still integrate and prove hosted execution;
+OCI payloads and external side-effect recovery remain separately gated.

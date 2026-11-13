@@ -161,3 +161,18 @@ test("state probe may use Alchemy HTTP state but cannot import administrator too
     }).some((x) => x.rule === "architecture"),
   );
 });
+
+test("fenced adapter permits only Alchemy and Effect imports", () => {
+  assert.deepEqual(
+    analyze({
+      "src/trial/fenced-state.ts":
+        "import {StateStoreError} from 'alchemy/State/State';",
+    }),
+    [],
+  );
+  assert.ok(
+    analyze({
+      "src/trial/fenced-state.ts": "import {readFile} from 'node:fs';",
+    }).some((x) => x.rule === "architecture"),
+  );
+});

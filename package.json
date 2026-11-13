@@ -36,7 +36,8 @@
     "check": "pnpm run check:fast && pnpm test && pnpm run build:runtime-probe && pnpm run security",
     "test:state-db": "pnpm run build && node --test dist/tests/integration/state-contract.test.js",
     "test:cloudflare-trial": "pnpm run build && node --test dist/tests/cloudflare-trial.test.js dist/tests/cloudflare-state-probe.test.js",
-    "build:state-probe": "pnpm run build && node dist/scripts/build-state-probe.js"
+    "build:state-probe": "pnpm run build && node dist/scripts/build-state-probe.js",
+    "test:fenced-db": "pnpm run build && node --test dist/tests/integration/fenced-state.test.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
