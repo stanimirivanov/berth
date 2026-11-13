@@ -80,3 +80,6 @@ jobs:
       - run: pnpm run test:checkpoint-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run test:ledger-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}

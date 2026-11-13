@@ -86,3 +86,8 @@ Issue #6 integrates the narrow adapter into scheduled Neon Functions and records
 its qualification in docs/trial/feasibility-decision.md. The synthetic runtime gate
 is separate from current account/headroom attestation and live OCI conditional
 mutation/recovery acceptance. Those remain mandatory before enabling OCI writes.
+
+Issue #7 adds the separate operation ledger and atomic dispatch budgets. See
+`docs/trial/operation-ledger.md` for lease/unknown-outcome semantics and consumer
+obligations. No provider dispatch or live schema installation is included; the
+later provider must reserve every request and establish evidence before settlement.
