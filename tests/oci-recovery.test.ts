@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { capabilities } from "../scripts/oci-admin.js";
 import { runOciAdmin } from "../scripts/oci-admin-setup.js";
+import { observedOciResponses } from "./fixtures/oci-observed.js";
 
 const id = (kind: string) => `ocid1.${kind}.oc1..aaaaaaaarecovery`;
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -583,7 +584,7 @@ test("confirmed group recovery verifies members explicitly and writes only key a
                             ? "null"
                             : "PRIVATE_TOKEN",
                   }
-                : { "opc-next-page": "MQ==" },
+                : observedOciResponses.singleGroup.headers,
             },
           );
         }

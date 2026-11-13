@@ -82,3 +82,5 @@ Cloudflare frontend hosting and Neon execution remain conditional on feasibility
 Keep `.env*`, private keys, `.oci/`, `.neon`, and `.alchemy/` out of Git. Only
 placeholder `.env.example` files may be tracked. Never paste real credentials into
 issues, PRs, command arguments, logs or test fixtures.
+
+OCI diagnostics: see [the read-only doctor guide](docs/oci-doctor.md) for `pnpm run doctor:oci`, optional OCI CLI comparison and agent-operated verification.

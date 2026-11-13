@@ -36,6 +36,10 @@ GitHub issues are authoritative for task status, acceptance criteria and verific
 
 Dependencies are explicit “Blocked by” references in each GitHub issue body. Issue #15 depends on the live attempt ending, not on a successful verdict. Independent paths may proceed separately but must coordinate shared SDK/dispatcher contracts before integration.
 
+## Diagnostic prerequisite
+
+[#26](https://github.com/stanimirivanov/berth/issues/26): OCI diagnostic tooling and agent-operated verification follows merged #24 / PR #25. It provides bounded read-only checks and live evidence before the remaining hosted implementation; it does not replace #4–#15.
+
 ## Architecture and scope
 
 - Node 24 Neon Functions host the private trial API and scheduled continuation; a narrow Alchemy provider owns the OCI bucket lifecycle. No Angular UI is built in this spike.
