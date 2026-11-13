@@ -260,3 +260,22 @@ test("trial object helper owns hashing and cannot bypass the SDK boundary", () =
     }).some((x) => x.rule === "architecture"),
   );
 });
+
+test("trial admission cannot reach cloud SDKs or bypass preflight ownership", () => {
+  const files = {
+    "src/trial/api.ts":
+      "import 'node:crypto'; import './preflight.js'; import type {TrialIntent} from './ledger.js';",
+    "src/trial/preflight.ts": "",
+    "src/trial/ledger.ts": "",
+  };
+  assert.deepEqual(
+    analyze(files).filter((x) => x.rule === "architecture"),
+    [],
+  );
+  assert.ok(
+    analyze({
+      ...files,
+      "src/trial/api.ts": "import 'oci-objectstorage';",
+    }).some((x) => x.rule === "architecture"),
+  );
+});
