@@ -1,0 +1,71 @@
+name: Berth verification
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: berth-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
+        env:
+          POSTGRES_DB: neondb
+          POSTGRES_USER: postgres
+          # Fixed disposable fixture credentials required by the loopback-only test.
+          POSTGRES_PASSWORD: berth-test-only
+        ports: [5432/tcp]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.22.3
+      - run: npm install --global pnpm@12.16.1 --ignore-scripts
+      - run: pnpm install --frozen-lockfile
+      - name: Install checksum-pinned Gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl --fail --silent --show-error --location --output "$archive" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          printf '%s  %s\n' 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb "$archive" | sha256sum --check
+          mkdir "$RUNNER_TEMP/berth-tools"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/berth-tools" gitleaks
+          echo "$RUNNER_TEMP/berth-tools" >> "$GITHUB_PATH"
+      - name: Verify the floor using the PR base implementation
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          git cat-file -e "$BASE_SHA^{commit}"
+          if git cat-file -e "$BASE_SHA:tools/floor.mjs" 2>/dev/null; then
+            git show "$BASE_SHA:tools/floor.mjs" | node --input-type=module - "$BASE_SHA"
+          elif test "$BASE_SHA" = f75d405f7db5fcbe2deff6541a7f6fbb6c3e8102; then
+            node tools/floor.mjs "$BASE_SHA"
+          else
+            echo 'verification-floor: trusted baseline missing; inspect history.' >&2
+            exit 1
+          fi
+      - run: pnpm check
+      - run: pnpm run test:setup-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}

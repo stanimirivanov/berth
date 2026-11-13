@@ -1,0 +1,13 @@
+# Review requests require a GitHub ruleset to become mandatory.
+/AGENTS.md @stanimirivanov
+/**/AGENTS.md @stanimirivanov
+/CONSTRAINTS.md @stanimirivanov
+/HARNESS.md @stanimirivanov
+/tools/ @stanimirivanov
+/.github/ @stanimirivanov
+/.githooks/ @stanimirivanov
+/.gitleaks.toml @stanimirivanov
+/package.json @stanimirivanov
+/pnpm-lock.yaml @stanimirivanov
+/tsconfig*.json @stanimirivanov
+/biome.json @stanimirivanov

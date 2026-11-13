@@ -11,9 +11,9 @@
   "packageManager": "pnpm@12.16.1",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json",
-    "test": "pnpm run build && node --test dist/tests/*.test.js",
+    "typecheck": "tsc --noEmit && pnpm run typecheck:harness",
+    "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json && pnpm run lint:harness",
+    "test": "pnpm run build && node --test dist/tests/*.test.js && pnpm run test:harness",
     "test:smoke": "pnpm run build && node --test dist/tests/runtime-smoke.test.js",
     "neon": "neon",
     "setup:neon": "pnpm run build && node dist/scripts/neon-setup.js",
@@ -24,7 +24,16 @@
     "doctor:oci": "pnpm run build && node dist/scripts/oci-doctor.js",
     "test:oci-doctor": "pnpm run build && node --test dist/tests/oci-doctor.test.js",
     "test:runtime-probe": "pnpm run build && node --test dist/tests/runtime-probe.test.js",
-    "build:runtime-probe": "pnpm run build && node dist/scripts/build-runtime-probe.js"
+    "build:runtime-probe": "pnpm run build && node dist/scripts/build-runtime-probe.js",
+    "lint:harness": "biome check tools tests/*.mjs tsconfig.harness.json",
+    "typecheck:harness": "tsc -p tsconfig.harness.json",
+    "test:harness": "node --test tests/*.test.mjs",
+    "harness": "node tools/harness.mjs",
+    "floor": "node tools/floor.mjs",
+    "secrets": "node tools/secrets.mjs",
+    "security": "pnpm run secrets && pnpm audit --audit-level high",
+    "check:fast": "pnpm run floor && pnpm run lint && pnpm run typecheck && pnpm run harness",
+    "check": "pnpm run check:fast && pnpm test && pnpm run build:runtime-probe && pnpm run security"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
@@ -42,6 +51,8 @@
     "@types/react": "19.3.0",
     "neon": "9.4.0",
     "pg": "8.23.1",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "typescript-ast": "npm:typescript@5.9.3",
+    "yaml": "2.9.1"
   }
 }
