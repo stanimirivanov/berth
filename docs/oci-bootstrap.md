@@ -386,7 +386,7 @@ other failures and to any failure after recovery has started.
 | `CreateApiKey` | Trial user's **Tokens and keys → API keys** (older layout: **Resources → API Keys**); compare fingerprint |
 | `CreatePolicy` | **Identity & Security → Identity → Policies**, root compartment → `berth-trial-objectstorage` |
 
-4. If the outcome is still uncertain, open **☰ → Identity & Security → Audit** and
+4. If the outcome is still uncertain, open **☰ → Observability & Management → Logging → Audit** and
    inspect events around the journal's UTC timestamp in the home region. Use the
    root compartment for IAM operations and check the new compartment where relevant.
    Allow for propagation/late completion; one empty listing does not establish absence.

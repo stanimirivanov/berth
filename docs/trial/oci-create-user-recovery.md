@@ -9,9 +9,12 @@ below describe the originally supported prefix, not permission to repeat this ru
 ## Diagnosing the second rejection
 
 - Do not rerun apply/recover, change the resource name, or remove recovery entries.
-- Open **Identity & Security → Audit**, select the tenancy root and the home region,
-  and a time range covering the failed recovery. Inspect the user-creation event,
-  if available, for its validation message. Absence of an event is inconclusive.
+- Open **Observability & Management → Logging → Audit**, select the tenancy root and the home region,
+  then choose **Edit → Custom**, enter a time range covering the failed recovery,
+  and select **Update**. Leave User/Resource/Type filters unset initially. In
+  **Explore events**, expand the relevant POST event with status 400, if present,
+  and inspect its validation message. Absence of an event is inconclusive.
+  Navigation source: [Oracle Audit Logs](https://docs.oracle.com/en-us/iaas/Content/Logging/Concepts/audit_logs.htm).
 - Share only the relevant error/validation text after redacting account identifiers,
   email addresses and other private data. Do not share a complete event or journal.
 - Oracle directs modern identity-domain audit queries to OCI Audit; legacy identity
