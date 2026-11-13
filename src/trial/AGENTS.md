@@ -22,3 +22,8 @@ Run `pnpm run test:runtime-probe` for this slice, followed by canonical verifica
 Alchemy HTTP StateService adapter. Its fixed synthetic routes admit no caller
 payloads, administrator credentials or local module imports. It has no production
 lease/fencing contract: see docs/trial/cloudflare-state-evidence.md before reuse.
+
+`fenced-state.ts` owns the narrow synthetic Postgres StateService. It receives a
+parameterized SQL port and immutable execution claim; it imports only Alchemy and
+Effect. Owner bootstrap is `sql/fenced-state.sql`; never run it from hosted code.
+See docs/trial/fenced-postgres.md for limits, uncertainty and ownership recovery.

@@ -147,3 +147,9 @@ gitleaks version
 
 Expected version: `8.30.1`. A mismatch fails `pnpm secrets`. Review and update the
 scanner constant, CI checksum/version and these installation instructions together.
+
+The fenced-state SQL sensor runs as `pnpm run test:fenced-db` after
+`test:setup-db` against the disposable loopback PostgreSQL fixture. It exercises
+actual transactions, permissions, takeover and backend termination. CI invokes it
+explicitly; ordinary `pnpm test` runs only the adapter's deterministic unit tests.
+Live Neon proof remains opt-in; see docs/trial/fenced-postgres.md.

@@ -6,6 +6,7 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/trial/fenced-state.ts": ["alchemy", "effect"],
   "src/trial/state-probe.ts": ["node:crypto", "alchemy", "effect"],
   "src/trial/runtime-probe.ts": ["node:crypto", "node:timers/promises"],
   "src/trial/deployment.ts": [],
