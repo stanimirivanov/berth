@@ -144,3 +144,20 @@ test("suppression detection distinguishes template text from actual comments aft
     [],
   );
 });
+
+test("state probe may use Alchemy HTTP state but cannot import administrator tooling", () => {
+  assert.equal(
+    analyze({
+      "src/trial/state-probe.ts":
+        "import { makeHttpStateStore } from 'alchemy/State/HttpStateStore';",
+    }).length,
+    0,
+  );
+  assert.ok(
+    analyze({
+      "src/trial/state-probe.ts":
+        "import { readPrivateText } from '../../scripts/oci-files.js';",
+      "scripts/oci-files.ts": "export const x = 1;",
+    }).some((x) => x.rule === "architecture"),
+  );
+});

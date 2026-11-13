@@ -1,6 +1,6 @@
 # OCI Object Storage trial implementation plan
 
-Specification approved by the owner on 2026-11-12. This plan implements only the OCI Object Storage feasibility slice in berth. The toolchain and Neon setup tooling are merged; the owner reports successful Neon database apply/verify. The authenticated hosted synthetic runtime experiment is recorded in docs/trial/runtime-evidence.md. The native Postgres state candidate failed local qualification; see [the blocked decision](../docs/trial/state-decision.md). No durable backend is approved. The #6 feasibility gate and gated live OCI resource lifecycle remain pending.
+Specification approved by the owner on 2026-11-12. This plan implements only the OCI Object Storage feasibility slice in berth. The toolchain and Neon setup tooling are merged; the owner reports successful Neon database apply/verify. The authenticated hosted synthetic runtime experiment is recorded in docs/trial/runtime-evidence.md. The native Postgres state candidate failed local qualification; see [the blocked decision](../docs/trial/state-decision.md). The [Cloudflare Free follow-up](../docs/trial/cloudflare-state-evidence.md) proved hosted persistence but failed deployment ownership under overlapping writers. No durable backend is approved. The #6 feasibility gate and gated live OCI resource lifecycle remain pending.
 
 ## Task tracker
 
@@ -23,6 +23,7 @@ GitHub issues are authoritative for task status, acceptance criteria and verific
 | [#18](https://github.com/stanimirivanov/berth/issues/18) | Complete restricted OCI trial identity setup tooling (remaining work after #3 closed) | #2, merged #17; existing OCI tenancy |
 | [#4](https://github.com/stanimirivanov/berth/issues/4) | Prove authenticated Alchemy execution in Neon Functions | [#2](https://github.com/stanimirivanov/berth/issues/2), [#3](https://github.com/stanimirivanov/berth/issues/3) |
 | [#5](https://github.com/stanimirivanov/berth/issues/5) | Validate a free durable Alchemy state backend | [#4](https://github.com/stanimirivanov/berth/issues/4) |
+| [#32](https://github.com/stanimirivanov/berth/issues/32) | Qualify Cloudflare Free durable state from Neon | #5 investigation, owner-confirmed Workers Free |
 | [#6](https://github.com/stanimirivanov/berth/issues/6) | Checkpoint: decide whether the Neon and Alchemy trial is feasible | [#5](https://github.com/stanimirivanov/berth/issues/5) |
 | [#7](https://github.com/stanimirivanov/berth/issues/7) | Persist trial intent and reserve attempts and request budgets atomically | [#6](https://github.com/stanimirivanov/berth/issues/6) |
 | [#8](https://github.com/stanimirivanov/berth/issues/8) | Implement the narrow Alchemy OCI bucket lifecycle | [#6](https://github.com/stanimirivanov/berth/issues/6) |
