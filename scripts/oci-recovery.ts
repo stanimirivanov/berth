@@ -11,6 +11,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { OciSetupError } from "./oci-access.js";
 import { type AdminConfig, bootstrapOci, capabilities } from "./oci-admin.js";
+import { saveUserRejection } from "./oci-diagnostics.js";
 import { readPrivateText } from "./oci-files.js";
 
 export interface Recovery {
@@ -298,6 +299,9 @@ export async function runOciRecovery(
           2,
         ),
       );
+    } catch (error) {
+      await saveUserRejection(output, error);
+      throw error;
     } finally {
       await journal.close();
     }

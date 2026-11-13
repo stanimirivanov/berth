@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { OciSetupError } from "./oci-access.js";
 import { bootstrapOci, parseAdminConfig } from "./oci-admin.js";
+import { saveUserRejection } from "./oci-diagnostics.js";
 import { readPrivateText } from "./oci-files.js";
 import { runOciRecovery } from "./oci-recovery.js";
 
@@ -194,6 +195,9 @@ export async function runOciAdmin(
         2,
       ),
     );
+  } catch (error) {
+    await saveUserRejection(output, error);
+    throw error;
   } finally {
     await journal.close();
   }

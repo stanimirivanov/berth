@@ -366,6 +366,18 @@ test("every remaining mutation failure preserves the original key and prevents r
         ["Users", "Groups", "ApiKeys", "policies"].indexOf(failed) + 1,
       );
       assert.equal(await readFile(join(f.out, "trial.pem"), "utf8"), pem);
+      if (failed === "Users") {
+        const diagnostic = JSON.parse(
+          await readFile(join(f.out, "create-user-error.json"), "utf8"),
+        );
+        assert.equal(diagnostic.body, "private-provider-body");
+        assert.ok(
+          !(await readFile(join(f.out, "journal.jsonl"), "utf8")).includes(
+            "private-provider-body",
+          ),
+        );
+      }
+
       const count = f.calls.length;
       await assert.rejects(runOciAdmin(f.args("recover"), f.transport));
       assert.equal(f.calls.length, count);

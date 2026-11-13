@@ -1,5 +1,33 @@
 # Recover `oci-bootstrap-02` after CreateUser HTTP 400
 
+**Latest owner result (2026-11-13):** recovery preflight passed, but the recovery
+CreateUser also returned HTTP 400. Its response detail was discarded by the
+version run. That directory now has a recovery-start entry and must not be replayed
+or edited back to four entries. The creation failure is unresolved; the commands
+below describe the originally supported prefix, not permission to repeat this run.
+
+## Diagnosing the second rejection
+
+- Do not rerun apply/recover, change the resource name, or remove recovery entries.
+- Open **Identity & Security → Audit**, select the tenancy root and the home region,
+  and a time range covering the failed recovery. Inspect the user-creation event,
+  if available, for its validation message. Absence of an event is inconclusive.
+- Share only the relevant error/validation text after redacting account identifiers,
+  email addresses and other private data. Do not share a complete event or journal.
+- Oracle directs modern identity-domain audit queries to OCI Audit; legacy identity
+  domain AuditEvents/report APIs no longer receive new events. See
+  [Oracle's audit migration notice](https://docs.oracle.com/en-us/iaas/Content/Identity/api-getstarted/usingauditeventapis.htm).
+- The revised command captures **future** CreateUser HTTP 400 bodies in
+  `create-user-error.json` inside the existing private run directory. It reads at
+  most 16 KiB, records whether the body was truncated/unavailable, writes mode 600,
+  and refuses to overwrite an existing diagnostic. No headers or credentials are
+  deliberately collected; provider text can nevertheless contain private account
+  data, so treat the whole file as sensitive, untrusted diagnostic data.
+- Provider detail is never printed or appended to the journal. Open a diagnostic
+  privately in an editor and share only a redacted validation message. This cannot
+  recreate already discarded responses and is not a reason to repeat a mutation.
+
+
 Use this procedure for the owner-reported run on 2026-11-12:
 
 - `CreateCompartment` succeeded and its OCID was recorded.

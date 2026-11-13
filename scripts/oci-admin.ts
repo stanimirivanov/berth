@@ -8,6 +8,7 @@ import {
   policyStatements,
 } from "./oci-access.js";
 
+import { captureUserRejection, OciUserRejection } from "./oci-diagnostics.js";
 import type { Recovery, RecoveryPlan } from "./oci-recovery.js";
 
 export interface AdminConfig {
@@ -166,6 +167,9 @@ export async function bootstrapOci(
         signal: AbortSignal.timeout(15_000),
       });
       status = response.status;
+      if (operation === "CreateUser" && response.status === 400) {
+        throw await captureUserRejection(response);
+      }
       if (!response.ok) {
         await response.body?.cancel();
         throw new Error("HTTP failure");
@@ -185,7 +189,8 @@ export async function bootstrapOci(
         });
       }
       return data;
-    } catch {
+    } catch (error) {
+      if (error instanceof OciUserRejection) throw error;
       throw new OciSetupError(
         `${operation}${status === undefined ? "" : ` (HTTP ${status})`} failed or its outcome is uncertain. No retry. Reconcile journal before further setup.`,
       );
