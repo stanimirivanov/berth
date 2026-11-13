@@ -75,6 +75,15 @@ function fixture(
     },
     transport: async (url: string, init: RequestInit) => {
       const index = calls.length;
+      if (init.method === "POST" && new URL(url).pathname.endsWith("/Groups")) {
+        assert.ok(
+          new URL(url).searchParams
+            .get("attributes")
+            ?.split(",")
+            .includes("members"),
+          "Group creation must explicitly request members",
+        );
+      }
       calls.push({ url, init });
       if (init.method !== "GET") assert.equal(events.at(-1)?.phase, "intent");
       const value = overrides.has(index)

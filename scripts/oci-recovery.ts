@@ -10,7 +10,12 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { OciSetupError } from "./oci-access.js";
-import { type AdminConfig, bootstrapOci, capabilities } from "./oci-admin.js";
+import {
+  type AdminConfig,
+  bootstrapOci,
+  capabilities,
+  userCreationBody,
+} from "./oci-admin.js";
 import { saveUserRejection } from "./oci-diagnostics.js";
 import { readPrivateText } from "./oci-files.js";
 
@@ -20,11 +25,17 @@ export interface Recovery {
   journalHash: string;
   planOnly: boolean;
   rejectedAttempts: 1 | 2;
+  identities?: {
+    userId: string;
+    userOcid: string;
+    groupId: string;
+    groupOcid: string;
+  };
 }
 export interface RecoveryPlan {
   recovery: "ready";
-  requestsDispatched: 8;
-  remainingWrites: 4;
+  requestsDispatched: 8 | 9;
+  remainingWrites: 4 | 2;
 }
 const description =
   "Berth disposable Object Storage trial; owner-managed IAM cleanup";
@@ -38,7 +49,7 @@ export function parseRecoveryJournal(
 ): Recovery {
   const fail = () =>
     new OciSetupError(
-      "Unsupported or mismatched recovery journal. Expected the supported four-entry or six-entry legacy rejected-user journal; do not edit the journal.",
+      "Unsupported or mismatched recovery journal. Expected the supported four/six-entry rejected-user or eleven-entry confirmed-group journal; do not edit the journal.",
     );
   if (!text.endsWith("\n")) throw fail();
   let entries: Record<string, unknown>[];
@@ -61,6 +72,74 @@ export function parseRecoveryJournal(
       });
   } catch {
     throw fail();
+  }
+  if (entries.length === 11) {
+    const prefix = `${text.split("\n").slice(0, 6).join("\n")}\n`;
+    const previous = parseRecoveryJournal(prefix, config, fingerprint);
+    const [marker, userIntent, userConfirmed, groupIntent, groupConfirmed] =
+      entries.slice(6);
+    const scimId = (value: unknown): value is string =>
+      typeof value === "string" && /^[a-zA-Z0-9-]{1,128}$/.test(value);
+    const ocid = (value: unknown, kind: string): value is string =>
+      typeof value === "string" &&
+      new RegExp(`^ocid1\\.${kind}\\.oc1\\.[a-z0-9-]*\\.[a-z0-9]{8,255}$`).test(
+        value,
+      );
+    if (
+      !userConfirmed ||
+      !groupConfirmed ||
+      !scimId(userConfirmed.id) ||
+      !ocid(userConfirmed.ocid, "user") ||
+      !scimId(groupConfirmed.id) ||
+      !ocid(groupConfirmed.ocid, "group") ||
+      userConfirmed.ocid === config.userOcid ||
+      !isDeepStrictEqual(marker, {
+        phase: "recovery-start",
+        originalJournalHash: previous.journalHash,
+        compartmentOcid: previous.compartmentOcid,
+        userCreateRejectedAttested: true,
+        primaryEmailRejectionAttested: true,
+      }) ||
+      !isDeepStrictEqual(userIntent, {
+        phase: "intent",
+        operation: "CreateUser",
+        url: previous.userUrl,
+        body: userCreationBody(config),
+      }) ||
+      !isDeepStrictEqual(userConfirmed, {
+        phase: "confirmed",
+        operation: "CreateUser",
+        id: userConfirmed.id,
+        ocid: userConfirmed.ocid,
+      }) ||
+      !isDeepStrictEqual(groupIntent, {
+        phase: "intent",
+        operation: "CreateGroup",
+        url: previous.userUrl.replace(/Users$/, "Groups"),
+        body: {
+          schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+          displayName: `${config.name}-executor`,
+          members: [{ value: userConfirmed.id, type: "User" }],
+        },
+      }) ||
+      !isDeepStrictEqual(groupConfirmed, {
+        phase: "confirmed",
+        operation: "CreateGroup",
+        id: groupConfirmed.id,
+        ocid: groupConfirmed.ocid,
+      })
+    )
+      throw fail();
+    return {
+      ...previous,
+      journalHash: createHash("sha256").update(text).digest("hex"),
+      identities: {
+        userId: userConfirmed.id,
+        userOcid: userConfirmed.ocid,
+        groupId: groupConfirmed.id,
+        groupOcid: groupConfirmed.ocid,
+      },
+    };
   }
   if (entries.length !== 4 && entries.length !== 6) throw fail();
   const [start, intent, confirmed, user] = entries;
@@ -315,8 +394,8 @@ export async function runOciRecovery(
             administratorSetup: "recovered",
             compartment: "reused",
             trialKey: "reused",
-            iamWrites: 4,
-            requestsDispatched: 12,
+            iamWrites: recovery.identities ? 2 : 4,
+            requestsDispatched: recovery.identities ? 11 : 12,
             remaining: [
               "Owner effective-IAM review and allowance checks",
               "Run setup:oci --mode verify with this directory's oci-trial.json",

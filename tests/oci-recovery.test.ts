@@ -125,7 +125,10 @@ async function fixture() {
         lifecycleState: "ACTIVE",
       };
     else if (url.includes("/b?") || url.includes("/policies?")) data = [];
-    else if (url.includes("/Users?") || url.includes("/Groups?"))
+    else if (
+      init.method === "GET" &&
+      (url.includes("/Users?") || url.includes("/Groups?"))
+    )
       data = { totalResults: 0, Resources: [] };
     else if (url.endsWith("/Users"))
       data = {
@@ -133,7 +136,7 @@ async function fixture() {
         ocid: "ocid1.user.oc1..aaaaaaaatrial",
         [extension]: capabilities,
       };
-    else if (url.endsWith("/Groups"))
+    else if (new URL(url).pathname.endsWith("/Groups"))
       data = {
         id: "group-scim",
         ocid: id("group"),
@@ -350,7 +353,7 @@ test("every remaining mutation failure preserves the original key and prevents r
       const transport = async (url: string, init: RequestInit) => {
         if (init.method === "POST") {
           writes++;
-          if (url.endsWith(`/${failed}`))
+          if (new URL(url).pathname.endsWith(`/${failed}`))
             return new Response("private-provider-body", { status: 400 });
         }
         return f.transport(url, init);
@@ -443,6 +446,165 @@ test("second legacy rejection needs its own attestation and exact journal linkag
       const count = f.calls.length;
       await assert.rejects(runOciAdmin(args, f.transport));
       assert.equal(f.calls.length, count);
+    });
+  }
+});
+
+async function groupCreatedJournal(f: Awaited<ReturnType<typeof fixture>>) {
+  const at = "2026-11-13T12:00:00.000Z";
+  const oldUser = JSON.parse(JSON.stringify(f.events[3]));
+  oldUser.body.name = { familyName: "berth-trial-executor" };
+  let text = f.journal;
+  const append = (e: Record<string, unknown>) => {
+    text += `${JSON.stringify({ at, ...e })}\n`;
+  };
+  append({
+    phase: "recovery-start",
+    originalJournalHash: createHash("sha256").update(text).digest("hex"),
+    compartmentOcid: id("compartment"),
+    userCreateRejectedAttested: true,
+  });
+  append(oldUser);
+  append({
+    phase: "recovery-start",
+    originalJournalHash: createHash("sha256").update(text).digest("hex"),
+    compartmentOcid: id("compartment"),
+    userCreateRejectedAttested: true,
+    primaryEmailRejectionAttested: true,
+  });
+  const notification =
+    "urn:ietf:params:scim:schemas:oracle:idcs:extension:user:User";
+  append({
+    ...oldUser,
+    body: {
+      ...oldUser.body,
+      schemas: [...oldUser.body.schemas, notification],
+      emails: [{ value: f.config.trialEmail, type: "work", primary: true }],
+      [notification]: { bypassNotification: true },
+    },
+  });
+  append({
+    phase: "confirmed",
+    operation: "CreateUser",
+    id: "user-scim",
+    ocid: "ocid1.user.oc1..aaaaaaaatrial",
+  });
+  append({
+    phase: "intent",
+    operation: "CreateGroup",
+    url: `${domain}/admin/v1/Groups`,
+    body: {
+      schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+      displayName: "berth-trial-executor",
+      members: [{ value: "user-scim", type: "User" }],
+    },
+  });
+  append({
+    phase: "confirmed",
+    operation: "CreateGroup",
+    id: "group-scim",
+    ocid: id("group"),
+  });
+  await writeFile(join(f.out, "journal.jsonl"), text);
+  return text;
+}
+test("confirmed group recovery verifies members explicitly and writes only key and policy", async () => {
+  for (const variant of [
+    "success",
+    "members-omitted",
+    "extra-member",
+    "wrong-user",
+    "key-exists",
+    "bad-hash",
+  ]) {
+    await withFixture(async (f) => {
+      const before = await groupCreatedJournal(f);
+      if (variant === "bad-hash")
+        await writeFile(
+          join(f.out, "journal.jsonl"),
+          before.replace(
+            '"primaryEmailRejectionAttested":true',
+            '"primaryEmailRejectionAttested":false',
+          ),
+        );
+      const transport = async (url: string, init: RequestInit) => {
+        if (url.includes("/Users/user-scim")) {
+          f.calls.push({ url, init });
+          return new Response(
+            JSON.stringify({
+              id: "user-scim",
+              ocid:
+                variant === "wrong-user"
+                  ? id("user")
+                  : "ocid1.user.oc1..aaaaaaaatrial",
+              userName: "berth-trial-executor",
+              active: true,
+              emails: [{ value: f.config.trialEmail, primary: true }],
+              [extension]: capabilities,
+            }),
+          );
+        }
+        if (url.includes("/Groups/group-scim")) {
+          f.calls.push({ url, init });
+          assert.ok(
+            new URL(url).searchParams.get("attributes")?.includes("members"),
+          );
+          return new Response(
+            JSON.stringify({
+              id: "group-scim",
+              ocid: id("group"),
+              displayName: "berth-trial-executor",
+              ...(variant === "members-omitted"
+                ? {}
+                : {
+                    members:
+                      variant === "extra-member"
+                        ? [{ value: "user-scim" }, { value: "other" }]
+                        : [{ value: "user-scim" }],
+                  }),
+            }),
+          );
+        }
+        if (url.includes("/ApiKeys?")) {
+          f.calls.push({ url, init });
+          return new Response(
+            JSON.stringify({
+              totalResults: variant === "key-exists" ? 1 : 0,
+              Resources: variant === "key-exists" ? [{}] : [],
+            }),
+          );
+        }
+        return f.transport(url, init);
+      };
+      const args = (mode: string) => [
+        ...f.args(mode),
+        "--confirm-primary-email-rejection",
+      ];
+      if (variant !== "success") {
+        await assert.rejects(runOciAdmin(args("recover"), transport));
+        assert.ok(f.calls.every((c) => c.init.method === "GET"));
+        return;
+      }
+      await runOciAdmin(args("recover-plan"), transport);
+      assert.equal(f.calls.length, 9);
+      assert.equal(
+        await readFile(join(f.out, "journal.jsonl"), "utf8"),
+        before,
+      );
+      f.calls.length = 0;
+      await runOciAdmin(args("recover"), transport);
+      assert.equal(f.calls.length, 11);
+      assert.deepEqual(
+        f.calls
+          .filter((c) => c.init.method === "POST")
+          .map((c) => new URL(c.url).pathname.split("/").at(-1)),
+        ["ApiKeys", "policies"],
+      );
+      const runtime = JSON.parse(
+        await readFile(join(f.out, "oci-trial.json"), "utf8"),
+      );
+      assert.equal(runtime.userOcid, "ocid1.user.oc1..aaaaaaaatrial");
+      assert.equal(runtime.groupOcid, id("group"));
     });
   }
 });

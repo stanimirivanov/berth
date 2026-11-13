@@ -368,9 +368,9 @@ Sources: [Subscriptions](https://docs.oracle.com/en-us/iaas/Content/Billing/Conc
 ## Recovery if apply fails
 
 For the recorded `oci-bootstrap-02` run (confirmed compartment, HTTP 400 at user
-creation, no later writes), use the [specific recovery command](trial/oci-create-user-recovery.md).
+creation, followed by the recorded missing-email rejection or confirmed user/group stage), use the [specific recovery command](trial/oci-create-user-recovery.md).
 It validates and reuses the original compartment/key. The steps below apply to
-other failures and to any failure after recovery has started.
+other failures and to recovery failures outside its explicitly supported journal states.
 
 1. Keep the output directory, keys and `journal.jsonl`. Open the journal locally in
    your editor. Never post it publicly.
@@ -397,7 +397,7 @@ other failures and to any failure after recovery has started.
    keep credentials and identifiers private.
 
 Fresh `apply` has no automatic resume, adoption or rollback. Only the linked
-recovery command supports the specific rejected-user state. Existing output folders
+recovery command supports the specific rejected-user and confirmed-group states. Existing output folders
 are deliberately refused. Manual completion of a partial run needs a separate,
 resource-specific recovery procedure; do not reconstruct credentials from source
 code or guess which creation steps to repeat.
