@@ -48,3 +48,13 @@ Use the [OCI setup guide](../oci-bootstrap.md) for the remaining effective-IAM
 review and allowance attestation. Use [doctor:oci](../oci-doctor.md) for subsequent
 bounded diagnostic runs.
 No bucket/object writes have been performed or claimed by this change.
+
+## Hosted runtime probe — 2026-11-13
+
+Issue #4's [runtime evidence](runtime-evidence.md) records actual hosted Alchemy
+create/read/delete, restricted database login, OCI local signing, bearer checks,
+forged scheduler rejection and duplicate scheduled delivery. The final bundle
+also passed in a fresh instance. All temporary functions and triggers were removed;
+final empty inventories were verified at 10:31:47 UTC. Billing counters were delayed,
+so attributable billed usage is inconclusive. This does not establish durable state,
+full effective OCI IAM permissions, or readiness for live OCI resource mutations.
