@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check scripts tests package.json tsconfig.json biome.json",
+    "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json",
     "test": "pnpm run build && node --test dist/tests/*.test.js",
     "test:smoke": "pnpm run build && node --test dist/tests/runtime-smoke.test.js",
     "neon": "neon",
@@ -22,7 +22,9 @@
     "test:oci-setup": "pnpm run build && node --test dist/tests/oci-setup.test.js dist/tests/oci-admin.test.js dist/tests/oci-recovery.test.js dist/tests/oci-diagnostics.test.js",
     "setup:oci-admin": "pnpm run build && node dist/scripts/oci-admin-setup.js",
     "doctor:oci": "pnpm run build && node dist/scripts/oci-doctor.js",
-    "test:oci-doctor": "pnpm run build && node --test dist/tests/oci-doctor.test.js"
+    "test:oci-doctor": "pnpm run build && node --test dist/tests/oci-doctor.test.js",
+    "test:runtime-probe": "pnpm run build && node --test dist/tests/runtime-probe.test.js",
+    "build:runtime-probe": "pnpm run build && node dist/scripts/build-runtime-probe.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
@@ -33,6 +35,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.7",
+    "@neon/config-runtime": "1.12.3",
     "@types/node": "24.19.2",
     "@types/node-fetch": "2.6.13",
     "@types/pg": "8.23.1",
