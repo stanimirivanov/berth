@@ -1,4 +1,8 @@
-import { type HttpClient, NoRetryConfigurationDetails } from "oci-common";
+import {
+  type HttpClient,
+  NoRetryConfigurationDetails,
+  type RequestSigner,
+} from "oci-common";
 import {
   models as model,
   ObjectStorageClient,
@@ -430,4 +434,76 @@ function normalizeObject<T extends ObjectObservation>(response: T): T {
         .map(([key, value]) => [key.slice(9), value]),
     ),
   };
+}
+
+/**
+ * Production single-send transport with cancellation covering response-body reads.
+ * Only a preconstructed restricted signer is accepted, never owner credentials or
+ * ambient config. Each call has at most five seconds and shares the execution abort.
+ * Writes fail closed unless the caller supplies the ledger-derived creation deadline;
+ * signing cannot extend that deadline. DELETE retains the cleanup window.
+ */
+export function boundedObjectSdk(
+  signer: RequestSigner,
+  execution: AbortSignal,
+  fetcher: typeof fetch = fetch,
+  requestMs = 5000,
+  creation: { creationDeadline: number; now?: () => number } = {
+    creationDeadline: 0,
+  },
+): ObjectStorageClient {
+  if (!Number.isInteger(requestMs) || requestMs < 1 || requestMs > 5000)
+    throw new BucketFailure("invalid-intent");
+  return safeBucketSdk({
+    /** Refuse redirects/other services and abort both headers and streamed body on deadline. */
+    async send(request) {
+      const url = new URL(request.uri);
+      if (
+        url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        !/^objectstorage[.][a-z]{2}-[a-z]+-[1-9][.]oraclecloud[.]com$/.test(
+          url.hostname,
+        ) ||
+        !url.pathname.startsWith("/n/")
+      )
+        throw Error("Target rejected");
+      const clock = creation.now ?? Date.now;
+      const write = request.method === "POST" || request.method === "PUT";
+      const remaining = creation.creationDeadline - clock();
+      if (write && (!Number.isFinite(remaining) || remaining <= 0))
+        throw Error("Creation deadline");
+      const signal = AbortSignal.any([
+        execution,
+        AbortSignal.timeout(
+          write ? Math.min(requestMs, Math.ceil(remaining)) : requestMs,
+        ),
+      ]);
+      signal.throwIfAborted();
+      await signer.signHttpRequest(request);
+      signal.throwIfAborted();
+      if (write && clock() >= creation.creationDeadline)
+        throw Error("Creation deadline");
+      const raw = request.body;
+      if (
+        raw !== undefined &&
+        typeof raw !== "string" &&
+        !(raw instanceof Uint8Array)
+      )
+        throw Error("Body rejected");
+      const body =
+        typeof raw === "string"
+          ? raw
+          : raw === undefined
+            ? undefined
+            : new Uint8Array(raw);
+      return fetcher(request.uri, {
+        method: request.method,
+        headers: request.headers,
+        signal,
+        redirect: "error",
+        ...(body === undefined ? {} : { body }),
+      });
+    },
+  });
 }

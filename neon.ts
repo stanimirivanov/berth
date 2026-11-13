@@ -28,3 +28,19 @@ export const checkpointFunction = {
   name: "Berth scheduled fenced-state checkpoint",
   source: "./src/trial/checkpoint-index.ts",
 };
+
+/** Synthetic-only hosted executor proof; schedules are explicitly managed, never enabled by build. */
+export const executorFunction = {
+  ...probeFunction,
+  slug: "berthexecutor11",
+  name: "Berth bounded scheduled executor proof",
+  source: "./src/trial/executor-hosted.ts",
+};
+/** Production trial cadence, with runtime window and SQL cutoffs independently enforced. */
+export const executorSchedule = {
+  type: "schedule" as const,
+  function_slug: executorFunction.slug,
+  function_path: "/scheduled",
+  enabled: false,
+  schedule: { cron: "*/15 * * * *" },
+};

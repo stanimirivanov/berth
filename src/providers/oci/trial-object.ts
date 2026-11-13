@@ -69,8 +69,8 @@ export function makeTrialObject(
   )
     throw new BucketFailure("ownership");
   /** Complete authenticated inventories; absence never comes from a failed GET. */
-  async function inventory(cleanup: boolean) {
-    if (!(await bucket.read(ownedBucket, cleanup)))
+  async function inventory(cleanup: boolean, checkBucket = true) {
+    if (checkBucket && !(await bucket.read(ownedBucket, cleanup)))
       throw new BucketFailure("ownership");
     const listing = (await client.list(i, cleanup)).listObjects;
     if (
@@ -123,16 +123,28 @@ export function makeTrialObject(
   /** Consume at most 1 MiB; cancel both Node and Web streams on any failure. */
   async function observe(cleanup: boolean) {
     if (!pending && !known) throw new BucketFailure("identity-unrecorded");
-    const head = await client.head(i, i.objectName, cleanup);
-    validate(head);
-    const response = await client.get(i, i.objectName, head.eTag, cleanup);
+    // A durable revision already pins cleanup GET; HEAD adds no identity evidence.
+    // Normal reads retain HEAD, and uncertain uploads need it to discover a revision.
+    let etag = cleanup ? known?.etag : undefined;
+    if (!etag) {
+      const head = await client.head(i, i.objectName, cleanup);
+      validate(head);
+      etag = head.eTag;
+    }
+    const response = await client
+      .get(i, i.objectName, etag, cleanup)
+      .catch((error: unknown) => {
+        if (error instanceof BucketFailure && error.code === "precondition")
+          throw new BucketFailure("revision");
+        throw error;
+      });
     const reader = (
       response.value instanceof Readable
         ? Readable.toWeb(response.value)
         : response.value
     ).getReader();
     try {
-      validate(response, head.eTag);
+      validate(response, etag);
       let count = 0;
       const hash = createHash("sha256");
       for (;;) {
@@ -152,7 +164,7 @@ export function makeTrialObject(
     }
     const receipt = {
       bucketId: ownedBucket.id,
-      etag: head.eTag,
+      etag,
       digest: i.digest,
     };
     await journal.saveReceipt(receipt);
@@ -199,15 +211,20 @@ export function makeTrialObject(
           throw new BucketFailure("unknown-outcome");
         return observe(false);
       }),
-    /** Verify the bytes and current ownership, delete conditionally, then prove absence. */
-    remove: () =>
+    /** Verify bytes, optionally settle a positively reconciled upload, then conditionally delete and prove absence. */
+    remove: (beforeDelete?: (receipt: ProbeReceipt) => Promise<void>) =>
       safe(async () => {
         if (!(await inventory(true))) return;
         const receipt = await observe(true);
+        await beforeDelete?.(receipt);
         if (!(await inventory(true)))
           throw new BucketFailure("unknown-outcome");
         await client.remove(i, i.objectName, receipt.etag);
-        if (await inventory(true)) throw new BucketFailure("unknown-outcome");
+        // DELETE followed the full fresh ownership/configuration check above.
+        // Prove object/version/upload absence here; bucket teardown independently
+        // rechecks bucket ownership and restrictions before its own conditional DELETE.
+        if (await inventory(true, false))
+          throw new BucketFailure("unknown-outcome");
       }),
   };
 }
