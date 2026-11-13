@@ -76,3 +76,7 @@ jobs:
       - run: pnpm run test:fenced-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run build:checkpoint
+      - run: pnpm run test:checkpoint-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}

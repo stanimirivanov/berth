@@ -27,3 +27,10 @@ lease/fencing contract: see docs/trial/cloudflare-state-evidence.md before reuse
 parameterized SQL port and immutable execution claim; it imports only Alchemy and
 Effect. Owner bootstrap is `sql/fenced-state.sql`; never run it from hosted code.
 See docs/trial/fenced-postgres.md for limits, uncertainty and ownership recovery.
+
+The issue #6 checkpoint adds a separate composition root `checkpoint-index.ts`.
+`checkpoint-handler.ts` owns fixed-route admission, `checkpoint-run.ts` the two-step
+qualification and `fenced-lifecycle.ts` its real synthetic Alchemy lifecycle. Only
+that orchestrator may reach the adapter/lifecycle; the handler has no DB/engine
+imports. SQL proof receipts preserve unfinished intents for inspection; they are
+not the later OCI workflow implementation. See docs/trial/feasibility-decision.md.

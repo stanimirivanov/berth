@@ -176,3 +176,29 @@ test("fenced adapter permits only Alchemy and Effect imports", () => {
     }).some((x) => x.rule === "architecture"),
   );
 });
+
+test("hosted checkpoint owns admission, orchestration and composition edges", () => {
+  const files = {
+    "src/trial/checkpoint-index.ts":
+      "import './checkpoint-handler.js'; import './checkpoint-run.js'; import {Client} from 'pg';",
+    "src/trial/checkpoint-handler.ts":
+      "import {createHash} from 'node:crypto';",
+    "src/trial/checkpoint-run.ts":
+      "import './fenced-state.js'; import './fenced-lifecycle.js';",
+    "src/trial/fenced-state.ts": "",
+    "src/trial/fenced-lifecycle.ts": "import {Plan} from 'alchemy';",
+  };
+  assert.deepEqual(analyze(files), []);
+  assert.ok(
+    analyze({
+      ...files,
+      "src/trial/checkpoint-handler.ts": "import './checkpoint-run.js';",
+    }).some((x) => x.rule === "architecture"),
+  );
+  assert.ok(
+    analyze({
+      ...files,
+      "src/trial/checkpoint-run.ts": "import {readFile} from 'node:fs';",
+    }).some((x) => x.rule === "architecture"),
+  );
+});

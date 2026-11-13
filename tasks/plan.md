@@ -81,3 +81,8 @@ rejections in #5/#32: narrow owner-installed Postgres functions plus immutable
 execution fencing, real SQL fault tests and live Neon persistence evidence.
 See docs/trial/fenced-postgres.md. #6 must still integrate and prove hosted execution;
 OCI payloads and external side-effect recovery remain separately gated.
+
+Issue #6 integrates the narrow adapter into scheduled Neon Functions and records
+its qualification in docs/trial/feasibility-decision.md. The synthetic runtime gate
+is separate from current account/headroom attestation and live OCI conditional
+mutation/recovery acceptance. Those remain mandatory before enabling OCI writes.

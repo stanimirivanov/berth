@@ -58,3 +58,9 @@ also passed in a fresh instance. All temporary functions and triggers were remov
 final empty inventories were verified at 10:31:47 UTC. Billing counters were delayed,
 so attributable billed usage is inconclusive. This does not establish durable state,
 full effective OCI IAM permissions, or readiness for live OCI resource mutations.
+
+Issue #6 hosted checkpoint (2026-11-13): scheduled synthetic create and later
+reload/update/teardown completed after the initiating client exited; a separate
+function confirmed durable terminal evidence. Both functions, the trigger and
+proof SQL schema were removed. See [feasibility decision](feasibility-decision.md)
+for timestamps, limits and the remaining headroom/OCI mutation gates.
