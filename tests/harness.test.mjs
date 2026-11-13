@@ -218,3 +218,26 @@ test("ledger SQL port cannot import providers or administrator tooling", () => {
     }).some((x) => x.rule === "architecture"),
   );
 });
+
+test("OCI provider owns only engine and budgeted SDK boundary", () => {
+  const files = {
+    "src/providers/oci/bucket.ts":
+      "import {Resource} from 'alchemy'; import './client.js';",
+    "src/providers/oci/client.ts":
+      "import {NoRetryConfigurationDetails} from 'oci-common'; import type {requests} from 'oci-objectstorage';",
+  };
+  assert.deepEqual(
+    analyze(files).filter((x) => x.rule === "architecture"),
+    [],
+  );
+  for (const [file, text] of /** @type {[string, string][]} */ ([
+    ["src/providers/oci/bucket.ts", "import 'oci-objectstorage';"],
+    ["src/providers/oci/client.ts", "import 'node:fs';"],
+    ["src/trial/runtime-probe.ts", "import '../providers/oci/client.js';"],
+  ]))
+    assert.ok(
+      analyze({ ...files, [file]: text }).some(
+        (x) => x.rule === "architecture",
+      ),
+    );
+});
