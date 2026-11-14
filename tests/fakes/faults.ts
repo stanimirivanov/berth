@@ -230,18 +230,12 @@ export function classifyRecovery(
     "before:ledger.settle:create_bucket:rejected:provider-response",
     "before:ledger.settle:put_object:rejected:provider-response",
   ]);
-  const cleanupBlocked = new Set([
-    "before:ledger.begin:delete_object",
-    "after:ledger.begin:delete_object",
-    "before:ledger.reserve:delete_object",
-  ]);
-  if (uncertain.has(label) || cleanupBlocked.has(label)) {
+  if (uncertain.has(label)) {
     assert.equal(row.outcome, "needs-reconciliation", label);
     assert.equal(row.failed, true, label);
     assert.equal(row.reason, "unresolved-provider-call", label);
-    assert.equal(row.unknown, uncertain.has(label) ? 1 : 0, label);
-    if (cleanupBlocked.has(label)) assert.equal(row.cleanup_used, 40, label);
-    return uncertain.has(label) ? "uncertain" : "cleanup-blocked";
+    assert.equal(row.unknown, 1, label);
+    return "uncertain";
   }
   assert.ok(
     ["succeeded", "failed"].includes(row.outcome),

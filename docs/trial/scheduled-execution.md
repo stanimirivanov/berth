@@ -100,8 +100,10 @@ with restricted OCI credentials remains behind the live trial gate.
 A saved cleanup receipt pins a conditional GET directly; a pending upload without
 a receipt still needs HEAD. Full ownership/configuration inspection precedes DELETE;
 post-delete object/version/upload inventories prove absence, and bucket teardown
-independently rechecks bucket ownership. One interrupted cleanup GET plus a resumed
-object/bucket teardown uses at most 40 protected calls. Repeated outages can exhaust
+independently rechecks bucket ownership. The first bucket check is deferred until after the read-only object inventory and
+checksum; the full fresh check still precedes conditional deletion. Both one
+interrupted cleanup GET and a pre-delete interruption followed by resumed
+object/bucket teardown fit within 40 protected calls. Repeated outages can exhaust
 that reserve and require owner reconciliation.
 
 The cleanup API sets a durable flag even when creation headroom is unknown. It

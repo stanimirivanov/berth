@@ -122,14 +122,19 @@ test("checkpoint outcome oracle rejects arbitrary stops and requires terminal re
       unknown: 0,
     }),
   );
-  assert.equal(
-    classifyRecovery("before:ledger.begin:delete_object", {
-      ...row,
-      unknown: 0,
-      cleanup_used: 40,
-    }),
-    "cleanup-blocked",
-  );
+  for (const label of [
+    "before:ledger.begin:delete_object",
+    "after:ledger.begin:delete_object",
+    "before:ledger.reserve:delete_object",
+  ]) {
+    assert.throws(() =>
+      classifyRecovery(label, { ...row, unknown: 0, cleanup_used: 40 }),
+    );
+    assert.equal(
+      classifyRecovery(label, { ...row, outcome: "succeeded", unknown: 0 }),
+      "terminal",
+    );
+  }
   assert.equal(
     classifyRecovery("after:cloud.createBucket", {
       ...row,

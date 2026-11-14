@@ -214,7 +214,15 @@ export function makeTrialObject(
     /** Verify bytes, optionally settle a positively reconciled upload, then conditionally delete and prove absence. */
     remove: (beforeDelete?: (receipt: ProbeReceipt) => Promise<void>) =>
       safe(async () => {
-        if (!(await inventory(true))) return;
+        // Inventory and checksum are read-only. Defer the bucket identity/settings
+        // check until after those reads and any reconciliation callback, immediately
+        // before DELETE. Repeating it before GET spends recovery's cleanup reserve.
+        // Empty inventories still require the saved bucket identity before returning.
+        if (!(await inventory(true, false))) {
+          if (!(await bucket.read(ownedBucket, true)))
+            throw new BucketFailure("ownership");
+          return;
+        }
         const receipt = await observe(true);
         await beforeDelete?.(receipt);
         if (!(await inventory(true)))
