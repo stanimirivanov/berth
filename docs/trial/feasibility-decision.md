@@ -183,3 +183,22 @@ invocations. Owner bootstrap/inspection/disposal used six additional management
 reads to obtain the existing endpoint/owner connection. Provider-scheduled calls
 are separate from these client counts. Administrative cleanup completed at
 16:06:32.685 UTC. No OCI request or paid-plan change was made.
+
+
+## Live OCI activation checkpoint — 2026-11-14, issue #14
+
+PR #49 completes the hosted admission prerequisite, including protection of cleanup
+capacity and evidence freshness through the creation window. The earlier synthetic
+result above still does not establish real OCI lifecycle feasibility.
+
+Current read-only checks pass for OCI access and restricted Neon SQL permissions;
+the project has no functions/triggers or installed trial schemas. Fresh owner Free
+eligibility, aggregate allowance headroom and effective-IAM review remain missing.
+**Decision: no-go for activation until those inputs are supplied; live feasibility
+is unproven.** No paid fallback or relaxation of resource/request/time limits is
+approved. The bounded next step is to complete those inputs and execute the existing
+runbook under issue #14, not to introduce another execution backend.
+
+See [the dated live evidence ledger](live-results.md) for observations, build
+identity, each unresolved acceptance row and the conditions for resuming. No live
+OCI resource lifecycle was started in this checkpoint.
