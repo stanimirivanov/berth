@@ -121,3 +121,17 @@ verdict; #14 stays blocked until these prerequisites and current owner gates pas
 Issue #47 connects signed admission to the prepared live executor. Follow
 `docs/trial/hosted-admission.md` for fresh owner gates, activation and shutdown.
 The next operational step is #14; local integration is not live acceptance.
+
+
+## Remaining live activation prerequisites after PR #50 preflight
+
+Owner account/activity questions are answered; do not repeat unavailable Console
+meter requests. Complete these bounded engineering tasks before #14 activation:
+
+- [#51](https://github.com/stanimirivanov/berth/issues/51): make complete recovery CI
+  reliable within existing limits, preserving all crash boundaries and assertions.
+- [#52](https://github.com/stanimirivanov/berth/issues/52): qualify Functions headroom
+  evidence on Free. Any evidence-contract change requires explicit review before use.
+
+The tasks are independent. Resume #14 only after both gates are satisfied; follow
+with #15 owner closeout. No paid fallback or weakening of the trial bounds.

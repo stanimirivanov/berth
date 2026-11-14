@@ -248,3 +248,46 @@ measure and isolate/partition recovery work while proving complete crash coverag
 preserving time limits, assertions and real process/SQL boundaries. Do not raise
 budgets or mark this checkpoint green based on partial progress. No CI change is
 included in this live-evidence PR.
+
+
+## Owner scope confirmed; remaining engineering gates — 2026-11-14
+
+The owner confirms Neon has only been used for our Berth trials and no other
+applications, scripts or people are using OCI. The Console figures were read just
+before their message, in Sofia local time (UTC+02:00 on this date). Exact minutes
+were not supplied; retain that precision rather than invent an epoch timestamp.
+No further owner Console search is requested. Recheck freshness at actual activation.
+
+The remaining issue is a Functions evidence contract, not missing owner cooperation:
+
+- The measured no-cloud-write probe recorded 2,252 ms client elapsed and 1,547 ms
+  handler time. It demonstrates runtime execution; it excludes a complete billing
+  breakdown and does not measure the later real OCI workload.
+- A planning allowance of 64 calls × 60 seconds is 3,840 capacity-seconds, or
+  **1.0667 capacity-hours**. Charging all of that to active compute is 10.67 percent
+  of the published 10 active capacity-hour allowance. This is a forward estimate,
+  not remaining allowance, measured OCI duration or a cap on provider invocations.
+- The 64-unit application counter excludes some rejected/load-failed/expired calls.
+  Historical logs do not establish a complete total. Owner-exclusive use narrows
+  activity scope, but does not eliminate platform retries or turn logs into billing.
+- Neon documents one runtime hour as one capacity-hour at fixed function size.
+  Its default 100 concurrent invocation limit is explicitly not a hard ceiling;
+  multiplying deployment lifetime by that value would not prove an upper bound.
+
+[Issue #52](https://github.com/stanimirivanov/berth/issues/52) now owns qualification
+of a defensible Free-tier evidence/estimate method. Any necessary headroom-contract
+change must receive explicit review in that dedicated change before activation;
+no unsupported values were written into `neonInvocations`, `neonComputeSeconds`
+or `measuredComputeSeconds`. This follows the quality contract and SPEC.md's
+unknown-headroom gate, not a newly imposed requirement for an exact billing ledger.
+
+**Current verdict: live trial blocked before activation, Neon/Alchemy live OCI
+feasibility not yet established.** Remaining engineering prerequisites are #51
+(reliable complete recovery CI) and #52 (Functions headroom evidence). The earlier
+owner-information requests are resolved to the precision stated above. No cloud
+resources, schemas or schedules were created by this follow-up.
+
+Sources rechecked:
+- [Functions capacity units and allowances](https://neon.com/docs/introduction/plans#functions)
+- [Runtime concurrency limitations](https://neon.com/docs/compute/functions/reference/runtime-limits#concurrency)
+- [Retry behavior](https://neon.com/docs/compute/functions/triggers/overview#delivery-and-retries)

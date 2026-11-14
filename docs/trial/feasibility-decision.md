@@ -225,3 +225,15 @@ Activation remains blocked on those specific inputs; do not request the same
 unavailable Functions counter repeatedly. The reported recovery CI cancellation
 was a confirmed 15-minute job timeout, tracked independently in #51. See the live
 results for the passing comparison run and precise limits of this diagnosis.
+
+
+### Owner scope confirmation and engineering handoff — 2026-11-14
+
+Owner questions are resolved: exclusive Berth use of the Neon project, no external
+OCI workloads, and Console observations immediately before the owner's message in
+Sofia time. The remaining blockers are engineering tasks #51 and #52, not another
+request to find unavailable Functions meters. The forward 64-call/60-second plan
+is 1.0667 capacity-hours, but cannot establish remaining historical allowance.
+Keep the live verdict blocked until the complete recovery gate and an explicitly
+reviewed headroom evidence method are satisfied. The existing application limits,
+free-only requirement and unknown-headroom rejection remain unchanged.
