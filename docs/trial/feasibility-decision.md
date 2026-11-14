@@ -199,3 +199,21 @@ owner review, requiring a partial outcome when Functions allowances remain unkno
 That exception is not applied by this change; merging the qualification alone does
 not unblock #14 or authorize deployment. PR #50 remains draft. No paid option or
 provider hard-cap claim is introduced.
+
+## Live OCI activation checkpoint — 2026-11-14, issue #14
+
+PR #49 completes the hosted admission prerequisite, including protection of cleanup
+capacity and evidence freshness through the creation window. The earlier synthetic
+result above still does not establish real OCI lifecycle feasibility.
+
+Current read-only checks pass for OCI access and restricted Neon SQL permissions;
+the project has no functions/triggers or installed trial schemas. Fresh owner Free
+eligibility, aggregate allowance headroom and effective-IAM review remain missing.
+**Decision: no-go for activation until those inputs are supplied; live feasibility
+is unproven.** No paid fallback or relaxation of resource/request/time limits is
+approved. The bounded next step is to complete those inputs and execute the existing
+runbook under issue #14, not to introduce another execution backend.
+
+See [the dated live evidence ledger](live-results.md) for observations, build
+identity, each unresolved acceptance row and the conditions for resuming. No live
+OCI resource lifecycle was started in this checkpoint.
