@@ -93,6 +93,8 @@ export async function execute(
       operation: e.operation,
       delivery,
       expiresAt: e.expiresAt,
+      // Synthetic proof never pretends that fixture observations are live OCI metrics.
+      usage: async () => [],
       sdk: (_signal, { claim, snapshot, store }) =>
         syntheticSdk(
           {

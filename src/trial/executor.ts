@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type BucketAttributes, makeBucket } from "../providers/oci/bucket.js";
 import {
-  type BucketAction,
   BucketFailure,
   type BudgetedDispatcher,
   bucketClient,
@@ -9,6 +8,7 @@ import {
   objectClient,
 } from "../providers/oci/client.js";
 import { makeTrialObject, probeIntent } from "../providers/oci/trial-object.js";
+import type { UsageTransport } from "../providers/oci/usage.js";
 import { bucketLifecycle } from "./executor-resources.js";
 import {
   type ExecutionSnapshot,
@@ -16,6 +16,7 @@ import {
   type Phase,
 } from "./executor-store.js";
 import { type LedgerDatabase, makeLedger, type TrialAction } from "./ledger.js";
+import { collectUsage, usageStore } from "./warnings.js";
 
 /** Fixed cadence/deadlines; one minute work plus five-minute delivery margin fits each slot. */
 export const timing = {
@@ -69,6 +70,8 @@ export interface ExecutorOptions {
   delivery: string;
   expiresAt: number;
   now?: () => number;
+  /** Optional until the real OCI composition is enabled; omission yields no usage evidence. */
+  usage?: UsageTransport;
   sdk: (
     signal: AbortSignal,
     session: {
@@ -122,11 +125,20 @@ export async function runExecutor(
         now >= start + timing.creationMs)
     )
       throw new BucketFailure("budget");
+    if (
+      action === "monitor" &&
+      (now >= start + timing.cleanupMs ||
+        !(await usageStore(db).allowed(claim)))
+    )
+      throw new BucketFailure("budget");
     await ledger.renew(claim);
+    if (action === "monitor" && !(await usageStore(db).allowed(claim)))
+      throw new BucketFailure("budget");
     if (
       controller.signal.aborted ||
       clock() >= deadline ||
       clock() >= expires ||
+      (action === "monitor" && clock() >= start + timing.cleanupMs) ||
       ((action === "create_bucket" || action === "put_object") &&
         clock() >= start + timing.creationMs)
     )
@@ -154,12 +166,11 @@ export async function runExecutor(
     );
     return old?.id ?? (await ledger.begin(claim, randomUUID(), action));
   }
-  const dispatcher: BudgetedDispatcher = {
+  const dispatcher: BudgetedDispatcher & {
+    dispatch<T>(action: TrialAction, send: () => Promise<T>): Promise<T>;
+  } = {
     /** Preserve raw transport outcome only long enough to settle definite responses; never log it. */
-    async dispatch<T>(
-      action: BucketAction,
-      send: () => Promise<T>,
-    ): Promise<T> {
+    async dispatch<T>(action: TrialAction, send: () => Promise<T>): Promise<T> {
       await guard(action);
       const id = await attempt(action),
         request = randomUUID();
@@ -389,10 +400,38 @@ export async function runExecutor(
           },
         },
       ).upload();
+      if (options.usage) {
+        await usageStore(db).uploaded(claim);
+        await store.access(claim, "phase", "observe");
+        return { phase: "observe" };
+      }
       await store.access(claim, "phase", "cleanup");
       return { phase: "cleanup" };
     }
-    if (phase === "observe") return { phase };
+    if (phase === "observe") {
+      if (options.usage)
+        await collectUsage(
+          db,
+          claim,
+          options.usage,
+          (send) => dispatcher.dispatch("monitor", send),
+          AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(
+              Math.max(
+                1,
+                Math.min(
+                  timing.invocationMs,
+                  start + timing.cleanupMs - clock(),
+                ),
+              ),
+            ),
+          ]),
+          clock,
+        );
+      return { phase };
+    }
+    if (options.usage) await usageStore(db).close(claim);
     await store.access(claim, "phase", "cleanup");
     snapshot.phase = "cleanup";
     if (snapshot.bucket) {

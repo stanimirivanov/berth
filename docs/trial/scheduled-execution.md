@@ -126,3 +126,9 @@ clocks, malformed schedule envelopes, restricted credentials and delayed signing
 
 See [scheduled evidence](scheduled-evidence.md) for the dated hosted result and
 its limits. No build or test command enables a schedule or deploys resources.
+
+With issue #12's Monitoring transport configured, successful upload enters `observe`
+instead of immediate cleanup. Owner migration 003 enables hourly due checks and
+retained warning history. Cancellation/failure/hour-three cleanup takes precedence;
+missing metrics never extend the window. See [usage observation](usage-observation.md).
+The dated #11 three-tick proof records the earlier synthetic configuration.

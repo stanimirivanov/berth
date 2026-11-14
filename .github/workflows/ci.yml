@@ -87,3 +87,6 @@ jobs:
       - run: pnpm run test:executor-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run test:usage-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
