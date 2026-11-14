@@ -1,6 +1,6 @@
 # Hosted OCI trial — issue #14
 
-## Status on 2026-11-14
+## Initial status on 2026-11-14
 
 **Blocked before activation; no live feasibility pass.** The implementation
 prerequisites (#43, #46 and #47) are merged. Fresh owner eligibility, aggregate
@@ -37,6 +37,9 @@ claim they were charged to a nonexistent trial ledger or reset accrued usage.
 Private credentials and raw provider bodies remain outside the repository.
 
 ## Inputs required before creation
+
+The follow-up below resolves Neon plan status, region, IAM and current storage
+inventory. Its remaining owner steps supersede requests to repeat those checks.
 
 Record the observation time and source for each item. Both allowance and IAM
 attestations must remain fresh through the prepared start plus 30 minutes.
@@ -99,3 +102,74 @@ Until then the decision is **no-go for activation, feasibility unproven**, rathe
 than a finding that Neon or Alchemy cannot work. Missing metrics, recovery proof,
 headroom or authenticated teardown after activation must remain partial/blocked.
 Issue #14 stays open until its live evidence and final verdict have been reviewed.
+
+
+## CLI/API follow-up — 2026-11-14, completed 18:06 UTC
+
+The owner authorized read-only use of the existing administrator and management
+credentials. OCI CLI 3.96.2 used explicit configuration, no automatic retries,
+bounded pages and timeouts. Neon checks used the documented REST API with the
+existing key; credentials and raw replies remain private. No cloud mutations.
+
+| Check | Evidence |
+| --- | --- |
+| Neon plan | Organization API returned `plan=free` |
+| OCI home/subscribed regions | Frankfurt (`eu-frankfurt-1`), sole subscribed region |
+| OCI compartment scope | One active child compartment, the trial; direct child of tenancy root |
+| OCI effective resource policies | Root has restricted three-statement trial policy plus Administrators policy; trial compartment has no policies; no pagination token on inventories |
+| Trial identity | ACTIVE; IAM and Identity Domains each return only `berth-trial-executor` membership; API keys enabled, other exposed credential capabilities disabled |
+| Storage inventory | Trial empty; root has one existing Standard bucket, versioning disabled, approximately one object / 46,377 bytes; unrelated bucket untouched |
+| OCI subscription | ACTIVE record, payment model `FREE_TRIAL`, promotional end 2026-09-02; insufficient to distinguish current post-promotion Free Tier status without Console confirmation |
+| OCI billing usage | Nov 1 inclusive to Nov 14 00:00 UTC exclusive: 46 Object Storage requests; 56,160 Monitoring retrieval datapoints; storage 0.000000301704 GB-month; no transfer SKU returned |
+| Neon consumption API | Correctly parameterized request returned 403: endpoint included with Launch plans and above; no upgrade attempted |
+
+Storage GB-month is not current bytes. Monitoring datapoints are not request counts.
+Missing transfer rows do not prove zero transfer. Today's activity and reporting
+lag are not included in the midnight usage snapshot. The existing storage inventory
+strongly supports storage headroom but cannot establish monthly requests/transfer.
+The first OCI usage call was rejected for daily timestamp precision, then corrected
+to midnight; the first Neon consumption call lacked the required metrics parameter,
+then a corrected read established the Free-plan restriction. Neither failed read
+was treated as successful evidence or automatically retried.
+
+### Remaining owner steps
+
+1. **OCI account status:** Navigation menu → **Billing & Cost Management** →
+   under **Billing**, **Upgrade and Manage Payment**. Read **Subscription
+   Information → Plan Type**. Do not select upgrade or change payment details.
+   Return the exact Plan Type and any free-trial expiry/credit status text. This
+   resolves the expired promotional date in the API record.
+2. **OCI usage gap:** Navigation menu → **Billing & Cost Management** →
+   **Cost Analysis**. Set the date range to the current month through today,
+   tenancy-wide (no compartment filter). Select usage rather than cost where
+   available, and inspect Object Storage request and outbound-transfer SKU rows,
+   preserving units and the latest available timestamp. Return these rows or
+   `not displayed`. Zero cost and absent rows must not be converted to zero usage.
+   Also state whether any workloads other than Berth have used Object Storage,
+   outbound transfer or Monitoring since Nov 14 00:00 UTC; if so, describe their
+   scale. The CLI already checked storage inventory, region and IAM.
+3. **Neon usage:** Open Console, select the project's organization from the
+   top-right profile menu, then **Projects** → the trial project → **Overview**.
+   In **Usage**, copy Compute, Storage, History and Network transfer values,
+   units, period and any displayed limits. Plan status is already API-verified.
+   At organization level, **Billing** shows the current billing period and plan
+   summary; record any Functions invocation/active/waiting compute usage displayed.
+   If those fields are absent, report `Functions usage not displayed`; do not use
+   Postgres CU-hours as Functions capacity-hours. The published Console summary
+   does not guarantee these Functions metrics are exposed on Free.
+4. State whether this Neon project has had any Functions activity besides the
+   recorded Berth trials. If Functions counters are unavailable, a conservative
+   reconstruction from private deployment/trigger journals is an investigation,
+   not verified billing evidence. The measured runtime basis remains our task;
+   the owner is not asked to invent a compute estimate or attest unknown usage.
+
+Return only statuses and numeric usage, with observation time/timezone. No account
+IDs, emails, API keys, OCIDs or connection strings are needed. Unknown figures
+remain blockers under the current admission contract; a missing provider meter
+may require a bounded follow-up rather than a paid upgrade or assumed zero usage.
+
+Sources checked 2026-11-14:
+- [OCI account status navigation](https://docs.oracle.com/en-us/iaas/Content/Billing/Tasks/changingpaymentmethod.htm)
+- [OCI Cost Analysis](https://docs.oracle.com/en-us/iaas/Content/Billing/Concepts/costanalysisoverview.htm)
+- [Neon Console usage locations](https://neon.com/docs/introduction/monitor-usage)
+- [Neon consumption API plan availability](https://neon.com/docs/guides/consumption-metrics)
