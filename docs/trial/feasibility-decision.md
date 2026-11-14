@@ -202,3 +202,14 @@ runbook under issue #14, not to introduce another execution backend.
 See [the dated live evidence ledger](live-results.md) for observations, build
 identity, each unresolved acceptance row and the conditions for resuming. No live
 OCI resource lifecycle was started in this checkpoint.
+
+
+### Read-only follow-up — 2026-11-14 18:06 UTC
+
+Existing credentials now verify Neon Free status, OCI home region, the restricted
+trial group/policy inventory and approximate current storage. The activation
+blocker is narrower: current OCI post-promotion account status, fresh aggregate
+request/transfer headroom and Neon Functions consumption/compute evidence. The
+Neon consumption API explicitly rejects Free-plan access (403); do not upgrade or
+infer zero usage. The live-results follow-up provides exact remaining Console
+steps. Activation remains blocked; no resource lifecycle has begun.
