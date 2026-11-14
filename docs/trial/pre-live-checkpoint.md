@@ -1,4 +1,4 @@
-# Pre-live recovery checkpoint — issue #13
+# Pre-live recovery checkpoint — issues #13 and #43
 
 This checkpoint uses real PostgreSQL, the pinned Alchemy engine, real Node
 process termination and a deterministic fake OCI service. It makes **no live OCI
@@ -68,7 +68,7 @@ successful stops.
 | Lifecycle | **PASS (bounded fixtures).** Alchemy bucket lifecycle, deterministic 1 MiB checksum, no duplicate mutation in crash sweep; create-only and revision-bound real SDK serialization tests. | **BLOCKED: not run in this checkpoint.** Real bucket settings, upload/checksum and persisted identity. |
 | Usage | **PASS (bounded fixtures).** Three separately reserved requests, malformed/stale/missing samples remain unknown; hourly SQL cadence and retained observations. | **BLOCKED: not run in this checkpoint.** Fresh bucket-filtered OCI metrics with source timestamps. |
 | Warning | **PASS (bounded fixtures).** Equality at 50% of 2 MiB warns once; SQL deduplicates and retains history after cleanup. | **BLOCKED: not run in this checkpoint.** Actual post-upload threshold observation. |
-| Recovery | **PASS safety; BLOCKED automatic teardown.** 136 primary semantic boundaries plus four recovery-only boundaries; three known cleanup-reserve failures tracked in #43. | **BLOCKED by #43**, then hosted continuation and recovery under deployed limits. |
+| Recovery | **PASS (bounded fixtures).** 136 primary semantic boundaries plus four recovery-only boundaries; all three pre-delete interruptions from #43 now require terminal teardown within 40 requests. | **BLOCKED: not run in this checkpoint.** Hosted continuation and recovery under deployed limits. |
 | Teardown | **PASS (bounded fixtures).** Conditional revision tests preserve replacements; protected cleanup after normal-budget exhaustion; auth errors and incomplete inventory cannot prove absence. | **BLOCKED: not run in this checkpoint.** Owned object/bucket removal with authenticated absence evidence. |
 | Outcome | **PASS (bounded fixtures).** Terminal assertions require no unresolved mutation and empty fake cloud; unknown requests preserve the active slot. | **BLOCKED: not run in this checkpoint.** Dated allowance delta, durable hosted outcome and owner shutdown evidence (#15). |
 
@@ -78,30 +78,34 @@ trusted installation boundary. These checks do not grant runtime migration right
 
 ## Gate verdict
 
-**BLOCKED for live trial #14 by [issue #43](https://github.com/stanimirivanov/berth/issues/43).**
-The checkpoint's safety assertions pass, but three recoverable pre-delete crashes
-exhaust the protected 40-request cleanup reserve after deleting the object, leaving
-the owned bucket.
-This is a measured recovery failure, not a successful teardown. Budgets and
-ownership checks have not been relaxed to make the gate green.
+**The local cleanup-reserve blocker from [issue #43](https://github.com/stanimirivanov/berth/issues/43) is resolved by this change.**
+Live qualification still requires issue #14's account, IAM, metrics and hosted
+execution evidence; this local result does not enable a schedule or cloud writes.
 
-The outcome oracle makes these three cases explicit: `before:ledger.begin:delete_object`,
-`after:ledger.begin:delete_object`, and `before:ledger.reserve:delete_object` must
-retain the bucket after exactly one object deletion and no bucket deletion, report `needs-reconciliation`, have zero unresolved mutations
-and have spent exactly 40 cleanup requests. Issue #43 must fix them and replace
-these blocked expectations with terminal assertions before #14 proceeds.
+Previously, crashes at `before:ledger.begin:delete_object`,
+`after:ledger.begin:delete_object`, or `before:ledger.reserve:delete_object`
+exhausted 40 cleanup requests after deleting the object, leaving the bucket.
+The regression first reproduced that failure, then required terminal status,
+zero unresolved mutations, exactly one deletion of each resource and an empty
+cloud model within the unchanged reserve.
+
+The fix defers the first bucket check until after the read-only object inventory,
+checksum and reconciliation callback. A full fresh ownership/configuration and
+inventory check still gates DELETE. Empty inventories still require saved bucket
+identity before returning. No inspection results are cached across invocations,
+reservations refunded or conditional-delete checks removed.
 
 Ten other primary checkpoints correctly retain one genuinely uncertain mutation:
 `after:ledger.reserve:<action>` / `before:cloud.<method>` for each of the four
 mutations, and interruption before recording a definite create/upload rejection.
 The ten require owner reconciliation; a response lost before durable settlement is
-not evidence of rejection. All remaining 123 primary checkpoints must reach terminal
+not evidence of rejection. All remaining 126 primary checkpoints must reach terminal
 with no unresolved mutations or leftover cloud resources. An unexpected child
 exception, unclassified SQL or new recovery stop fails the suite.
 
-Verification covers 145 assertions/tests (full sweep plus focused reruns of the
-three refined leftover-resource assertions), including the 136 primary cases, four
-recovery-only cases, delayed completion, corruption and DB privilege checks. Use
+Verification covers the 136 primary cases, four recovery-only cases, three
+explicit interrupted-delete regressions, delayed completion, corruption and DB
+privilege checks. Use
 `BERTH_RECOVERY_POINT=before:ledger.begin:delete_object pnpm run test:recovery-db`
 for a focused reproduction; omit the variable for the full CI gate. Unknown labels
 fail. This filter does not claim full-checkpoint coverage.
@@ -117,8 +121,31 @@ identified permissive exception handling and substituted object bytes in the fir
 fixture version; both findings were accepted and corrected. The CLI review used no
 cloud credentials, deployments or database access. No second CLI review is claimed.
 
-`pnpm check` passes 129 application tests and 22 harness tests, including formatting,
+The issue #13 `pnpm check` passed 129 application tests and 22 harness tests, including formatting,
 strict types, ownership/documentation checks, bundle build and secret scan. The
 unchanged dependency audit has seven moderate and one low finding, with no
 high/critical finding. `pnpm run build:executor` also passes. These checks do not
 replace the database-suite and live acceptance evidence.
+
+Issue #43 adds post-checksum drift tests for bucket ID/marker/configuration,
+retention, access grants, version history, unexpected contents, multipart uploads
+and pagination, plus an empty-inventory ownership test. Replacement-safe deletion,
+lost-upload cleanup after normal-budget exhaustion and all ten ambiguous dispatch
+expectations remain unchanged. Review of this change is separate from the earlier
+CLI review; no additional external CLI review was run.
+
+Issue #43 verification on 2026-11-14: `pnpm check:fast`, `pnpm check` (131 application
+and 22 harness tests), the executor bundle, 28 provider contracts, and ledger (5),
+executor (11), usage (6) and privilege suites passed. The three interrupted-delete
+regressions first failed at 40 requests with the bucket remaining, then passed
+with one object deletion, one bucket deletion, no unresolved mutations and
+35 of the unchanged 40 cleanup requests used in each case.
+
+**Execution limitation:** an uninterrupted local `test:recovery-db` run did not
+finish: the first was interrupted after 131 primary checkpoints; the retry reached
+the unchanged 600-second wall-clock limit under competing host CPU load. The five
+remaining primary checkpoints and all auxiliary scenarios passed in focused runs,
+with the existing assertions intact. All 136 primary checkpoints are covered across
+those runs; this is not a claim that the full command exited successfully. CI still
+runs the unfiltered command. An isolated build-copy mutation of the new empty-
+inventory branch caused its ownership test to fail; the real build was unchanged.

@@ -370,3 +370,65 @@ test("Node response streams are checksummed and truncated bodies stop cleanup", 
   await f.probe.read();
   assert.equal(f.sdk.puts, 1);
 });
+
+test("cleanup rechecks identity and restrictions after checksum persistence before deleting", async () => {
+  const changes: ((sdk: FakeObjects) => void)[] = [
+    (sdk) => {
+      assert.ok(sdk.value);
+      sdk.value.id = "ocid1.bucket.oc1..replacement";
+    },
+    (sdk) => {
+      assert.ok(sdk.value);
+      sdk.value.freeformTags = {};
+    },
+    (sdk) => {
+      assert.ok(sdk.value);
+      sdk.value.isReadOnly = true;
+    },
+    (sdk) => {
+      sdk.retention = [{}];
+    },
+    (sdk) => {
+      sdk.grants = [{}];
+    },
+    (sdk) => {
+      sdk.versions = true;
+    },
+    (sdk) => {
+      sdk.extra = true;
+    },
+    (sdk) => {
+      sdk.uploads = [{}];
+    },
+    (sdk) => {
+      sdk.page = "next";
+    },
+  ];
+  for (const change of changes) {
+    const f = await fixture();
+    await f.probe.upload();
+    assert.ok(f.receipt);
+    const cleanup = makeTrialObject(
+      { intent: f.saved, bucket: f.bucket, receipt: f.receipt },
+      f.client,
+      {
+        saveIntent: f.journal.saveIntent,
+        saveReceipt: async (receipt) => {
+          await f.journal.saveReceipt(receipt);
+          change(f.sdk);
+        },
+      },
+    );
+    await assert.rejects(cleanup.remove());
+    assert.equal(f.sdk.objectDeletes, 0);
+    assert.ok(f.sdk.object);
+  }
+});
+
+test("empty object inventory still requires the saved bucket identity", async () => {
+  const f = await fixture();
+  assert.ok(f.sdk.value);
+  f.sdk.value.id = "ocid1.bucket.oc1..replacement";
+  await assert.rejects(f.probe.remove(), /ownership/);
+  assert.equal(f.sdk.objectDeletes, 0);
+});

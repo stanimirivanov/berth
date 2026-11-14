@@ -281,15 +281,6 @@ test("checkpoint seed 13: process death at each observed semantic write boundary
         }
         const row = await f.converge();
         const classification = classifyRecovery(label, row);
-        if (classification === "cleanup-blocked") {
-          assert.equal(f.cloud.sdk.object, undefined);
-          assert.ok(
-            f.cloud.sdk.value,
-            "cleanup blocker retains the owned bucket",
-          );
-          assert.equal(f.cloud.sdk.objectDeletes, 1);
-          assert.equal(f.cloud.sdk.deletes, 0);
-        }
         if (classification !== "terminal")
           t.diagnostic(
             `requires-owner: ${label}; unknown=${row.unknown}; pending-upload=${row.pending_upload}; reason=${row.reason}`,
@@ -425,3 +416,36 @@ test(
       assert.equal(row.reason, "unresolved-provider-call");
     }),
 );
+
+test("interrupted object deletion completes owned teardown within the unchanged reserve", {
+  timeout: 60000,
+}, async (t) => {
+  for (const label of [
+    "before:ledger.begin:delete_object",
+    "after:ledger.begin:delete_object",
+    "before:ledger.reserve:delete_object",
+  ]) {
+    await t.test(label, () =>
+      fixture(async (f) => {
+        assert.equal((await (await f.launch()).done).phase, "object");
+        assert.equal((await (await f.launch()).done).phase, "observe");
+        await (await f.launch(undefined, true)).done;
+        const killed = await (await f.launch({ label, occurrence: 1 })).done;
+        assert.equal(killed.signal, "SIGKILL");
+        assert.equal(f.cloud.sdk.objectDeletes, 0);
+        const row = await f.converge();
+        assert.ok(
+          ["succeeded", "failed"].includes(row.outcome),
+          `${label}: cleanup=${row.cleanup_used}, outcome=${row.outcome}`,
+        );
+        assert.equal(row.unknown, 0);
+        assert.ok(row.cleanup_used <= 40);
+        assert.equal(f.cloud.sdk.object, undefined);
+        assert.equal(f.cloud.sdk.value, undefined);
+        assert.equal(f.cloud.sdk.objectDeletes, 1);
+        assert.equal(f.cloud.sdk.deletes, 1);
+        t.diagnostic(`${label}: cleanup requests=${row.cleanup_used}/40`);
+      }),
+    );
+  }
+});

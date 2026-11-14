@@ -36,10 +36,15 @@ no account credentials or cloud mutations are involved.
    permits read-only reconciliation against the exact marker, target, metadata and
    bytes. Without that evidence, even matching content is not adopted. Missing
    content after a pending upload stops; it never triggers automatic re-upload.
-7. `remove()` uses only cleanup reservations. It checks inventory, ownership and
-   checksum, saves the observed revision, rechecks bucket configuration/inventory,
-   then DELETEs with the inspected `If-Match`. A final authenticated inventory
-   establishes absence. The bucket helper may then delete the empty owned bucket.
+7. `remove()` uses only cleanup reservations. Read-only object/version/upload
+   inventory and checksum verification precede the fresh bucket check. After saving
+   the revision and any reconciliation callback, it checks full bucket ownership,
+   configuration and inventories, then DELETEs with the inspected `If-Match`.
+   Empty object inventories still require saved bucket identity before returning.
+   Final object/version/upload inventories establish absence; the bucket helper
+   independently rechecks and deletes the empty owned bucket. Deferring the initial
+   duplicate bucket check saves four reads per present-object cleanup attempt,
+   including an interrupted attempt, without caching evidence across invocations.
 
 Concrete SQL journal/dispatch wiring and hosted orchestration are still gated work;
 these injected ports are not a durable implementation by themselves. Keep pending
