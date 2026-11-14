@@ -15,6 +15,10 @@ import {
 
 /** Private admission ports; no SDK, execution dispatch or credentials appear in responses. */
 export interface TrialApiOptions {
+  /** Optional owner-prepared identity for the metered live preview contract. */
+  operation?: string;
+  /** Bind prepared live previews to the reviewed credential identity and window. */
+  binding?: string;
   token: string;
   previewKey: string;
   configuration: TrialConfiguration;
@@ -77,6 +81,7 @@ export function makeTrialApi(options: TrialApiOptions) {
   const c = Object.freeze({ ...options.configuration });
   validateConfiguration(c);
   if (
+    (options.operation !== undefined && !uuid.test(options.operation)) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(options.token) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(options.previewKey)
   )
@@ -85,7 +90,9 @@ export function makeTrialApi(options: TrialApiOptions) {
     key = options.previewKey,
     clock = options.now ?? Date.now;
   const configurationHash = createHash("sha256")
-    .update(JSON.stringify(proposal(c, "configuration")))
+    .update(
+      JSON.stringify([proposal(c, "configuration"), options.binding ?? ""]),
+    )
     .digest("hex");
   const sign = (payload: string) =>
     createHmac("sha256", key).update(payload).digest("base64url");
@@ -116,6 +123,7 @@ export function makeTrialApi(options: TrialApiOptions) {
     };
     if (
       !uuid.test(p.operation) ||
+      (options.operation !== undefined && p.operation !== options.operation) ||
       p.configurationHash !== configurationHash ||
       !Number.isFinite(p.issued) ||
       p.issued > now ||
@@ -232,7 +240,7 @@ export function makeTrialApi(options: TrialApiOptions) {
           }
         }
         if (url.pathname === "/preview") {
-          const id = randomUUID(),
+          const id = options.operation ?? randomUUID(),
             payload = Buffer.from(
               JSON.stringify({
                 operation: id,

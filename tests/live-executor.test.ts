@@ -18,6 +18,9 @@ const env = {
   DATABASE_URL_UNPOOLED:
     "postgresql://berth_runtime:fixture@ep-fixture.neon.tech/neondb",
   BERTH_EXECUTOR_MODE: "live",
+  BERTH_PREVIEW_KEY: "b".repeat(40),
+  BERTH_MONITORING_LIMIT: "20",
+  BERTH_NEON_LIMIT: "40",
   BERTH_EXECUTOR_OPERATION: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   BERTH_EXECUTOR_STARTED_AT: String(now - 1000),
   BERTH_EXECUTOR_EXPIRES_AT: String(now - 1000 + 14400000),
@@ -184,6 +187,8 @@ test("live execution checks SQL identity and exact admitted target/window before
         assert.equal(closed, false);
         if (sql.includes("AS restricted"))
           return { rows: [{ restricted: true }] };
+        if (sql.includes("berth_executor.admission_status"))
+          return { rows: [{ result: { admitted: true } }] };
         if (sql.includes("berth_executor.open")) {
           await new Promise((resolve) => setTimeout(resolve, 1));
           assert.equal(closed, false);
@@ -320,4 +325,42 @@ test("live build descriptor keeps the schedule disabled and the synthetic root s
   assert.equal(liveSchedule.enabled, false);
   assert.equal(liveSchedule.function_slug, liveFunction.slug);
   assert.equal(liveSchedule.schedule.cron, "*/15 * * * *");
+});
+
+test("hosted preview reaches bounded API only after bearer authentication", async () => {
+  let calls = 0;
+  const handler = makeLiveHandler(
+    env,
+    async () => {
+      throw Error("not executor work");
+    },
+    () => now,
+    async (_e, request) => {
+      calls++;
+      assert.equal(new URL(request.url).pathname, "/preview");
+      return Response.json({ preview: "fixture" });
+    },
+  );
+  assert.equal(
+    (
+      await handler.fetch(
+        new Request("https://fixture/preview", { method: "POST", body: "{}" }),
+      )
+    ).status,
+    401,
+  );
+  assert.equal(calls, 0);
+  assert.equal(
+    (
+      await handler.fetch(
+        new Request("https://fixture/preview", {
+          method: "POST",
+          body: "{}",
+          headers: { authorization: `Bearer ${env.BERTH_TRIAL_TOKEN}` },
+        }),
+      )
+    ).status,
+    200,
+  );
+  assert.equal(calls, 1);
 });

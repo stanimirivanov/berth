@@ -6,11 +6,13 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/trial/live-admission.ts": ["node:crypto"],
+  "src/providers/oci/readiness.ts": ["oci-common"],
   "src/trial/executor-security.ts": [],
   "src/trial/live-index.ts": [],
   "src/trial/live-environment.ts": ["node:crypto"],
   "src/trial/live-hosted.ts": ["node:crypto"],
-  "src/trial/live-runtime.ts": ["oci-common", "pg"],
+  "src/trial/live-runtime.ts": ["node:crypto", "oci-common", "pg"],
   "src/providers/oci/usage.ts": ["oci-common"],
   "src/trial/warnings.ts": [],
   "src/trial/executor-api.ts": [],
@@ -151,6 +153,14 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
+            (file === "src/trial/live-admission.ts" &&
+              [
+                "src/trial/api.ts",
+                "src/trial/executor-store.ts",
+                "src/trial/ledger.ts",
+                "src/trial/live-environment.ts",
+                "src/trial/preflight.ts",
+              ].includes(resolved)) ||
             (file === "src/trial/live-index.ts" &&
               [
                 "src/trial/live-hosted.ts",
@@ -166,6 +176,8 @@ export function analyze(files) {
             (file === "src/trial/live-runtime.ts" &&
               [
                 "src/trial/live-environment.ts",
+                "src/trial/live-admission.ts",
+                "src/providers/oci/readiness.ts",
                 "src/trial/live-hosted.ts",
                 "src/trial/executor-security.ts",
                 "src/trial/executor.ts",

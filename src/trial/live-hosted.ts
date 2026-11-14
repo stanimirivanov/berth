@@ -15,6 +15,10 @@ export function makeLiveHandler(
   env: Record<string, string | undefined>,
   run: LiveRun,
   now: () => number = Date.now,
+  admission?: (
+    e: ReturnType<typeof liveEnvironment>,
+    request: Request,
+  ) => Promise<Response>,
 ) {
   return {
     /** Expired/unauthenticated calls perform no SQL, signing or provider work; errors are redacted. */
@@ -40,7 +44,10 @@ export function makeLiveHandler(
       if (
         request.method !== "POST" ||
         url.search ||
-        !["/evidence", "/usage", "/cleanup"].includes(url.pathname)
+        !(
+          ["/evidence", "/usage", "/cleanup"].includes(url.pathname) ||
+          (admission && ["/preview", "/submit"].includes(url.pathname))
+        )
       )
         return new Response(null, { status: 404 });
       const authorization = request.headers.get("authorization") ?? "",
@@ -56,7 +63,7 @@ export function makeLiveHandler(
         return new Response(null, { status: 401 });
       const headers = { "cache-control": "no-store" };
       // These controls take no payload; a caller cannot override the fixed operation.
-      if (request.body)
+      if (request.body && !["/preview", "/submit"].includes(url.pathname))
         return Response.json(
           { error: "body-not-allowed" },
           { status: 400, headers },
@@ -64,6 +71,8 @@ export function makeLiveHandler(
       try {
         if (now() >= expiresAt)
           return Response.json({ phase: "expired" }, { headers });
+        if (admission && ["/preview", "/submit"].includes(url.pathname))
+          return await admission(liveEnvironment(env), request);
         return Response.json(
           await run(liveEnvironment(env), url.pathname.slice(1) as LiveAction),
           { headers },

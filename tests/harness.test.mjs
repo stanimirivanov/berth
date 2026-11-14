@@ -351,3 +351,27 @@ test("live roots allow reviewed transports but reject synthetic and administrato
   for (const [file, text] of rejected)
     assert.ok(analyze({ [file]: text }).some((f) => f.rule === "architecture"));
 });
+
+test("live admission owns metering and cannot import credentials from administrator scripts", () => {
+  const files = {
+    "src/trial/live-admission.ts":
+      'import "node:crypto"; import "./api.js"; import "./ledger.js";',
+    "src/trial/api.ts": "",
+    "src/trial/ledger.ts": "",
+    "src/providers/oci/readiness.ts":
+      'import type { RequestSigner } from "oci-common";',
+  };
+  assert.deepEqual(analyze(files), []);
+  assert.ok(
+    analyze({
+      ...files,
+      "src/trial/live-admission.ts": 'import "../../scripts/oci-setup.js";',
+    }).some((x) => x.rule === "architecture"),
+  );
+  assert.ok(
+    analyze({
+      ...files,
+      "src/providers/oci/readiness.ts": 'import "node:fs";',
+    }).some((x) => x.rule === "architecture"),
+  );
+});

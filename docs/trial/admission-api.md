@@ -1,5 +1,11 @@
 # Private trial admission — issue #10
 
+The persistence-free contract below describes the original generic API. The live
+#47 composition uses an owner-prepared fixed operation and **persists metered
+read-only checks during preview**. See [hosted-admission.md](hosted-admission.md)
+for that explicit contract, SQL submission gate, shared deadline and activation.
+
+
 `makeTrialApi` exposes a Fetch-compatible private API for a single configured OCI
 trial. It does not dispatch Alchemy, upload objects, deploy Functions or start a
 scheduler. Submission calls the real atomic `makeLedger(...).start` contract;

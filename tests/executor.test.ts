@@ -211,3 +211,27 @@ test("hosted connection remains open until scheduled execution settles", async (
   assert.deepEqual(result, { phase: "terminal" });
   assert.equal(closed, true);
 });
+
+test("shared hosted deadline refuses another executor step before opening SQL", async () => {
+  const { runExecutor } = await import("../src/trial/executor.js");
+  let calls = 0;
+  const result = await runExecutor(
+    {
+      query: async () => {
+        calls++;
+        throw Error("must not connect");
+      },
+    },
+    {
+      operation: "fixture",
+      delivery: "fixture",
+      expiresAt: Date.now() + 10000,
+      deadlineAt: Date.now() - 1,
+      sdk: () => {
+        throw Error("must not dispatch");
+      },
+    },
+  );
+  assert.deepEqual(result, { phase: "expired" });
+  assert.equal(calls, 0);
+});
