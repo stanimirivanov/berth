@@ -213,3 +213,15 @@ request/transfer headroom and Neon Functions consumption/compute evidence. The
 Neon consumption API explicitly rejects Free-plan access (403); do not upgrade or
 infer zero usage. The live-results follow-up provides exact remaining Console
 steps. Activation remains blocked; no resource lifecycle has begun.
+
+
+### Owner evidence received — 2026-11-14
+
+The owner confirms OCI Free Tier and Neon Free, reporting 0.33 CU-hours, 32.1 MB
+Postgres storage, 118.7 kB history and 600 kB network transfer since November 12.
+Functions usage is not displayed. This resolves the account-status ambiguity but
+not the separate Functions headroom/measurement gap or recent OCI activity.
+Activation remains blocked on those specific inputs; do not request the same
+unavailable Functions counter repeatedly. The reported recovery CI cancellation
+was a confirmed 15-minute job timeout, tracked independently in #51. See the live
+results for the passing comparison run and precise limits of this diagnosis.

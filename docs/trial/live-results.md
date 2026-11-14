@@ -202,3 +202,49 @@ whole-window compute basis was recovered. The owner Console observations request
 above remain necessary; if Functions metering is unavailable there too, record that
 explicitly and resolve the evidence gap before activation. No deployment, schema
 installation, schedule or OCI mutation was performed during this investigation.
+
+
+## Owner Console evidence and CI triage — 2026-11-14
+
+The owner supplied the following Console observations. Exact observation time and
+whether there was non-Berth activity are still requested; do not stamp them with
+an invented `checkedAt` time for admission.
+
+| Item | Owner-reported value |
+| --- | --- |
+| OCI account | Free Tier account; resolves the ambiguous expired promotional record as an owner attestation |
+| Neon billing | Free Plan, $0/month |
+| Project | Ohio; one production branch; default compute 0.25–2 CU; Postgres 18; six-hour history retention |
+| Usage period | Since November 12, 2026 |
+| Postgres compute | 0.33 CU-hours used; displayed plan allowance 100 compute hours |
+| Postgres storage | 32.1 MB used; displayed allowance 1 GB |
+| History | 118.7 kB |
+| Network transfer | 600 kB |
+| Neon Object Storage | 0 kB; separate from this trial's OCI object storage |
+| Functions usage | Not displayed in Console |
+
+Do not ask the owner to find a Functions counter again: both the API restriction
+and its absence from the Console are now evidenced. Postgres usage is not Functions
+usage. Remaining activation gaps are a dated aggregate OCI allowance attestation
+covering recent activity, and a defensible Functions headroom/whole-window compute
+basis. A statement about other project activity may help scope a reconstruction,
+but it does not make incomplete invocation logs into exact billing measurements.
+No runtime guard was relaxed and no live operation was started.
+
+### Reported recovery cancellation
+
+The supplied 13m43s recovery excerpt matches PR #50 run
+[43626270858](https://github.com/stanimirivanov/berth/actions/runs/43626270858).
+GitHub's check annotation explicitly says the job exceeded its **15m0s maximum**.
+Recovery started at 18:24:19 and was canceled at 18:38:02 UTC. The preceding run
+[43624785292](https://github.com/stanimirivanov/berth/actions/runs/43624785292)
+passed the full workflow in 10m33s with unchanged test code. This establishes the
+observed cancellation cause, not the cause of runtime variation or a new teardown
+correctness failure. Later crossed-out test names alone cannot establish separate
+assertion failures; the canceled run remains incomplete.
+
+The bounded CI follow-up is [#51](https://github.com/stanimirivanov/berth/issues/51):
+measure and isolate/partition recovery work while proving complete crash coverage,
+preserving time limits, assertions and real process/SQL boundaries. Do not raise
+budgets or mark this checkpoint green based on partial progress. No CI change is
+included in this live-evidence PR.
