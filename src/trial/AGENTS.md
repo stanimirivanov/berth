@@ -56,3 +56,11 @@ that ledger and durable cleanup flags. The synthetic hosted root and service are
 qualification-only and must not gain OCI credentials. Read
 `docs/trial/scheduled-execution.md` before changing deadlines, budgets or recovery;
 run `test:executor-db` against a fresh disposable database and `build:executor`.
+
+`warnings.ts` owns hourly admission, normalized observation persistence and the app
+threshold contract. `providers/oci/usage.ts` owns only fixed Monitoring queries,
+strict response validation and the single-send signed transport. The executor
+reserves every Monitoring request separately, stops collection at cleanup, and
+never waits for metrics before required teardown. Install owner migration 003 after
+001/002; runtime cannot install it. Read `docs/trial/usage-observation.md`, and run
+`test:usage-db` plus collector/API fixtures when changing these boundaries.

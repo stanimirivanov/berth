@@ -6,6 +6,8 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/providers/oci/usage.ts": ["oci-common"],
+  "src/trial/warnings.ts": [],
   "src/trial/executor-api.ts": [],
   "src/trial/executor-hosted.ts": ["node:crypto", "pg"],
   "src/trial/executor-synthetic.ts": [],
@@ -144,9 +146,14 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
+            (file === "src/trial/warnings.ts" &&
+              ["src/trial/ledger.ts", "src/providers/oci/usage.ts"].includes(
+                resolved,
+              )) ||
             (file === "src/trial/executor-api.ts" &&
               [
                 "src/trial/api.ts",
+                "src/trial/warnings.ts",
                 "src/trial/ledger.ts",
                 "src/trial/executor-store.ts",
               ].includes(resolved)) ||
@@ -164,6 +171,8 @@ export function analyze(files) {
               ].includes(resolved)) ||
             (file === "src/trial/executor.ts" &&
               [
+                "src/trial/warnings.ts",
+                "src/providers/oci/usage.ts",
                 "src/trial/ledger.ts",
                 "src/trial/executor-store.ts",
                 "src/trial/executor-resources.ts",

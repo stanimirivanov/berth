@@ -207,3 +207,89 @@ test("uncertain submission returns only the stable operation for reconciliation"
   assert.equal(repeated.status, 202);
   assert.equal(f.records.size, 1);
 });
+
+test("private usage reports bypass creation headroom and never invoke cloud ports", async () => {
+  let reads = 0;
+  const operation = "00000000-0000-4000-8000-000000000001";
+  const handler = makeTrialApi({
+    token,
+    previewKey: "b".repeat(40),
+    configuration: config,
+    headroom: async () => {
+      throw Error("must not collect");
+    },
+    verifyCredentials: async () => {
+      throw Error("must not contact OCI");
+    },
+    ledger: {
+      start: async () => {
+        throw Error();
+      },
+    },
+    admitCleanup: async () => {
+      throw Error();
+    },
+    readUsage: async (op) => {
+      reads++;
+      return {
+        operation: op,
+        evidence: "inconclusive",
+        coverage: "bucket-operational-not-billing",
+        providerHardCap: false,
+        threshold: { bytes: 2097152, warningPercent: 50, enforcement: "app" },
+        history: [],
+        warnings: [],
+        uploadedAt: null,
+        closedAt: null,
+        secret: "private-canary",
+      };
+    },
+  });
+  assert.equal(
+    (await handler.fetch(request("usage", { operation }, "wrong"))).status,
+    401,
+  );
+  assert.equal(reads, 0);
+  assert.equal(
+    (await handler.fetch(request("usage", { operation, extra: true }))).status,
+    400,
+  );
+  const response = await handler.fetch(request("usage", { operation }));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const body = await response.json();
+  assert.equal(body.evidence, "inconclusive");
+  assert.equal(body.providerHardCap, false);
+  assert.equal(body.secret, undefined);
+  assert.equal(reads, 1);
+});
+
+test("read-only usage failures have a fixed diagnostic without uncertain-mutation claims", async () => {
+  const operation = "00000000-0000-4000-8000-000000000001";
+  const handler = makeTrialApi({
+    token,
+    previewKey: "b".repeat(40),
+    configuration: config,
+    headroom: async () => {
+      throw Error();
+    },
+    verifyCredentials: async () => false,
+    ledger: {
+      start: async () => {
+        throw Error();
+      },
+    },
+    admitCleanup: async () => {
+      throw Error();
+    },
+    readUsage: async () => {
+      throw Error("private-canary");
+    },
+  });
+  const response = await handler.fetch(request("usage", { operation }));
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "usage-unavailable",
+    operation,
+  });
+});

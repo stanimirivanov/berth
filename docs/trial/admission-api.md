@@ -116,3 +116,8 @@ API submission; the disposable container was removed. Inverting signature valida
 caused four failures; restored code passed. No cloud credentials or mutations were
 used. The unchanged dependency audit retains seven moderate and one low findings,
 with no high/critical findings.
+
+Issue #12 adds authenticated `POST /usage` with exactly `{ "operation": "<UUID>" }`.
+It reads durable bucket observations and warning history without headroom checks or
+provider calls, including after resource teardown. See
+[usage observation](usage-observation.md) for timestamp, freshness and coverage semantics.

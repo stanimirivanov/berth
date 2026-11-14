@@ -299,3 +299,22 @@ test("scheduled continuation separates admission, ledger state and OCI compositi
     ),
   );
 });
+
+test("usage collector separates signed provider IO from durable warnings and admission", () => {
+  const files = {
+    "src/providers/oci/usage.ts":
+      "import type {RequestSigner} from 'oci-common';",
+    "src/trial/warnings.ts":
+      "import './ledger.js'; import '../providers/oci/usage.js';",
+    "src/trial/ledger.ts": "",
+  };
+  assert.deepEqual(
+    analyze(files).filter((x) => x.rule === "architecture"),
+    [],
+  );
+  assert.ok(
+    analyze({ ...files, "src/trial/warnings.ts": "import 'pg';" }).some(
+      (x) => x.rule === "architecture",
+    ),
+  );
+});

@@ -25,6 +25,8 @@ export interface TrialApiOptions {
   /** Bounded read-only credential/target validation; false or rejection must never permit creation. */
   verifyCredentials: () => Promise<boolean>;
   ledger: Pick<ReturnType<typeof makeLedger>, "start">;
+  /** Read-only durable projection; never fetches provider data or gates on creation headroom. */
+  readUsage?: (operation: string) => Promise<Record<string, unknown>>;
   /** Must durably/idempotently admit only existing owned operations, without headroom gating. */
   admitCleanup: (
     operation: string,
@@ -68,7 +70,8 @@ function equal(a: string, b: string) {
 }
 /**
  * Fixed private POST API: signed read-only preview, atomic ledger submission and
- * owned cleanup admission. No cloud executor is invoked here. Deploy over TLS only.
+ * owned cleanup admission plus read-only usage history. No cloud executor is
+ * invoked here. Deploy over TLS only.
  */
 export function makeTrialApi(options: TrialApiOptions) {
   const c = Object.freeze({ ...options.configuration });
@@ -128,7 +131,7 @@ export function makeTrialApi(options: TrialApiOptions) {
       if (
         request.method !== "POST" ||
         url.search ||
-        !["/preview", "/submit", "/cleanup"].includes(url.pathname)
+        !["/preview", "/submit", "/cleanup", "/usage"].includes(url.pathname)
       )
         return reply({ error: "not-found" }, 404);
       const authorization = request.headers.get("authorization") ?? "";
@@ -161,6 +164,32 @@ export function makeTrialApi(options: TrialApiOptions) {
         return reply({ error: "invalid-request-or-preview" }, 400);
       }
       try {
+        if (url.pathname === "/usage") {
+          if (!operation || !options.readUsage) throw Error();
+          const report = await options.readUsage(operation);
+          if (report.operation !== operation) throw Error();
+          const {
+            coverage,
+            providerHardCap,
+            threshold,
+            uploadedAt,
+            closedAt,
+            evidence,
+            history,
+            warnings,
+          } = report;
+          return reply({
+            operation,
+            coverage,
+            providerHardCap,
+            threshold,
+            uploadedAt,
+            closedAt,
+            evidence,
+            history,
+            warnings,
+          });
+        }
         if (url.pathname === "/cleanup") {
           if (!operation) throw Error();
           const result = await options.admitCleanup(operation);
@@ -249,7 +278,13 @@ export function makeTrialApi(options: TrialApiOptions) {
         );
       } catch {
         return reply(
-          { error: "admission-uncertain-reconcile-operation", operation },
+          {
+            error:
+              url.pathname === "/usage"
+                ? "usage-unavailable"
+                : "admission-uncertain-reconcile-operation",
+            operation,
+          },
           503,
         );
       }
