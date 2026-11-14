@@ -44,3 +44,17 @@ export const executorSchedule = {
   enabled: false,
   schedule: { cron: "*/15 * * * *" },
 };
+
+/** Live executor is separate from the synthetic proof; building never deploys it. */
+export const liveFunction = {
+  ...probeFunction,
+  slug: "berthlive46",
+  name: "Berth bounded live OCI executor",
+  source: "./src/trial/live-index.ts",
+};
+/** Owner readiness/admission gates must pass before explicitly enabling this schedule. */
+export const liveSchedule = {
+  ...executorSchedule,
+  function_slug: liveFunction.slug,
+  enabled: false,
+};

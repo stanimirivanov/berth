@@ -318,3 +318,36 @@ test("usage collector separates signed provider IO from durable warnings and adm
     ),
   );
 });
+
+test("live roots allow reviewed transports but reject synthetic and administrator coupling", () => {
+  const controls = {
+    "src/trial/live-index.ts":
+      'import "./live-hosted.js"; import "./live-runtime.js";',
+    "src/trial/live-environment.ts":
+      'import "node:crypto"; import "./executor-security.js";',
+    "src/trial/live-hosted.ts":
+      'import "./live-environment.js"; import "./scheduled.js";',
+    "src/trial/live-runtime.ts":
+      'import "oci-common"; import "pg"; import "../providers/oci/client.js"; import "./executor.js";',
+    "src/trial/executor-security.ts":
+      "/** Shared restricted SQL check. */ export const restricted = true;",
+  };
+  assert.deepEqual(
+    analyze({
+      ...controls,
+      "src/trial/scheduled.ts": "",
+      "src/providers/oci/client.ts": "",
+      "src/trial/executor.ts": "",
+    }),
+    [],
+  );
+  /** @type {[string, string][]} */
+  const rejected = [
+    ["src/trial/live-index.ts", 'import "../../scripts/oci-admin-setup.js";'],
+    ["src/trial/live-hosted.ts", 'import "oci-common";'],
+    ["src/trial/live-runtime.ts", 'import "./executor-synthetic.js";'],
+    ["src/trial/executor-security.ts", 'import "node:fs";'],
+  ];
+  for (const [file, text] of rejected)
+    assert.ok(analyze({ [file]: text }).some((f) => f.rule === "architecture"));
+});

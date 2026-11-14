@@ -6,6 +6,11 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/trial/executor-security.ts": [],
+  "src/trial/live-index.ts": [],
+  "src/trial/live-environment.ts": ["node:crypto"],
+  "src/trial/live-hosted.ts": ["node:crypto"],
+  "src/trial/live-runtime.ts": ["oci-common", "pg"],
   "src/providers/oci/usage.ts": ["oci-common"],
   "src/trial/warnings.ts": [],
   "src/trial/executor-api.ts": [],
@@ -146,6 +151,30 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
+            (file === "src/trial/live-index.ts" &&
+              [
+                "src/trial/live-hosted.ts",
+                "src/trial/live-runtime.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/live-environment.ts" &&
+              resolved === "src/trial/executor-security.ts") ||
+            (file === "src/trial/live-hosted.ts" &&
+              [
+                "src/trial/live-environment.ts",
+                "src/trial/scheduled.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/live-runtime.ts" &&
+              [
+                "src/trial/live-environment.ts",
+                "src/trial/live-hosted.ts",
+                "src/trial/executor-security.ts",
+                "src/trial/executor.ts",
+                "src/trial/executor-store.ts",
+                "src/trial/ledger.ts",
+                "src/trial/warnings.ts",
+                "src/providers/oci/client.ts",
+                "src/providers/oci/usage.ts",
+              ].includes(resolved)) ||
             (file === "src/trial/warnings.ts" &&
               ["src/trial/ledger.ts", "src/providers/oci/usage.ts"].includes(
                 resolved,
@@ -162,6 +191,7 @@ export function analyze(files) {
                 "src/trial/executor.ts",
                 "src/trial/executor-store.ts",
                 "src/trial/executor-synthetic.ts",
+                "src/trial/executor-security.ts",
                 "src/trial/scheduled.ts",
               ].includes(resolved)) ||
             (file === "src/trial/executor-synthetic.ts" &&
