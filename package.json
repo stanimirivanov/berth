@@ -43,7 +43,8 @@
     "test:ledger-db": "pnpm run build && node --test dist/tests/integration/ledger.test.js",
     "test:executor-db": "pnpm run build && node --test dist/tests/integration/executor.test.js",
     "build:executor": "pnpm run build && node dist/scripts/build-executor.js",
-    "test:usage-db": "pnpm run build && node --test dist/tests/integration/usage.test.js"
+    "test:usage-db": "pnpm run build && node --test dist/tests/integration/usage.test.js",
+    "test:recovery-db": "pnpm run build && node --test --test-concurrency=1 dist/tests/integration/recovery.test.js dist/tests/integration/security.test.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
