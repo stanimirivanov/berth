@@ -122,7 +122,11 @@ export function makeLedger(db: LedgerDatabase) {
       c: LedgerClaim,
       id: string,
       outcome: "succeeded" | "rejected",
-      basis: "provider-response" | "reconciled-provider",
+      basis:
+        | "provider-response"
+        | "reconciled-provider"
+        | "read-only-interruption"
+        | "not-dispatched",
     ) =>
       call<unknown>("SELECT berth_ledger.settle($1,$2,$3,$4,$5,$6) AS result", [
         ...identity(c),

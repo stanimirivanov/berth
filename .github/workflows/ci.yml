@@ -83,3 +83,7 @@ jobs:
       - run: pnpm run test:ledger-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run build:executor
+      - run: pnpm run test:executor-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}

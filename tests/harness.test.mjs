@@ -279,3 +279,23 @@ test("trial admission cannot reach cloud SDKs or bypass preflight ownership", ()
     }).some((x) => x.rule === "architecture"),
   );
 });
+
+test("scheduled continuation separates admission, ledger state and OCI composition", () => {
+  const files = {
+    "src/trial/scheduled.ts": "import 'node:crypto';",
+    "src/trial/executor.ts":
+      "import 'node:crypto'; import './ledger.js'; import './executor-store.js'; import './executor-resources.js';",
+    "src/trial/ledger.ts": "",
+    "src/trial/executor-store.ts": "",
+    "src/trial/executor-resources.ts": "",
+  };
+  assert.deepEqual(
+    analyze(files).filter((x) => x.rule === "architecture"),
+    [],
+  );
+  assert.ok(
+    analyze({ ...files, "src/trial/scheduled.ts": "import 'pg';" }).some(
+      (x) => x.rule === "architecture",
+    ),
+  );
+});

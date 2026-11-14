@@ -6,6 +6,13 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/trial/executor-api.ts": [],
+  "src/trial/executor-hosted.ts": ["node:crypto", "pg"],
+  "src/trial/executor-synthetic.ts": [],
+  "src/trial/scheduled.ts": ["node:crypto"],
+  "src/trial/executor.ts": ["node:crypto"],
+  "src/trial/executor-store.ts": ["alchemy"],
+  "src/trial/executor-resources.ts": ["alchemy", "effect"],
   "src/trial/api.ts": ["node:crypto"],
   "src/trial/preflight.ts": [],
   "src/providers/oci/trial-object.ts": ["node:crypto", "node:stream"],
@@ -137,6 +144,46 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
+            (file === "src/trial/executor-api.ts" &&
+              [
+                "src/trial/api.ts",
+                "src/trial/ledger.ts",
+                "src/trial/executor-store.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/executor-hosted.ts" &&
+              [
+                "src/trial/executor.ts",
+                "src/trial/executor-store.ts",
+                "src/trial/executor-synthetic.ts",
+                "src/trial/scheduled.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/executor-synthetic.ts" &&
+              [
+                "src/providers/oci/client.ts",
+                "src/providers/oci/trial-object.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/executor.ts" &&
+              [
+                "src/trial/ledger.ts",
+                "src/trial/executor-store.ts",
+                "src/trial/executor-resources.ts",
+                "src/providers/oci/bucket.ts",
+                "src/providers/oci/client.ts",
+                "src/providers/oci/trial-object.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/executor-store.ts" &&
+              [
+                "src/trial/ledger.ts",
+                "src/providers/oci/bucket.ts",
+                "src/providers/oci/trial-object.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/executor-resources.ts" &&
+              [
+                "src/trial/ledger.ts",
+                "src/trial/executor-store.ts",
+                "src/providers/oci/bucket.ts",
+                "src/providers/oci/client.ts",
+              ].includes(resolved)) ||
             (file === "src/trial/api.ts" &&
               ["src/trial/preflight.ts", "src/trial/ledger.ts"].includes(
                 resolved,

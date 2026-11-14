@@ -47,3 +47,12 @@ window projection. The handler may import only preflight and ledger types, never
 SDKs or admin tooling. Preview has no persistence; accepted submission atomically
 records the signed previewed intent. Cleanup admission skips creation headroom but
 requires a durable owned-operation port. See docs/trial/admission-api.md.
+
+`scheduled.ts` admits gateway-attested deliveries before any DB connection.
+`executor.ts` owns bounded phases/reconciliation; `executor-store.ts` exposes only
+owner-installed guarded SQL; `executor-resources.ts` adapts the real bucket provider
+to Alchemy state under the ledger fence. `executor-api.ts` composes admission with
+that ledger and durable cleanup flags. The synthetic hosted root and service are
+qualification-only and must not gain OCI credentials. Read
+`docs/trial/scheduled-execution.md` before changing deadlines, budgets or recovery;
+run `test:executor-db` against a fresh disposable database and `build:executor`.

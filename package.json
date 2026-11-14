@@ -40,7 +40,9 @@
     "test:fenced-db": "pnpm run build && node --test dist/tests/integration/fenced-state.test.js",
     "test:checkpoint-db": "pnpm run build && node --test dist/tests/integration/checkpoint.test.js",
     "build:checkpoint": "pnpm run build && node dist/scripts/build-checkpoint.js",
-    "test:ledger-db": "pnpm run build && node --test dist/tests/integration/ledger.test.js"
+    "test:ledger-db": "pnpm run build && node --test dist/tests/integration/ledger.test.js",
+    "test:executor-db": "pnpm run build && node --test dist/tests/integration/executor.test.js",
+    "build:executor": "pnpm run build && node dist/scripts/build-executor.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
