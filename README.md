@@ -93,3 +93,7 @@ hardening work; [CONSTRAINTS.md](CONSTRAINTS.md) defines the enforced floor.
 Use `pnpm check:fast` during implementation and `pnpm check` before a PR.
 The full gate requires pinned Gitleaks on PATH and registry access for the audit.
 See [comment quality](docs/comment-quality.md) for declaration documentation.
+
+The [pre-live recovery checkpoint](docs/trial/pre-live-checkpoint.md) maps issue
+#13's process-kill and privilege-drift tests to SPEC acceptance criteria and keeps
+local fixture evidence separate from the gated live trial.

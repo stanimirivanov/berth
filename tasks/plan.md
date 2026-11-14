@@ -32,7 +32,8 @@ GitHub issues are authoritative for task status, acceptance criteria and verific
 | [#11](https://github.com/stanimirivanov/berth/issues/11) | Run bounded trial phases through authenticated scheduled continuation | [#10](https://github.com/stanimirivanov/berth/issues/10), [#4](https://github.com/stanimirivanov/berth/issues/4) |
 | [#12](https://github.com/stanimirivanov/berth/issues/12) | Observe bucket usage and record a deduplicated threshold warning | [#11](https://github.com/stanimirivanov/berth/issues/11) |
 | [#13](https://github.com/stanimirivanov/berth/issues/13) | Checkpoint: prove recovery and teardown under fault injection | [#12](https://github.com/stanimirivanov/berth/issues/12) |
-| [#14](https://github.com/stanimirivanov/berth/issues/14) | Run the hosted OCI Object Storage trial and record the feasibility verdict | [#13](https://github.com/stanimirivanov/berth/issues/13), [#3](https://github.com/stanimirivanov/berth/issues/3) |
+| [#43](https://github.com/stanimirivanov/berth/issues/43) | Recover interrupted teardown within the fixed cleanup reserve (pre-live blocker) | [#13](https://github.com/stanimirivanov/berth/issues/13) |
+| [#14](https://github.com/stanimirivanov/berth/issues/14) | Run the hosted OCI Object Storage trial and record the feasibility verdict | [#13](https://github.com/stanimirivanov/berth/issues/13), [#43](https://github.com/stanimirivanov/berth/issues/43), [#3](https://github.com/stanimirivanov/berth/issues/3) |
 | [#15](https://github.com/stanimirivanov/berth/issues/15) | Complete owner-managed trial shutdown and credential revocation | [#14](https://github.com/stanimirivanov/berth/issues/14) |
 
 Dependencies are explicit “Blocked by” references in each GitHub issue body. Issue #15 depends on the live attempt ending, not on a successful verdict. Independent paths may proceed separately but must coordinate shared SDK/dispatcher contracts before integration.
