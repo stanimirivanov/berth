@@ -293,3 +293,51 @@ test("read-only usage failures have a fixed diagnostic without uncertain-mutatio
     operation,
   });
 });
+
+test("prepared API previews bind one fixed operation and reject previews from another deployment", async () => {
+  const operation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const options = {
+    token,
+    previewKey: "b".repeat(40),
+    configuration: config,
+    headroom: async () => evidence,
+    verifyCredentials: async () => true,
+    now: () => now,
+    ledger: {
+      start: async () => {
+        throw Error("must not start");
+      },
+    },
+    admitCleanup: async () => ({
+      operation,
+      status: "cleanup-requested" as const,
+    }),
+    operation,
+  };
+  const handler = makeTrialApi(options);
+  const preview = await (await handler.fetch(request("preview"))).json();
+  assert.equal(
+    preview.proposal.bucket.name,
+    `berth-${operation.replaceAll("-", "")}`,
+  );
+  const changedBinding = makeTrialApi({
+    ...options,
+    binding: "changed-key-or-window",
+  });
+  assert.equal(
+    (
+      await changedBinding.fetch(
+        request("submit", { preview: preview.preview }),
+      )
+    ).status,
+    400,
+  );
+  const other = makeTrialApi({
+    ...options,
+    operation: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  });
+  assert.equal(
+    (await other.fetch(request("submit", { preview: preview.preview }))).status,
+    400,
+  );
+});

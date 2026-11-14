@@ -1,10 +1,9 @@
 # Live hosted executor integration
 
-Issue #46 adds a separate Neon Functions entry point for **one already-admitted
-operation**. This is local integration evidence, not a live feasibility verdict.
-Do not enable it for the operational trial until #47 connects admission, accounts
-for credential-check requests and supplies the reviewed deployment procedure.
-Issue #14 remains blocked on that work and current account/IAM/headroom evidence.
+Issues #46/#47 provide one owner-prepared operation with signed hosted admission,
+real OCI continuation and cleanup. Follow [hosted-admission.md](hosted-admission.md)
+for owner preparation, activation and shutdown. Local integration is not a live
+feasibility verdict; #14 still requires current account evidence and a live run.
 
 ## Build and ownership
 
@@ -31,8 +30,7 @@ connection stays open until the executor settles, including uncertain outcomes.
 ## Deployment inputs (server-side secrets/configuration only)
 
 These are the exact environment names consumed by the new root. Keep their values
-outside Git, chat, shell arguments and logs. Deployment automation belongs to #47;
-this table is not authorization to bypass admission by manually inserting a row.
+outside Git, chat, shell arguments and logs. Use the owner prepare function in the runbook; do not bypass admission by manually inserting a trial row.
 
 | Input | Required value |
 | --- | --- |
@@ -41,6 +39,8 @@ this table is not authorization to bypass admission by manually inserting a row.
 | `BERTH_EXECUTOR_MODE` | Exactly `live` |
 | `BERTH_EXECUTOR_OPERATION` | The admitted version-4 operation UUID |
 | `BERTH_EXECUTOR_STARTED_AT`, `BERTH_EXECUTOR_EXPIRES_AT` | Unix milliseconds copied from authoritative SQL timestamps; exactly four hours apart |
+| `BERTH_PREVIEW_KEY` | Independent 32–128-character URL-safe preview-signing secret |
+| `BERTH_MONITORING_LIMIT`, `BERTH_NEON_LIMIT` | Match prepared SQL binding; Neon minimum 40, both at most 1000 |
 | `BERTH_TRIAL_TOKEN` | Private 32–128-character token using letters, digits, `_` and `-` |
 | `OCI_TENANCY_OCID`, `OCI_USER_OCID` | Dedicated trial identity's tenancy and user; not the administrator user |
 | `OCI_PRIVATE_KEY` | Trial RSA private PEM contents (not a file path or public key); unencrypted, at least 2048 bits, at most 8192 characters |
@@ -51,7 +51,7 @@ Remove `NEON_API_KEY` and every other `OCI_*` value. Injected AWS access/secret 
 and the Neon AI gateway token must be absent or set to the existing
 `disabled-for-berth-probe` marker. The shared SQL guard rejects database/schema
 ownership, role memberships, broad role flags, CREATE/TEMP and direct protected
-ledger/executor/usage table privileges. Install migrations 001–003 separately as
+ledger/executor/usage table privileges. Install migrations 001–004 separately as
 owner; the runtime cannot install them.
 
 The local fingerprint check follows Oracle's
@@ -65,7 +65,7 @@ checks before activation. No administrator config file is read by this runtime.
 All routes require POST, no query string, and a live deployment window.
 
 - `/scheduled`: authenticated Neon gateway schedule envelope only; a manual bearer
-  token is insufficient. One delivery calls the real fenced executor.
+  token is insufficient. One delivery calls up to two real fenced steps under one shared 50-second deadline.
 - `/evidence`: bearer-authenticated, empty body. Returns fixed-operation phase,
   terminal status, redacted reason, removal flag and SQL timestamps.
 - `/usage`: bearer-authenticated, empty body. Returns stored normalized observations
@@ -73,8 +73,10 @@ All routes require POST, no query string, and a live deployment window.
 - `/cleanup`: bearer-authenticated, empty body. Sets the durable cleanup flag for
   this operation. A later scheduled execution performs conditional teardown.
   Creation headroom is not rechecked to admit cleanup.
-- `/preview` and `/submit` are deliberately unavailable here until #47. There is
-  no manual execute route or caller-selected operation/target.
+- `/preview` and `/submit`: bearer-authenticated bounded JSON API, `{}` and
+  `{"preview":"SIGNED_VALUE"}` respectively. Preview persists metered credential
+  evidence; submit opens the prepared SQL gate. Neither directly creates OCI resources.
+  There is no manual execute route or caller-selected operation/target.
 
 Expired requests return before credentials/SQL work. Control responses use
 `Cache-Control: no-store`; unexpected errors have fixed redacted diagnostics.
@@ -96,10 +98,11 @@ SQL privilege rejection, exact target/window matching, delayed executor completi
 before SQL close, signed transport composition and fail-closed creation deadlines.
 Harness fixtures allow only reviewed module edges and reject administrator and
 synthetic coupling. Existing executor/SQL suites own phase, budget and recovery
-semantics; this change does not alter their limits or migrations.
+semantics. Migration 004 adds admission and invocation-reserve gates while
+preserving the existing Object Storage limits.
 
-Before #14 can run, #47 must provide admission and metered credential checks,
-configuration handoff, cadence/margin validation, controlled interruption and
-shutdown procedures. Fresh account/headroom evidence, actual deployed IAM/DB
-permissions, live metrics/warnings, computer-offline continuation and real teardown
-are still unverified by this PR. No cloud resources were deployed for #46.
+The #47 runbook provides admission, metered credential checks, configuration
+handoff, cadence assumptions, interruption and shutdown procedures. Fresh
+account/headroom evidence, actual deployed IAM/DB permissions, live metrics/warnings,
+computer-offline continuation and real teardown remain unverified locally.
+No cloud resources were deployed for either integration issue.

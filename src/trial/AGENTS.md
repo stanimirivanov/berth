@@ -71,5 +71,10 @@ and `live-runtime.ts` owns restricted SQL plus real signed transports. Shared
 `executor-security.ts` retains the synthetic root's connection/privilege checks.
 The live root accepts only a pre-admitted operation and exact SQL target/window;
 never add an admission bypass or import administrator/synthetic tooling here.
-See docs/trial/live-executor.md. Build with `build:live-executor`; #47 owns live
-admission/credential accounting and #14 owns operational acceptance.
+See docs/trial/live-executor.md and docs/trial/hosted-admission.md.
+`live-admission.ts` owns prepared identity, metered checks and signed admission;
+`providers/oci/readiness.ts` owns only the two fixed read-only requests. Migration
+004 protects mutation admission, HTTP receipts and cleanup capacity. Preview may
+persist reservations; never call it persistence-free in the live contract.
+Build with `build:live-executor` and run `test:admission-db` on disposable Postgres.
+#14 owns operational acceptance.

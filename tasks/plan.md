@@ -117,3 +117,7 @@ Readiness inspection after #43 found the live composition missing. Before #14:
 
 See `docs/trial/live-executor.md`. A locally tested bundle is not a live trial
 verdict; #14 stays blocked until these prerequisites and current owner gates pass.
+
+Issue #47 connects signed admission to the prepared live executor. Follow
+`docs/trial/hosted-admission.md` for fresh owner gates, activation and shutdown.
+The next operational step is #14; local integration is not live acceptance.

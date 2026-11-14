@@ -22,6 +22,9 @@ export function liveEnvironment(env: Record<string, string | undefined>) {
   const connection = restrictedConnection(env);
   const startedAt = Number(env.BERTH_EXECUTOR_STARTED_AT),
     expiresAt = Number(env.BERTH_EXECUTOR_EXPIRES_AT);
+  const previewKey = env.BERTH_PREVIEW_KEY ?? "",
+    monitoringLimit = Number(env.BERTH_MONITORING_LIMIT),
+    neonLimit = Number(env.BERTH_NEON_LIMIT);
   const operation = env.BERTH_EXECUTOR_OPERATION ?? "",
     token = env.BERTH_TRIAL_TOKEN ?? "";
   const tenancy = env.OCI_TENANCY_OCID ?? "",
@@ -31,6 +34,11 @@ export function liveEnvironment(env: Record<string, string | undefined>) {
     namespace = env.OCI_NAMESPACE ?? "";
   if (
     env.BERTH_EXECUTOR_MODE !== "live" ||
+    !/^[A-Za-z0-9_-]{32,128}$/.test(previewKey) ||
+    ![monitoringLimit, neonLimit].every(
+      (n) => Number.isInteger(n) && n >= 1 && n <= 1000,
+    ) ||
+    neonLimit < 40 ||
     !Number.isFinite(startedAt) ||
     expiresAt - startedAt !== 14400000 ||
     !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
@@ -62,6 +70,9 @@ export function liveEnvironment(env: Record<string, string | undefined>) {
     throw Error("Trial key mismatch");
   return {
     connection,
+    previewKey,
+    monitoringLimit,
+    neonLimit,
     startedAt,
     expiresAt,
     operation,

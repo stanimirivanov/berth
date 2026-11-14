@@ -70,6 +70,8 @@ export interface ExecutorOptions {
   delivery: string;
   expiresAt: number;
   now?: () => number;
+  /** Shared hosting deadline can shorten, never extend, the per-step work window. */
+  deadlineAt?: number;
   /** Optional until the real OCI composition is enabled; omission yields no usage evidence. */
   usage?: UsageTransport;
   sdk: (
@@ -92,7 +94,12 @@ export async function runExecutor(
   options: ExecutorOptions,
 ) {
   const clock = options.now ?? Date.now;
-  if (clock() >= options.expiresAt) return { phase: "expired" };
+  if (
+    clock() >= options.expiresAt ||
+    (options.deadlineAt !== undefined &&
+      (!Number.isFinite(options.deadlineAt) || clock() >= options.deadlineAt))
+  )
+    return { phase: "expired" };
   const store = executorStore(db),
     ledger = makeLedger(db);
   const opened = await store.open(
@@ -105,7 +112,11 @@ export async function runExecutor(
   let snapshot = opened.snapshot;
   const start = Date.parse(snapshot.trial.started_at),
     expires = Date.parse(snapshot.trial.expires_at),
-    deadline = Math.min(clock() + timing.invocationMs, expires);
+    deadline = Math.min(
+      clock() + timing.invocationMs,
+      expires,
+      options.deadlineAt ?? Infinity,
+    );
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),

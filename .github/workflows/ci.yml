@@ -93,3 +93,7 @@ jobs:
       - run: pnpm run test:recovery-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run build:live-executor
+      - run: pnpm run test:admission-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
