@@ -173,3 +173,32 @@ Sources checked 2026-11-14:
 - [OCI Cost Analysis](https://docs.oracle.com/en-us/iaas/Content/Billing/Concepts/costanalysisoverview.htm)
 - [Neon Console usage locations](https://neon.com/docs/introduction/monitor-usage)
 - [Neon consumption API plan availability](https://neon.com/docs/guides/consumption-metrics)
+
+
+### Historical usage reconstruction check — 2026-11-14
+
+Read the existing private probe, Cloudflare-state, checkpoint and executor journals
+without replaying requests or reading their credentials into the report. These
+artifacts cannot establish aggregate Functions allowance headroom:
+
+- The runtime-probe journal records 23 client invocation entries; the Cloudflare
+  state trial records 12 invocation intents; checkpoint and executor journals
+  record five and nine manual invocations respectively. These are client records,
+  not total provider invocation counts; scheduled deliveries and rejected requests
+  are not exhaustively represented.
+- The executor's first saved log export explicitly has `is_truncated=true` and a
+  continuation cursor. Its later export contains 22 records and is not truncated,
+  but that does not establish coverage of the missing earlier interval. Log rows
+  are not necessarily one-per-invocation or billed capacity measurements.
+- Saved checkpoint, executor and Cloudflare-state Neon teardown reports each record
+  zero functions and zero triggers. This supports their shutdown evidence, not a
+  claim that their accrued usage vanished.
+- No connected OCI/Neon Console tab was available for direct UI verification.
+
+Do not populate `neonInvocations`, `neonComputeSeconds` or
+`measuredComputeSeconds` by treating these partial counts as complete or handler
+latency as billed capacity. No reliable remaining allowance or measured
+whole-window compute basis was recovered. The owner Console observations requested
+above remain necessary; if Functions metering is unavailable there too, record that
+explicitly and resolve the evidence gap before activation. No deployment, schema
+installation, schedule or OCI mutation was performed during this investigation.
