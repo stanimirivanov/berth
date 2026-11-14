@@ -53,8 +53,8 @@ BEGIN
  IF n<t.started_at OR n>=t.started_at+interval '5 minutes' OR a.verified_at IS NULL OR a.verified_at<n-interval '5 minutes'
  OR t.outcome<>'active' OR t.cleanup_started OR EXISTS(SELECT FROM berth_executor.work WHERE operation=p_operation AND cleanup_requested)
  OR a.evidence->>'iamReviewed' IS DISTINCT FROM 'true'
- OR coalesce((a.evidence->>'checkedAt')::numeric,0) NOT BETWEEN extract(epoch FROM n-interval '24 hours')*1000 AND extract(epoch FROM n)*1000
- OR coalesce((a.evidence->>'iamCheckedAt')::numeric,0) NOT BETWEEN extract(epoch FROM n-interval '24 hours')*1000 AND extract(epoch FROM n)*1000
+ OR coalesce((a.evidence->>'checkedAt')::numeric,0) NOT BETWEEN extract(epoch FROM t.started_at+interval '30 minutes'-interval '24 hours')*1000 AND extract(epoch FROM n)*1000
+ OR coalesce((a.evidence->>'iamCheckedAt')::numeric,0) NOT BETWEEN extract(epoch FROM t.started_at+interval '30 minutes'-interval '24 hours')*1000 AND extract(epoch FROM n)*1000
  THEN RAISE EXCEPTION 'Admission evidence or creation margin rejected'; END IF;
  UPDATE berth_executor.admission SET admitted=true WHERE operation=p_operation;
  RETURN true;
@@ -68,14 +68,17 @@ DECLARE t berth_ledger.trials%ROWTYPE; cleanup boolean;
 BEGIN
  SELECT * INTO STRICT t FROM berth_ledger.trials WHERE operation=p_operation FOR UPDATE;
  PERFORM berth_executor.admission_status(p_operation,p_binding);
- cleanup:=p_purpose='cleanup' OR (p_purpose='scheduled' AND (clock_timestamp()>=t.started_at+interval '3 hours' OR EXISTS(SELECT FROM berth_executor.work WHERE operation=p_operation AND cleanup_requested)));
+ -- Only one cancellation admission may use the HTTP slice of the reserve.
+ cleanup:=p_purpose='cleanup';
  IF clock_timestamp()<t.started_at OR clock_timestamp()>=t.expires_at OR t.neon_limit<40
  OR (NOT cleanup AND t.neon_used>=t.neon_limit-12)
  OR (p_purpose='admission' AND (SELECT count(*) FROM berth_executor.http_receipts WHERE operation=p_operation AND purpose='admission')>=6)
  OR (NOT cleanup AND (SELECT count(*) FROM berth_executor.http_receipts r WHERE r.operation=p_operation AND NOT r.reserved_cleanup)>=52)
- OR (cleanup AND (SELECT count(*) FROM berth_executor.http_receipts r WHERE r.operation=p_operation AND r.reserved_cleanup)>=12) THEN RAISE EXCEPTION 'HTTP invocation budget'; END IF;
+ OR (cleanup AND (t.neon_used>=t.neon_limit-11 OR EXISTS(SELECT FROM berth_executor.http_receipts r WHERE r.operation=p_operation AND r.purpose='cleanup'))) THEN RAISE EXCEPTION 'HTTP invocation budget'; END IF;
  INSERT INTO berth_executor.http_receipts(id,operation,purpose,reserved_cleanup) VALUES(p_id,p_operation,p_purpose,cleanup);
  UPDATE berth_ledger.trials SET neon_used=neon_used+1 WHERE operation=p_operation;
+ -- A lost response cannot spend the cancellation allowance without queuing cleanup.
+ IF cleanup THEN PERFORM berth_executor.cleanup(p_operation); END IF;
 END $$;
 REVOKE ALL ON FUNCTION berth_executor.meter_http(uuid,jsonb,uuid,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION berth_executor.meter_http(uuid,jsonb,uuid,text) TO berth_runtime;
@@ -103,8 +106,16 @@ BEGIN
  IF EXISTS(SELECT FROM berth_ledger.attempts WHERE id=p_attempt AND operation=p_operation AND action IN ('create_bucket','put_object')) THEN PERFORM berth_executor.creation_admitted(p_operation); END IF;
  IF EXISTS(SELECT FROM berth_executor.admission WHERE operation=p_operation)
  AND EXISTS(SELECT FROM berth_ledger.attempts WHERE id=p_attempt AND operation=p_operation AND action='invoke')
- AND EXISTS(SELECT FROM berth_ledger.trials WHERE operation=p_operation AND neon_used>=neon_limit-12 AND clock_timestamp()<started_at+interval '3 hours')
- AND NOT EXISTS(SELECT FROM berth_executor.work WHERE operation=p_operation AND cleanup_requested) THEN RAISE EXCEPTION 'Protected Neon cleanup reserve'; END IF;
+ AND EXISTS(SELECT FROM berth_ledger.trials WHERE operation=p_operation AND neon_used>=neon_limit-12) THEN
+  IF EXISTS(SELECT FROM berth_ledger.trials WHERE operation=p_operation AND
+    (cleanup_started OR outcome='needs-reconciliation' OR clock_timestamp()>=started_at+interval '3 hours'))
+  OR EXISTS(SELECT FROM berth_executor.work WHERE operation=p_operation AND (cleanup_requested OR failed OR phase='cleanup'))
+  OR EXISTS(SELECT FROM berth_ledger.trials t LEFT JOIN berth_executor.work w USING(operation)
+    WHERE t.operation=p_operation AND clock_timestamp()>=t.started_at+interval '30 minutes' AND coalesce(w.phase,'bucket') IN ('bucket','object')) THEN
+   -- Protected invocation capacity authorizes only a durable cleanup transition.
+   PERFORM berth_executor.cleanup(p_operation);
+  ELSE RAISE EXCEPTION 'Protected Neon cleanup reserve'; END IF;
+ END IF;
  RETURN berth_ledger.reserve_unadmitted(p_operation,p_owner,p_generation,p_attempt,p_id);
 END $$;
 REVOKE ALL ON FUNCTION berth_executor.prepare(uuid,timestamptz,jsonb,jsonb),berth_executor.creation_admitted(uuid),berth_executor.admission_status(uuid,jsonb),berth_executor.admission_verified(uuid,uuid,bigint,jsonb,uuid),berth_executor.admit(uuid,jsonb) FROM PUBLIC,berth_runtime;

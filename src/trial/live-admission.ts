@@ -125,6 +125,7 @@ export function liveAdmissionApi(
         evidence = status.evidence as {
           iamReviewed?: boolean;
           iamCheckedAt?: number;
+          checkedAt?: number;
         };
       const now = Date.now();
       if (
@@ -133,6 +134,12 @@ export function liveAdmissionApi(
         (evidence.iamCheckedAt ?? Infinity) > now ||
         now - (evidence.iamCheckedAt ?? 0) > 86400000 ||
         preflight(configuration, evidence, now).length ||
+        (!status.admitted &&
+          [evidence.checkedAt, evidence.iamCheckedAt].some(
+            (at) =>
+              !Number.isFinite(at) ||
+              (at ?? 0) + 86400000 < e.startedAt + 1800000,
+          )) ||
         (!status.admitted && now >= e.startedAt + 300000)
       )
         return null;

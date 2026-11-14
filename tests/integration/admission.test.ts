@@ -88,6 +88,8 @@ test("prepared admission refuses mutations, charges credential requests, admits 
       { ...evidence, iamReviewed: false },
       { ...evidence, iamCheckedAt: Date.now() + 10000 },
       { ...evidence, checkedAt: Date.now() - 86401000 },
+      { ...evidence, checkedAt: Date.now() - 86340000 },
+      { ...evidence, iamCheckedAt: Date.now() - 86340000 },
     ]) {
       await owner.query(
         "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
@@ -258,7 +260,7 @@ test("prepared admission refuses mutations, charges credential requests, admits 
       [operation],
     );
     await assert.rejects(meterAdmission(db, larger, "control"));
-    await meterAdmission(db, larger, "cleanup");
+    await assert.rejects(meterAdmission(db, larger, "cleanup"));
 
     await assert.rejects(
       db.query("UPDATE berth_executor.admission SET admitted=true"),
@@ -434,9 +436,253 @@ test("one hosted delivery creates and uploads under one deadline and replay does
     ).rows[0].result;
     assert.equal(report.phase, "observe");
     assert.ok(report.receipt);
+    await owner.query(
+      "UPDATE berth_ledger.trials SET neon_used=neon_limit-12 WHERE operation=$1",
+      [operation],
+    );
+    assert.deepEqual(
+      await executeLive(e, "scheduled", "exhausted-normal-budget", ports),
+      { phase: "needs-reconciliation" },
+    );
+    assert.deepEqual(
+      await executeLive(e, "scheduled", "autonomous-recovery", ports),
+      { phase: "terminal" },
+    );
+    assert.equal(cloud.object, undefined);
+    assert.equal(cloud.value, undefined);
+    const terminal = (
+      await owner.query("SELECT berth_executor.report($1) AS result", [
+        operation,
+      ])
+    ).rows[0].result;
+    assert.equal(terminal.trial.outcome, "failed");
+    assert.equal(terminal.cleanup_requested, true);
+    assert.ok(terminal.trial.cleanup_used <= 40);
   } finally {
     for (const schema of ["berth_usage", "berth_executor", "berth_ledger"])
       await owner.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
     await owner.end();
+  }
+});
+
+/** Fresh SQL fixture for the three CLI-review regressions; no provider network calls. */
+async function reviewedAdmission(
+  work: (
+    owner: Client,
+    db: Client,
+    operation: string,
+    binding: Record<string, unknown>,
+  ) => Promise<void>,
+) {
+  const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
+  assert.ok(port > 0 && port < 65536);
+  const owner = new Client({
+    host: "127.0.0.1",
+    port,
+    database: "neondb",
+    user: "neondb_owner",
+    password: "berth-test-only",
+  });
+  const db = new Client({
+    host: "127.0.0.1",
+    port,
+    database: "neondb",
+    user: "berth_runtime",
+    password: "test-runtime-only",
+  });
+  await owner.connect();
+  await db.connect();
+  try {
+    for (const name of [
+      "001_trial",
+      "002_executor",
+      "003_usage",
+      "004_admission",
+    ])
+      await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
+    const operation = randomUUID(),
+      binding = {
+        compartment: "ocid1.compartment.oc1..fixture",
+        namespace: "fixture",
+        region: "eu-frankfurt-1",
+        monitoringLimit: 20,
+        neonLimit: 40,
+        tenancy: "ocid1.tenancy.oc1..fixture",
+        user: "ocid1.user.oc1..fixture",
+        fingerprint: "fixture",
+      };
+    await owner.query(
+      "SELECT berth_executor.prepare($1,clock_timestamp()-interval '1 second',$2,$3)",
+      [
+        operation,
+        JSON.stringify(binding),
+        JSON.stringify({
+          iamReviewed: true,
+          iamCheckedAt: Date.now(),
+          checkedAt: Date.now(),
+        }),
+      ],
+    );
+    await owner.query(
+      "UPDATE berth_executor.admission SET admitted=true,verified_at=clock_timestamp() WHERE operation=$1",
+      [operation],
+    );
+    await work(owner, db, operation, binding);
+  } finally {
+    await db.end();
+    for (const schema of ["berth_usage", "berth_executor", "berth_ledger"])
+      await owner.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    await owner.end();
+  }
+}
+
+test("cleanup control cannot drain executor reserve and cancellation commits with its charge", async () => {
+  await reviewedAdmission(async (owner, db, operation, binding) => {
+    await owner.query(
+      "UPDATE berth_ledger.trials SET neon_used=neon_limit-12 WHERE operation=$1",
+      [operation],
+    );
+    const cancel = () =>
+      db.query("SELECT berth_executor.meter_http($1,$2,$3,'cleanup')", [
+        operation,
+        JSON.stringify(binding),
+        randomUUID(),
+      ]);
+    await cancel();
+    const cancelled = (
+      await owner.query(
+        "SELECT cleanup_requested FROM berth_executor.work WHERE operation=$1",
+        [operation],
+      )
+    ).rows[0]?.cleanup_requested;
+    const repeats = [];
+    for (let i = 0; i < 12; i++)
+      repeats.push(
+        await cancel().then(
+          () => true,
+          () => false,
+        ),
+      );
+    assert.equal(
+      (
+        await owner.query(
+          "SELECT neon_used FROM berth_ledger.trials WHERE operation=$1",
+          [operation],
+        )
+      ).rows[0].neon_used,
+      29,
+      "repeated HTTP calls must leave eleven units for execution",
+    );
+    assert.ok(repeats.every((accepted) => !accepted));
+    assert.equal(
+      cancelled,
+      true,
+      "cancellation must commit atomically with metering",
+    );
+    const ledger = makeLedger(db),
+      claim = await ledger.claim(operation, randomUUID());
+    const invocation = await ledger.begin(claim, randomUUID(), "invoke");
+    assert.equal(
+      (await ledger.reserve(claim, invocation, randomUUID())).fresh,
+      true,
+    );
+    assert.equal(
+      (
+        await owner.query(
+          "SELECT neon_used FROM berth_ledger.trials WHERE operation=$1",
+          [operation],
+        )
+      ).rows[0].neon_used,
+      30,
+    );
+  });
+});
+
+test("admission requires both attestations to remain fresh through creation cutoff", async () => {
+  await reviewedAdmission(async (owner, db, operation, binding) => {
+    await owner.query(
+      "UPDATE berth_executor.admission SET admitted=false WHERE operation=$1",
+      [operation],
+    );
+    for (const field of ["checkedAt", "iamCheckedAt"]) {
+      const evidence = {
+        iamReviewed: true,
+        checkedAt: Date.now(),
+        iamCheckedAt: Date.now(),
+        [field]: Date.now() - 86340000,
+      };
+      await owner.query(
+        "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+        [operation, JSON.stringify(evidence)],
+      );
+      await assert.rejects(
+        db.query("SELECT berth_executor.admit($1,$2)", [
+          operation,
+          JSON.stringify(binding),
+        ]),
+        /Admission evidence/,
+      );
+    }
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [
+        operation,
+        JSON.stringify({
+          iamReviewed: true,
+          checkedAt: Date.now(),
+          iamCheckedAt: Date.now(),
+        }),
+      ],
+    );
+    assert.equal(
+      (
+        await db.query("SELECT berth_executor.admit($1,$2) AS fresh", [
+          operation,
+          JSON.stringify(binding),
+        ])
+      ).rows[0].fresh,
+      true,
+    );
+  });
+});
+
+test("failure and creation cutoff admit protected invocation only into durable cleanup", async () => {
+  for (const scenario of ["failed", "cutoff"]) {
+    await reviewedAdmission(async (owner, db, operation) => {
+      await owner.query(
+        "UPDATE berth_ledger.trials SET neon_used=neon_limit-12 WHERE operation=$1",
+        [operation],
+      );
+      await owner.query(
+        "INSERT INTO berth_executor.work(operation,phase,failed) VALUES($1,$2,$3)",
+        [
+          operation,
+          scenario === "failed" ? "cleanup" : "object",
+          scenario === "failed",
+        ],
+      );
+      if (scenario === "cutoff")
+        await owner.query(
+          "UPDATE berth_ledger.trials SET started_at=clock_timestamp()-interval '31 minutes',expires_at=clock_timestamp()+interval '209 minutes' WHERE operation=$1",
+          [operation],
+        );
+      const ledger = makeLedger(db),
+        claim = await ledger.claim(operation, randomUUID());
+      const invocation = await ledger.begin(claim, randomUUID(), "invoke");
+      assert.equal(
+        (await ledger.reserve(claim, invocation, randomUUID())).fresh,
+        true,
+      );
+      assert.equal(
+        (
+          await owner.query(
+            "SELECT cleanup_requested FROM berth_executor.work WHERE operation=$1",
+            [operation],
+          )
+        ).rows[0].cleanup_requested,
+        true,
+      );
+      await assert.rejects(ledger.begin(claim, randomUUID(), "put_object"));
+    });
   }
 });

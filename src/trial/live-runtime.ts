@@ -94,7 +94,9 @@ export async function executeLive(
             : "control",
       );
     if (Date.now() >= e.expiresAt) return { phase: "expired" };
-    if (action === "cleanup") return await store.cleanup(e.operation);
+    // meter_http atomically persisted the cleanup flag with its single control charge.
+    if (action === "cleanup")
+      return { operation: e.operation, status: "cleanup-requested" };
     if (action === "usage") return await usageStore(db).report(e.operation);
     if (action === "evidence")
       return {

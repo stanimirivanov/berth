@@ -17,15 +17,23 @@ Node/pnpm tools and a local PostgreSQL `psql` client. All timestamps below are U
   window. Replays do not repeat the empty-compartment check after admission.
 - Submit atomically opens the SQL creation gate. It is accepted only in the first
   five minutes of the window. Both attempt creation and dispatch reservation enforce
-  that gate and reject cancellation. Unprepared live operations cannot create.
+  that gate and reject cancellation. Both owner attestations must remain fresh
+  through the entire 30-minute creation window, not merely at submission.
+  Unprepared live operations cannot create.
 - The already-enabled schedule performs the journey after submit, without the
   client computer. A delivery can execute bucket and object phases under one shared
   50-second deadline. Deterministic subdelivery IDs preserve replay protection.
 - Each actual executor step is conservatively charged one Neon reservation (two
   for a paired initial delivery). Preview/submit and controls have separate durable
   HTTP receipts charged to the **same** Neon counter. At most six admission calls
-  are accepted. Twelve Neon units and twelve HTTP receipt slots are protected from
-  ordinary calls for cleanup; ordinary HTTP receipts are capped at 52.
+  are accepted. Twelve Neon units are protected from ordinary calls: at most one
+  can be spent on cleanup control, leaving at least eleven for execution. Ordinary
+  HTTP receipts are capped at 52; only one cleanup-control receipt is accepted.
+  Its charge and cancellation flag commit atomically. Repeated cleanup controls
+  are rejected without another charge; a lost response cannot prevent queued cleanup.
+  Failure, reconciliation state and creation/cleanup deadlines can also authorize
+  protected execution before hour three. Spending it durably selects cleanup and
+  blocks new creation.
 - Live Neon budgets must be at least 40: at most 13 normal executor steps, six
   admission calls, six planned controls and twelve cleanup units require 37 units.
   Configure 64 only if current aggregate headroom covers 64. Extra control requests,
@@ -75,7 +83,8 @@ period; automatic OCI teardown does not imply automatic hosting/IAM removal.
 
 - Create `$BERTH_PRIVATE_DIR/prepare-live.sql` (600). Replace every placeholder below.
   Use actual measured remaining allowances, not fixture values. `checkedAt` and
-  `iamCheckedAt` are epoch milliseconds, no older than 24 hours. `iamReviewed=true`
+  `iamCheckedAt` are epoch milliseconds. Both must remain no older than 24 hours
+  through the prepared start plus 30 minutes. `iamReviewed=true`
   means the owner actually reviewed all effective grants/group memberships for the
   named trial user; the runtime cannot audit IAM. The home region must match OCI.
   Choose a fresh version-4 UUID once (`node -e 'console.log(crypto.randomUUID())'`).
