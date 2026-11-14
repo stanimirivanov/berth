@@ -169,3 +169,15 @@ bucket/object helper journey through the real pinned SDK and an independent HTTP
 model, with unsafe-response controls and original 160/40 ceilings. It changes no
 production code and cannot replace the partial live verdict. PRs #50/#60 were
 rebased, evidence preserved and kept draft; no new live run is authorized.
+## Remaining live activation prerequisites after PR #50 preflight
+
+Owner account/activity questions are answered; do not repeat unavailable Console
+meter requests. Complete these bounded engineering tasks before #14 activation:
+
+- [#51](https://github.com/stanimirivanov/berth/issues/51): make complete recovery CI
+  reliable within existing limits, preserving all crash boundaries and assertions.
+- [#52](https://github.com/stanimirivanov/berth/issues/52): qualify Functions headroom
+  evidence on Free. Any evidence-contract change requires explicit review before use.
+
+The tasks are independent. Resume #14 only after both gates are satisfied; follow
+with #15 owner closeout. No paid fallback or weakening of the trial bounds.
