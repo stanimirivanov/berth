@@ -64,3 +64,12 @@ reserves every Monitoring request separately, stops collection at cleanup, and
 never waits for metrics before required teardown. Install owner migration 003 after
 001/002; runtime cannot install it. Read `docs/trial/usage-observation.md`, and run
 `test:usage-db` plus collector/API fixtures when changing these boundaries.
+
+`live-index.ts` is the separate real OCI composition root; `live-hosted.ts` owns
+fixed-route admission, `live-environment.ts` validates explicit trial credentials,
+and `live-runtime.ts` owns restricted SQL plus real signed transports. Shared
+`executor-security.ts` retains the synthetic root's connection/privilege checks.
+The live root accepts only a pre-admitted operation and exact SQL target/window;
+never add an admission bypass or import administrator/synthetic tooling here.
+See docs/trial/live-executor.md. Build with `build:live-executor`; #47 owns live
+admission/credential accounting and #14 owns operational acceptance.

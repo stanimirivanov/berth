@@ -107,3 +107,13 @@ Issue #10 adds private signed preview and atomic ledger submission admission,
 with creation-only headroom checks and independent owned-cleanup admission. See
 `docs/trial/admission-api.md`; hosted composition, credential-check wiring and the
 cleanup executor remain gated follow-up work, not deployed by this API slice.
+
+Readiness inspection after #43 found the live composition missing. Before #14:
+
+- [#46](https://github.com/stanimirivanov/berth/issues/46): wire the real hosted
+  executor for a fixed admitted operation, private controls and signed Monitoring.
+- [#47](https://github.com/stanimirivanov/berth/issues/47): connect hosted admission,
+  meter credential checks and complete deployment/cadence/interruption procedures.
+
+See `docs/trial/live-executor.md`. A locally tested bundle is not a live trial
+verdict; #14 stays blocked until these prerequisites and current owner gates pass.
