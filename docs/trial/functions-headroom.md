@@ -126,11 +126,11 @@ JS
 Expected: `verdict: 'no-go'`, `remaining: null`, `admission: false`. The timestamp
 in this reproduction is synthetic; it does not refresh the real account evidence.
 
-## Exact optional contract proposal — not applied
+## Contract proposal and subsequent owner acceptance
 
 The smallest alternative to waiting for supported provider evidence is to accept
-an explicitly uncertain experiment. The following is proposed wording for owner
-review, **not** an active exception or a proven conservative historical bound:
+an explicitly uncertain experiment. The following wording was proposed in #52
+and subsequently accepted by the owner; it is not a conservative historical bound:
 
 > For one four-hour OCI trial on the existing Neon Free project, the owner may
 > explicitly accept unverified remaining Functions allowance when the provider
@@ -145,12 +145,15 @@ review, **not** an active exception or a proven conservative historical bound:
 > feasibility pass. No paid upgrade, assumed-zero consumption or fabricated numeric
 > headroom is permitted.
 
-Accepting that clause would change SPEC.md's unknown-headroom gate and requires an
-explicitly reviewed policy/implementation change before use. A future implementation
-would need a distinct evidence mode and bounded partial verdict, not a positive
-number inserted into the existing numeric schema. This PR **does not implement**
-that mode. Merging this qualification report alone does not authorize activation.
-Without that explicit exception or complete supported evidence, retain no-go.
+The owner subsequently accepted this clause for implementation in #55; see
+[the exception runbook](free-functions-exception.md). This qualification report
+and offline calculator still never grant admission.
+
+Issue #55 implements the distinct owner-prepared evidence mode and partial verdict
+under the revised SPEC.md. It does not change this calculator into an admission
+source or populate numeric Functions quota. Merging the qualification report alone
+did not authorize activation. Without the separately prepared one-use exception
+or complete supported evidence, retain no-go.
 
 ## Verification
 

@@ -66,3 +66,80 @@ test("proposal agrees with the implemented provider settings and deterministic p
     validateConfiguration({ ...config, namespace: "bad/path" }),
   );
 });
+
+test("one-trial exception accepts unknown Functions only with bound owner commitments", () => {
+  const c = { ...config, neonLimit: 64 };
+  const context = {
+    operation: "00000000-0000-4000-8000-000000000055",
+    startedAt: now,
+    expiresAt: now + 14400000,
+  };
+  const {
+    neonInvocations: _i,
+    neonComputeSeconds: _c,
+    measuredComputeSeconds: _m,
+    ...other
+  } = evidence;
+  const exceptional = {
+    ...other,
+    functionsMode: "free-functions-one-trial",
+    functionsException: {
+      ...context,
+      unknownAllowanceAccepted: true,
+      partialVerdictAccepted: true,
+      exclusiveProjectUse: true,
+      manualRecoveryReady: true,
+      otherServicesEvidence: "owner-review-2026-11-15",
+      shutdownBy: context.expiresAt + 900000,
+      probeClientMs: 2252,
+      scenario: "64x60-plus36x60-v1",
+    },
+  };
+  assert.deepEqual(preflight(c, exceptional, now, context), []);
+  assert.ok(preflight(c, exceptional, now).length);
+  for (const change of [
+    { functionsMode: "unknown" },
+    { neonInvocations: 1000 },
+    { neonComputeSeconds: 0 },
+    { measuredComputeSeconds: 6000 },
+    { neonFree: false },
+    { storageBytes: 0 },
+    { objectRequests: 199 },
+    { monitoringRequests: 0 },
+    { transferBytes: 0 },
+    { checkedAt: now - 86340000 },
+  ])
+    assert.ok(preflight(c, { ...exceptional, ...change }, now, context).length);
+  for (const change of [
+    { operation: "00000000-0000-4000-8000-000000000056" },
+    { startedAt: now + 1 },
+    { expiresAt: now + 14400001 },
+    { shutdownBy: context.expiresAt + 900001 },
+    { unknownAllowanceAccepted: false },
+    { partialVerdictAccepted: false },
+    { exclusiveProjectUse: false },
+    { manualRecoveryReady: false },
+    { otherServicesEvidence: "" },
+    { probeClientMs: 3001 },
+    { probeClientMs: 0 },
+  ])
+    assert.ok(
+      preflight(
+        c,
+        {
+          ...exceptional,
+          functionsException: { ...exceptional.functionsException, ...change },
+        },
+        now,
+        context,
+      ).length,
+    );
+  assert.ok(
+    preflight({ ...c, neonLimit: 65 }, exceptional, now, context).length,
+  );
+  assert.ok(
+    preflight(c, exceptional, now, { ...context, expiresAt: now + 14400001 })
+      .length,
+  );
+  assert.ok(preflight(c, exceptional, now + 300000, context).length);
+});

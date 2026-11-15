@@ -6,6 +6,7 @@ import {
 } from "node:crypto";
 import type { makeLedger } from "./ledger.js";
 import {
+  functionsAssessment,
   preflight,
   proposal,
   type TrialConfiguration,
@@ -17,6 +18,8 @@ import {
 export interface TrialApiOptions {
   /** Optional owner-prepared identity for the metered live preview contract. */
   operation?: string;
+  /** Only owner-prepared live admission may opt into the one-trial exception. */
+  preparedWindow?: { operation: string; startedAt: number; expiresAt: number };
   /** Bind prepared live previews to the reviewed credential identity and window. */
   binding?: string;
   token: string;
@@ -85,6 +88,8 @@ export function makeTrialApi(options: TrialApiOptions) {
   validateConfiguration(c);
   if (
     (options.operation !== undefined && !uuid.test(options.operation)) ||
+    (options.preparedWindow !== undefined &&
+      options.preparedWindow.operation !== options.operation) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(options.token) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(options.previewKey)
   )
@@ -94,7 +99,11 @@ export function makeTrialApi(options: TrialApiOptions) {
     clock = options.now ?? Date.now;
   const configurationHash = createHash("sha256")
     .update(
-      JSON.stringify([proposal(c, "configuration"), options.binding ?? ""]),
+      JSON.stringify([
+        proposal(c, "configuration"),
+        options.binding ?? "",
+        options.preparedWindow ?? null,
+      ]),
     )
     .digest("hex");
   const sign = (payload: string) =>
@@ -214,7 +223,7 @@ export function makeTrialApi(options: TrialApiOptions) {
           return reply({ operation, status: "cleanup-requested" }, 202);
         }
         const evidence = await options.headroom();
-        const reasons = preflight(c, evidence, clock());
+        const reasons = preflight(c, evidence, clock(), options.preparedWindow);
         if (reasons.length)
           return reply(
             {
@@ -228,7 +237,7 @@ export function makeTrialApi(options: TrialApiOptions) {
         if (!(await options.verifyCredentials()))
           return reply({ error: "credentials-unverified" }, 403);
         const acceptedAt = clock();
-        if (preflight(c, evidence, acceptedAt).length)
+        if (preflight(c, evidence, acceptedAt, options.preparedWindow).length)
           return reply(
             {
               error: "creation-blocked",
@@ -257,6 +266,7 @@ export function makeTrialApi(options: TrialApiOptions) {
             preview: `${payload}.${sign(payload)}`,
             previewExpiresAt: new Date(acceptedAt + 300000).toISOString(),
             proposal: proposal(c, id),
+            feasibility: functionsAssessment(evidence),
             coverage: "partial-owner-attested",
             hardSpendingCap: false,
           });
@@ -285,6 +295,7 @@ export function makeTrialApi(options: TrialApiOptions) {
           {
             operation,
             status: record.outcome,
+            feasibility: functionsAssessment(evidence),
             ...trialWindow(record.started_at, record.expires_at),
           },
           202,

@@ -30,6 +30,7 @@ test("prepared admission refuses mutations, charges credential requests, admits 
       "002_executor",
       "003_usage",
       "004_admission",
+      "005_functions_exception",
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
     const operation = randomUUID(),
@@ -367,6 +368,7 @@ test("one hosted delivery creates and uploads under one deadline and replay does
       "002_executor",
       "003_usage",
       "004_admission",
+      "005_functions_exception",
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
     const { FakeObjects } = await import("../fakes/oci.js"),
@@ -400,7 +402,21 @@ test("one hosted delivery creates and uploads under one deadline and replay does
       operation,
       new Date(startedAt).toISOString(),
       JSON.stringify(binding),
-      "{}",
+      JSON.stringify({
+        checkedAt: Date.now(),
+        iamCheckedAt: Date.now(),
+        iamReviewed: true,
+        accountType: "always-free",
+        homeRegion: binding.region,
+        neonFree: true,
+        storageBytes: 10485760,
+        objectRequests: 200,
+        transferBytes: 1048576,
+        monitoringRequests: 20,
+        neonInvocations: 64,
+        measuredComputeSeconds: 60,
+        neonComputeSeconds: 60,
+      }),
     ]);
     // Owner fixture emulates already accepted admission; normal admission is covered above.
     await owner.query(
@@ -473,6 +489,7 @@ async function reviewedAdmission(
     operation: string,
     binding: Record<string, unknown>,
   ) => Promise<void>,
+  legacy = false,
 ) {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
   assert.ok(port > 0 && port < 65536);
@@ -498,6 +515,7 @@ async function reviewedAdmission(
       "002_executor",
       "003_usage",
       "004_admission",
+      ...(!legacy ? ["005_functions_exception"] : []),
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
     const operation = randomUUID(),
@@ -604,8 +622,21 @@ test("admission requires both attestations to remain fresh through creation cuto
       "UPDATE berth_executor.admission SET admitted=false WHERE operation=$1",
       [operation],
     );
+    const serviceEvidence = {
+      accountType: "always-free",
+      homeRegion: binding.region,
+      neonFree: true,
+      storageBytes: 10485760,
+      objectRequests: 200,
+      transferBytes: 1048576,
+      monitoringRequests: 20,
+      neonInvocations: 40,
+      measuredComputeSeconds: 60,
+      neonComputeSeconds: 60,
+    };
     for (const field of ["checkedAt", "iamCheckedAt"]) {
       const evidence = {
+        ...serviceEvidence,
         iamReviewed: true,
         checkedAt: Date.now(),
         iamCheckedAt: Date.now(),
@@ -628,6 +659,7 @@ test("admission requires both attestations to remain fresh through creation cuto
       [
         operation,
         JSON.stringify({
+          ...serviceEvidence,
           iamReviewed: true,
           checkedAt: Date.now(),
           iamCheckedAt: Date.now(),
@@ -684,5 +716,551 @@ test("failure and creation cutoff admit protected invocation only into durable c
       );
       await assert.rejects(ledger.begin(claim, randomUUID(), "put_object"));
     });
+  }
+});
+
+test("Free exception is owner-prepared once, preserves gates and durably reports partial after success", async () => {
+  await reviewedAdmission(async (owner, db, _prior, original) => {
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='failed' WHERE operation=$1",
+      [_prior],
+    );
+    const operation = randomUUID(),
+      startedAt = Date.now() - 1000,
+      expiresAt = startedAt + 14400000;
+    const binding = { ...original, neonLimit: 64 };
+    const evidence = {
+      checkedAt: Date.now(),
+      iamCheckedAt: Date.now(),
+      iamReviewed: true,
+      accountType: "always-free",
+      homeRegion: original.region,
+      neonFree: true,
+      storageBytes: 10485760,
+      objectRequests: 200,
+      transferBytes: 1048576,
+      monitoringRequests: 20,
+      functionsMode: "free-functions-one-trial",
+      functionsException: {
+        operation,
+        startedAt,
+        expiresAt,
+        unknownAllowanceAccepted: true,
+        partialVerdictAccepted: true,
+        exclusiveProjectUse: true,
+        manualRecoveryReady: true,
+        otherServicesEvidence: "review-2026-11-15",
+        shutdownBy: expiresAt + 900000,
+        probeClientMs: 2252,
+        scenario: "64x60-plus36x60-v1",
+      },
+    };
+    const args = [
+      operation,
+      new Date(startedAt).toISOString(),
+      JSON.stringify(binding),
+      JSON.stringify(evidence),
+    ];
+    await assert.rejects(
+      db.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+    );
+    for (const change of [
+      { neonInvocations: 1000 },
+      { neonComputeSeconds: 6000 },
+      { measuredComputeSeconds: 6000 },
+      { storageBytes: 0 },
+      { objectRequests: 199 },
+      { transferBytes: 0 },
+      { monitoringRequests: 0 },
+      { neonFree: false },
+      { accountType: "paid" },
+      { iamReviewed: false },
+      { checkedAt: Date.now() - 86340000 },
+      {
+        functionsException: {
+          ...evidence.functionsException,
+          unknownAllowanceAccepted: false,
+        },
+      },
+      {
+        functionsException: {
+          ...evidence.functionsException,
+          scenario: "invented",
+        },
+      },
+      {
+        functionsException: {
+          ...evidence.functionsException,
+          operation: randomUUID(),
+        },
+      },
+    ])
+      await assert.rejects(
+        owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+          ...args.slice(0, 3),
+          JSON.stringify({ ...evidence, ...change }),
+        ]),
+      );
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+        operation,
+        args[1],
+        JSON.stringify({ ...binding, neonLimit: 65 }),
+        args[3],
+      ]),
+    );
+    const competingOwner = new Client({
+      host: "127.0.0.1",
+      port: Number(process.env.BERTH_TEST_POSTGRES_PORT),
+      database: "neondb",
+      user: "neondb_owner",
+      password: "berth-test-only",
+    });
+    await competingOwner.connect();
+    try {
+      const races = await Promise.allSettled([
+        owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+        competingOwner.query(
+          "SELECT berth_executor.prepare($1,$2,$3,$4)",
+          args,
+        ),
+      ]);
+      assert.equal(
+        races.filter((result) => result.status === "fulfilled").length,
+        1,
+      );
+      assert.equal(
+        (
+          await owner.query(
+            "SELECT count(*) FROM berth_executor.functions_exception",
+          )
+        ).rows[0].count,
+        "1",
+      );
+    } finally {
+      await competingOwner.end();
+    }
+
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+    );
+    const second = randomUUID();
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+        second,
+        args[1],
+        args[2],
+        JSON.stringify({
+          ...evidence,
+          functionsException: {
+            ...evidence.functionsException,
+            operation: second,
+          },
+        }),
+      ]),
+    );
+    await assert.rejects(
+      db.query("DELETE FROM berth_executor.functions_exception"),
+    );
+    await assert.rejects(
+      db.query("UPDATE berth_executor.admission SET evidence='{}'"),
+    );
+    await assert.rejects(
+      db.query(
+        "SELECT berth_executor.prepare_without_exception($1,$2,$3,$4)",
+        args,
+      ),
+    );
+    await owner.query(
+      "UPDATE berth_executor.admission SET verified_at=clock_timestamp() WHERE operation=$1",
+      [operation],
+    );
+    for (const change of [
+      { storageBytes: 0 },
+      { neonFree: false },
+      { objectRequests: 0 },
+      { functionsMode: "verified" },
+    ]) {
+      await owner.query(
+        "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+        [operation, JSON.stringify({ ...evidence, ...change })],
+      );
+      await assert.rejects(
+        db.query("SELECT berth_executor.admit($1,$2)", [operation, args[2]]),
+      );
+    }
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [operation, args[3]],
+    );
+    const environment = {
+      compartment: String(original.compartment),
+      namespace: String(original.namespace),
+      region: String(original.region),
+      tenancy: String(original.tenancy),
+      user: String(original.user),
+      fingerprint: String(original.fingerprint),
+      monitoringLimit: 20,
+      neonLimit: 64,
+      operation,
+      startedAt,
+      expiresAt,
+      token: "a".repeat(40),
+      previewKey: "b".repeat(40),
+      connection: "unused",
+      privateKey: "unused",
+    };
+    const { liveAdmissionApi } = await import(
+      "../../src/trial/live-admission.js"
+    );
+    const api = liveAdmissionApi(db, environment, async () => {
+      throw Error("Cached receipt should avoid provider work");
+    });
+    const call = (route: string, body: unknown) =>
+      api.fetch(
+        new Request(`https://fixture/${route}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${environment.token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    const {
+      functionsMode: _mode,
+      functionsException: _exception,
+      ...normalFields
+    } = evidence;
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [
+        operation,
+        JSON.stringify({
+          ...normalFields,
+          neonInvocations: 64,
+          neonComputeSeconds: 6000,
+          measuredComputeSeconds: 6000,
+        }),
+      ],
+    );
+    assert.equal(
+      (await call("preview", {})).status,
+      409,
+      "durable exception cannot disappear from preview when owner evidence changes",
+    );
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [operation, JSON.stringify(evidence)],
+    );
+    const preview = await call("preview", {});
+    assert.equal(preview.status, 200);
+    const previewBody = await preview.json();
+    assert.equal(previewBody.feasibility.verdict, "partial");
+    const submit = await call("submit", { preview: previewBody.preview });
+    assert.equal(submit.status, 202);
+    assert.equal((await submit.json()).feasibility.verdict, "partial");
+    assert.equal(
+      (
+        await db.query("SELECT berth_executor.admit($1,$2) AS admitted", [
+          operation,
+          args[2],
+        ])
+      ).rows[0].admitted,
+      false,
+    );
+    const guardedLedger = makeLedger(db),
+      guardedClaim = await guardedLedger.claim(operation, randomUUID());
+    const pendingCreate = await guardedLedger.begin(
+      guardedClaim,
+      randomUUID(),
+      "create_bucket",
+    );
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [
+        operation,
+        JSON.stringify({
+          ...evidence,
+          functionsException: {
+            ...evidence.functionsException,
+            partialVerdictAccepted: false,
+          },
+        }),
+      ],
+    );
+    await assert.rejects(
+      guardedLedger.begin(guardedClaim, randomUUID(), "put_object"),
+    );
+    await assert.rejects(
+      guardedLedger.reserve(guardedClaim, pendingCreate, randomUUID()),
+    );
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [operation, JSON.stringify(evidence)],
+    );
+    await guardedLedger.release(guardedClaim);
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='succeeded' WHERE operation=$1",
+      [operation],
+    );
+    const report = (
+      await db.query("SELECT berth_executor.report($1) AS result", [operation])
+    ).rows[0].result;
+    assert.equal(report.trial.outcome, "succeeded");
+    assert.equal(report.feasibility.verdict, "partial");
+    assert.equal(report.feasibility.functionsAllowance, "unknown");
+    assert.equal(report.feasibility.hardSpendingCap, false);
+    const { executeLive } = await import("../../src/trial/live-runtime.js");
+    const live = await executeLive(environment, "evidence", undefined, {
+      database: () => ({
+        connect: async () => {},
+        end: async () => {},
+        query: (text, values) => db.query(text, values ? [...values] : []),
+      }),
+    });
+    assert.deepEqual(
+      (live as { feasibility: unknown }).feasibility,
+      report.feasibility,
+    );
+
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+        second,
+        args[1],
+        args[2],
+        JSON.stringify({
+          ...evidence,
+          functionsException: {
+            ...evidence.functionsException,
+            operation: second,
+          },
+        }),
+      ]),
+    );
+    // An expired or inconsistent window never blocks owner evidence reads or renews cloud work.
+    const expiredAt = Date.now() - 1000;
+    for (const outcome of ["succeeded", "needs-reconciliation"]) {
+      await owner.query(
+        "UPDATE berth_ledger.trials SET started_at=$2,expires_at=$3,outcome=$4 WHERE operation=$1",
+        [
+          operation,
+          new Date(expiredAt - 14400000),
+          new Date(expiredAt),
+          outcome,
+        ],
+      );
+      const retained = (
+        await owner.query("SELECT berth_executor.report($1) AS result", [
+          operation,
+        ])
+      ).rows[0].result;
+      assert.equal(retained.trial.outcome, outcome);
+      assert.ok(Date.parse(retained.trial.expires_at) < Date.now());
+      assert.equal(retained.feasibility.verdict, "partial");
+      assert.deepEqual(
+        await executeLive(
+          {
+            ...environment,
+            startedAt: expiredAt - 14400000,
+            expiresAt: expiredAt,
+          },
+          "evidence",
+          undefined,
+          {
+            database: () => {
+              throw Error("Expired hosted requests must not connect");
+            },
+          },
+        ),
+        { phase: "expired" },
+      );
+    }
+  });
+});
+
+test("direct normal SQL admission rejects unknown and insufficient service headroom", async () => {
+  await reviewedAdmission(async (owner, db, operation, binding) => {
+    await owner.query(
+      "UPDATE berth_executor.admission SET admitted=false WHERE operation=$1",
+      [operation],
+    );
+    const valid = {
+      checkedAt: Date.now(),
+      iamCheckedAt: Date.now(),
+      iamReviewed: true,
+      accountType: "always-free",
+      homeRegion: binding.region,
+      neonFree: true,
+      storageBytes: 10485760,
+      objectRequests: 200,
+      transferBytes: 1048576,
+      monitoringRequests: 20,
+      neonInvocations: 40,
+      measuredComputeSeconds: 60,
+      neonComputeSeconds: 60,
+    };
+    for (const patch of [
+      { neonInvocations: null },
+      { neonInvocations: 39 },
+      { neonComputeSeconds: 59 },
+      { measuredComputeSeconds: 0 },
+      { storageBytes: 0 },
+      { objectRequests: 199 },
+      { transferBytes: 0 },
+      { monitoringRequests: 19 },
+      { neonFree: false },
+      { accountType: "paid" },
+      { homeRegion: "wrong" },
+      { neonComputeSeconds: "Infinity" },
+    ]) {
+      await owner.query(
+        "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+        [operation, JSON.stringify({ ...valid, ...patch })],
+      );
+      assert.equal(
+        (
+          await db.query(
+            "SELECT berth_executor.admission_status($1,$2) AS status",
+            [operation, JSON.stringify(binding)],
+          )
+        ).rows[0].status.evidenceBound,
+        false,
+      );
+      await assert.rejects(
+        db.query("SELECT berth_executor.admit($1,$2)", [
+          operation,
+          JSON.stringify(binding),
+        ]),
+      );
+    }
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [operation, JSON.stringify(valid)],
+    );
+    assert.equal(
+      (
+        await db.query("SELECT berth_executor.admit($1,$2) AS accepted", [
+          operation,
+          JSON.stringify(binding),
+        ])
+      ).rows[0].accepted,
+      true,
+    );
+  });
+});
+
+test("legacy direct SQL admission cannot create via schedule but retains owned cleanup and partial evidence", async () => {
+  for (const owned of [false, true]) {
+    await reviewedAdmission(async (owner, db, operation, binding) => {
+      await owner.query(
+        'UPDATE berth_executor.admission SET admitted=false,evidence=evidence || \'{"functionsMode":"free-functions-one-trial"}\'::jsonb WHERE operation=$1',
+        [operation],
+      );
+      assert.equal(
+        (
+          await db.query("SELECT berth_executor.admit($1,$2) AS admitted", [
+            operation,
+            JSON.stringify(binding),
+          ])
+        ).rows[0].admitted,
+        true,
+      );
+      const trial = (
+        await db.query("SELECT berth_executor.report($1) AS result", [
+          operation,
+        ])
+      ).rows[0].result.trial;
+      const environment = {
+        compartment: String(binding.compartment),
+        namespace: String(binding.namespace),
+        region: String(binding.region),
+        tenancy: String(binding.tenancy),
+        user: String(binding.user),
+        fingerprint: String(binding.fingerprint),
+        monitoringLimit: 20,
+        neonLimit: 40,
+        operation,
+        startedAt: Date.parse(trial.started_at),
+        expiresAt: Date.parse(trial.expires_at),
+        token: "a".repeat(40),
+        previewKey: "b".repeat(40),
+        connection: "unused",
+        privateKey: generateKeyPairSync("rsa", { modulusLength: 2048 })
+          .privateKey.export({ type: "pkcs8", format: "pem" })
+          .toString(),
+      };
+      const { executeLive } = await import("../../src/trial/live-runtime.js");
+      const { FakeObjects } = await import("../fakes/oci.js");
+      const cloud = new FakeObjects();
+      const ports = {
+        database: () => ({
+          connect: async () => {},
+          end: async () => {},
+          query: (text: string, values?: readonly unknown[]) =>
+            db.query(text, values ? [...values] : []),
+        }),
+        sdk: () => cloud,
+        fetch: async () => {
+          throw Error("No network");
+        },
+      };
+      if (owned) {
+        const { runExecutor } = await import("../../src/trial/executor.js");
+        assert.equal(
+          (
+            await runExecutor(db, {
+              operation,
+              delivery: "a".repeat(64),
+              expiresAt: environment.expiresAt,
+              sdk: () => cloud,
+            })
+          ).phase,
+          "object",
+        );
+        assert.ok(cloud.value);
+      }
+      await executeLive(environment, "scheduled", "legacy-delivery", ports);
+      assert.equal(cloud.creates, owned ? 1 : 0);
+      assert.equal(cloud.value, undefined);
+      assert.equal(cloud.deletes, owned ? 1 : 0);
+
+      assert.equal(
+        (
+          await owner.query(
+            "SELECT count(*) FROM berth_ledger.attempts WHERE operation=$1 AND action IN ('create_bucket','put_object')",
+            [operation],
+          )
+        ).rows[0].count,
+        owned ? "1" : "0",
+      );
+      assert.equal(
+        (
+          await owner.query(
+            "SELECT cleanup_requested FROM berth_executor.work WHERE operation=$1",
+            [operation],
+          )
+        ).rows[0].cleanup_requested,
+        true,
+      );
+      const evidence = await executeLive(
+        environment,
+        "evidence",
+        undefined,
+        ports,
+      );
+      assert.equal(
+        (evidence as { feasibility: { verdict: string } }).feasibility.verdict,
+        "partial",
+      );
+      assert.equal(
+        (
+          (await executeLive(environment, "cleanup", undefined, ports)) as {
+            status: string;
+          }
+        ).status,
+        "cleanup-requested",
+      );
+    }, true);
   }
 });

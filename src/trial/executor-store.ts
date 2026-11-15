@@ -15,6 +15,17 @@ export interface ExecutionSnapshot {
   cleanup_requested: boolean;
   object_removed: boolean;
   reason: string | null;
+  /** Owner-installed SQL qualification survives lifecycle success; absent for legacy trials. */
+  feasibility?: {
+    mode: "free-functions-one-trial";
+    verdict: "partial";
+    functionsAllowance: "unknown";
+    hardSpendingCap: false;
+    scenario: "64x60-plus36x60-v1";
+    scenarioCapacitySeconds: 6000;
+    scenarioInvocations: 100;
+    shutdownBy: number;
+  };
 }
 /** Duplicate and busy deliveries cannot authorize work. */
 export type OpenExecution =

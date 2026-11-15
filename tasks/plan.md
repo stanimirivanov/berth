@@ -131,3 +131,10 @@ for an owner-reviewed uncertain one-trial mode. Do not confuse completion of tha
 investigation with completion of #14, or fill missing live headroom fields with
 forward estimates. PR #50 remains draft pending supported evidence or an explicit
 contract/implementation revision. No further owner Console search is requested.
+
+## One-trial exception prerequisite — #55
+
+Implement the explicitly accepted Neon Free Functions exception from #52, using a
+durable one-use owner preparation and mandatory partial evidence. Preserve all
+budgets and recovery coverage. No live activation; #14 / PR #50 remains draft until
+reviewed preparation and the actual trial establish the remaining evidence.

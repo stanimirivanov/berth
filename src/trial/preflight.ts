@@ -6,6 +6,23 @@ export interface TrialConfiguration {
   monitoringLimit: number;
   neonLimit: number;
 }
+/** Immutable owner-prepared live identity; callers cannot select a different trial. */
+export interface PreparedTrial {
+  operation: string;
+  startedAt: number;
+  expiresAt: number;
+}
+/** Explicit one-use exception commitments; remaining Functions quota is deliberately absent. */
+export interface FunctionsException extends PreparedTrial {
+  unknownAllowanceAccepted: true;
+  partialVerdictAccepted: true;
+  exclusiveProjectUse: true;
+  manualRecoveryReady: true;
+  otherServicesEvidence: string;
+  shutdownBy: number;
+  probeClientMs: number;
+  scenario: "64x60-plus36x60-v1";
+}
 /** Owner aggregate attestation, not a provider billing API or hard spending guarantee. */
 export interface Headroom {
   checkedAt: number;
@@ -19,6 +36,8 @@ export interface Headroom {
   neonInvocations: number;
   neonComputeSeconds: number;
   measuredComputeSeconds: number;
+  functionsMode?: "verified" | "free-functions-one-trial";
+  functionsException?: FunctionsException;
 }
 
 /** Fail closed on unsupported target/configuration before admission can be constructed. */
@@ -43,6 +62,7 @@ export function preflight(
   c: TrialConfiguration,
   input: unknown,
   now: number,
+  prepared?: PreparedTrial,
 ): string[] {
   validateConfiguration(c);
   if (!input || typeof input !== "object" || !Number.isFinite(now))
@@ -67,7 +87,19 @@ export function preflight(
     !sufficient(e.storageBytes, 10485760) ||
     !sufficient(e.objectRequests, 200) ||
     !sufficient(e.transferBytes, 1048576) ||
-    !sufficient(e.monitoringRequests, c.monitoringLimit) ||
+    !sufficient(e.monitoringRequests, c.monitoringLimit)
+  )
+    return ["headroom-insufficient-or-unmeasured"];
+  if (e.functionsMode === "free-functions-one-trial")
+    return validFunctionsException(c, e, now, prepared)
+      ? []
+      : ["functions-exception-invalid"];
+  if (
+    (e.functionsMode !== undefined && e.functionsMode !== "verified") ||
+    e.functionsException !== undefined
+  )
+    return ["functions-mode-invalid"];
+  if (
     !sufficient(e.neonInvocations, c.neonLimit) ||
     !sufficient(e.measuredComputeSeconds, Number.MIN_VALUE) ||
     !sufficient(e.neonComputeSeconds, e.measuredComputeSeconds ?? Infinity)
@@ -128,4 +160,63 @@ export function proposal(c: TrialConfiguration, operation: string) {
     },
     durationSeconds: 14400,
   };
+}
+
+/** Reject partial or mixed exception evidence; SQL independently owns single-use enforcement. */
+function validFunctionsException(
+  c: TrialConfiguration,
+  e: Partial<Headroom>,
+  now: number,
+  p?: PreparedTrial,
+) {
+  const x = e.functionsException;
+  return !!(
+    p &&
+    x &&
+    c.neonLimit === 64 &&
+    ["neonInvocations", "neonComputeSeconds", "measuredComputeSeconds"].every(
+      (key) => !(key in e),
+    ) &&
+    /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(
+      p.operation,
+    ) &&
+    Number.isSafeInteger(p.startedAt) &&
+    Number.isSafeInteger(p.expiresAt) &&
+    p.expiresAt - p.startedAt === 14400000 &&
+    now >= p.startedAt &&
+    now < p.startedAt + 300000 &&
+    x.operation === p.operation &&
+    x.startedAt === p.startedAt &&
+    x.expiresAt === p.expiresAt &&
+    (e.checkedAt ?? 0) + 86400000 >= p.startedAt + 1800000 &&
+    x.unknownAllowanceAccepted === true &&
+    x.partialVerdictAccepted === true &&
+    x.exclusiveProjectUse === true &&
+    x.manualRecoveryReady === true &&
+    typeof x.otherServicesEvidence === "string" &&
+    /^[A-Za-z0-9_-]{1,80}$/.test(x.otherServicesEvidence) &&
+    x.shutdownBy === p.expiresAt + 900000 &&
+    x.scenario === "64x60-plus36x60-v1" &&
+    typeof x.probeClientMs === "number" &&
+    Number.isFinite(x.probeClientMs) &&
+    x.probeClientMs > 0 &&
+    x.probeClientMs <= 3000
+  );
+}
+
+/** Separate lifecycle success from the exception's mandatory partial feasibility ceiling. */
+export function functionsAssessment(evidence: unknown) {
+  const e = evidence as Partial<Headroom> | null;
+  return e?.functionsMode === "free-functions-one-trial"
+    ? {
+        mode: "free-functions-one-trial",
+        verdict: "partial",
+        functionsAllowance: "unknown",
+        hardSpendingCap: false,
+        scenario: "64x60-plus36x60-v1",
+        scenarioCapacitySeconds: 6000,
+        scenarioInvocations: 100,
+        shutdownBy: e.functionsException?.shutdownBy,
+      }
+    : undefined;
 }
