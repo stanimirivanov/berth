@@ -183,3 +183,19 @@ invocations. Owner bootstrap/inspection/disposal used six additional management
 reads to obtain the existing endpoint/owner connection. Provider-scheduled calls
 are separate from these client counts. Administrative cleanup completed at
 16:06:32.685 UTC. No OCI request or paid-plan change was made.
+
+## Functions allowance qualification — issue #52, 2026-11-15
+
+[Functions headroom qualification](functions-headroom.md) completes the investigation
+with **no-go under the current evidence contract**. Owner questions are answered;
+Free lacks the documented Functions consumption API and the Console omits this
+meter. Historical logs cannot establish complete remaining allowance. A measured
+probe plus explicit overhead/shutdown assumptions yields a 6,000-capacity-second
+forward scenario, not a historical bound or live billing proof.
+
+The offline review calculation never grants admission or populates legacy numeric
+headroom fields. The document includes an exact optional one-trial exception for
+owner review, requiring a partial outcome when Functions allowances remain unknown.
+That exception is not applied by this change; merging the qualification alone does
+not unblock #14 or authorize deployment. PR #50 remains draft. No paid option or
+provider hard-cap claim is introduced.
