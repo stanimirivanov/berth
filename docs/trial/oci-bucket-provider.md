@@ -98,3 +98,39 @@ contracts include actual SDK serialization and Alchemy lifecycle checks. Inverti
 the fresh-revision guard caused three tests to fail; restoring it returned the suite
 to green. The dependency audit retains seven moderate and one low findings, with no
 high/critical findings and no dependency changes in this issue.
+
+## Opt-in metadata contract — issue #57
+
+OCI GetBucket exposes `autoTiering` as an optional `fields` selection in the pinned
+SDK's `GetBucketRequest`. CreateBucket returning `Disabled` does not imply that a
+later ordinary GET includes that setting. The shared budgeted `bucketClient.get`
+now explicitly requests `GetBucketRequest.Fields.AutoTiering`, including the fresh
+read immediately before conditional deletion. This adds no request, retry or
+budget unit; it changes the query on the existing metered request.
+
+Validation still requires the explicit `Disabled` value. Missing, unknown and
+`InfrequentAccess` values fail with the existing safe `BucketFailure` category
+`configuration`; ownership, revision and all other configuration checks remain
+unchanged. The hosted SQL reason remains the existing generic reconciliation
+category; this fix does not widen its public/schema diagnostic vocabulary.
+
+`tests/oci-bucket-metadata.test.ts` exercises the real pinned SDK over a local
+transport that returns the field on create and omits it on GET unless selected.
+The regression first failed at the post-create read, then passed through read and
+conditional teardown. It checks all three bucket GETs, one reservation per send,
+cleanup-only dispatch and strict rejection of unsafe/missing settings. The shared
+`FakeOci` now models optional field selection too, so object/executor/recovery
+fixtures cannot silently conceal the same omission.
+
+This code-only correction follows the [recorded live failure and manual recovery](https://github.com/stanimirivanov/berth/blob/7995f46/docs/trial/live-results.md#hosted-failure-and-bounded-owner-recovery)
+in draft PR #50. It does not change that partial/no-go verdict, prove hosted
+teardown or authorize another trial. The one-use exception remains consumed;
+no cloud credentials, deployments or resources are used by these tests.
+
+Verification for #57 on 2026-11-15: `pnpm check` passed (158 application tests,
+28 harness tests, types/lint, bundle, secret scan and advisory gate). Disposable
+loopback PostgreSQL setup and all 19 executor/admission tests passed. All three
+existing interrupted object-deletion cases passed at 35/40 cleanup requests;
+the full crash matrix was not rerun locally, and its CI coverage is unchanged.
+The live executor bundle also built locally; nothing was deployed. Existing seven
+moderate and one low dependency advisories remain, with no high/critical findings.
