@@ -99,26 +99,36 @@ export async function executeLive(
     // meter_http atomically persisted the cleanup flag with its single control charge.
     if (action === "cleanup")
       return { operation: e.operation, status: "cleanup-requested" };
+    const authorizationValid =
+      status.authorizationVersion === 1 && status.evidenceBound === true;
+    const feasibility =
+      snapshot.feasibility ??
+      (!authorizationValid
+        ? {
+            verdict: "partial",
+            functionsAllowance: "unknown",
+            hardSpendingCap: false,
+            reason: "admission-authorization-unverified",
+          }
+        : undefined);
     if (action === "usage") {
       const usage = await usageStore(db).report(e.operation);
-      return snapshot.feasibility
-        ? { usage, feasibility: snapshot.feasibility }
-        : usage;
+      return feasibility ? { usage, feasibility } : usage;
     }
     if (action === "evidence")
       return {
         operation: e.operation,
         phase: snapshot.phase,
         status: trial.outcome,
-        ...(snapshot.feasibility ? { feasibility: snapshot.feasibility } : {}),
+        ...(feasibility ? { feasibility } : {}),
         reason: snapshot.reason,
         objectRemoved: snapshot.object_removed,
         startedAt: trial.started_at,
         expiresAt: trial.expires_at,
       };
     if (!delivery) throw Error("Missing delivery");
-    if (!status.admitted) {
-      if (Date.now() < e.startedAt + 300000)
+    if (!authorizationValid || !status.admitted) {
+      if (authorizationValid && Date.now() < e.startedAt + 300000)
         return { phase: "awaiting-submission" };
       await store.cleanup(e.operation);
     }

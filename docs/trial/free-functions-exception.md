@@ -113,8 +113,18 @@ the run is cancelled, or lifecycle cleanup succeeds. Do not prepare another run.
 - Continue the existing [build/deploy and trigger steps](hosted-admission.md#2-build-and-deploy-before-the-prepared-start)
   with the returned window and same operation. No extra environment variable,
   privileged runtime credential or HTTP opt-in flag is introduced.
-- New hosted code rejects exception admission when migration 005's durable
-  qualification is absent. Runtime can neither prepare nor alter the exception.
+- New hosted code requires migration 005's versioned authorization projection for
+  admission and scheduled creation, including normal mode. Missing migration,
+  invalid normal-mode headroom or disagreement with the immutable exception routes
+  scheduled work into durable cleanup. It cannot create/upload. Cleanup controls
+  and evidence remain available; missing qualification is reported as partial with
+  `admission-authorization-unverified`, not as a pass.
+- Preview checks durable authorization independently of the current evidence mode;
+  owner-side evidence changes cannot hide a consumed exception. Normal-mode SQL
+  admission also validates all service thresholds, so direct runtime SQL calls
+  cannot substitute for the HTTP headroom checks. Runtime cannot prepare or alter
+  the exception. Both SQL mutation boundaries recheck qualification under the
+  existing trial lock before allowing a creation attempt or dispatch reservation.
 - Review `/preview`: `feasibility.verdict` must be `partial`, `functionsAllowance`
   must be `unknown`, `hardSpendingCap` must be false, and the fixed forward scenario
   must be shown. `/submit` retains the same qualification. Do not submit on a
@@ -142,7 +152,23 @@ SQL `berth_executor.report(operation)` retains `feasibility` from the immutable
 slot. `/evidence` includes it alongside lifecycle `status`; `/usage` in this mode
 returns `{usage, feasibility}`. `status: succeeded` means resource lifecycle success,
 **not a feasibility pass**. The report remains partial after success, failure,
-expiry and cleanup. Remaining Functions allowance stays unknown. Missing metrics
+expiry and cleanup **in SQL**. At or after expiry the hosted endpoints return only
+`{phase: "expired"}` and perform no SQL or provider work. They are not a post-expiry
+evidence channel. Use the private owner psql service for read-only reporting:
+
+```bash
+psql service=berth-owner -X -v ON_ERROR_STOP=1 -c \
+  "SELECT berth_executor.report('YOUR_OPERATION_UUID'::uuid);"
+```
+
+Run it for the existing operation only; never extend the window to obtain a hosted
+response. Retain `trial.outcome`, `feasibility`, resource identities and unresolved
+ledger requests. Whether the lifecycle is succeeded or needs-reconciliation, the
+exception's SQL feasibility remains partial. If SQL itself is unavailable, report
+that evidence as unavailable and preserve private journals for owner reconciliation.
+This read does not authorize renewed cloud work or additional Functions calls.
+
+Remaining Functions allowance stays unknown. Missing metrics
 or other acceptance failures must also remain visible in #14's evidence.
 
 Removal/closure owner: trial owner, tracked by #14. Authorization expires with its

@@ -482,3 +482,52 @@ test("live exception refuses deployment without durable migration qualification"
   );
   assert.equal((await api.fetch(request("preview"))).status, 409);
 });
+
+test("live preview rejects owner evidence drift away from a consumed exception", async () => {
+  const { liveAdmissionApi } = await import("../src/trial/live-admission.js");
+  const startedAt = Date.now() - 1000;
+  const e = {
+    ...config,
+    operation: "00000000-0000-4000-8000-000000000055",
+    startedAt,
+    expiresAt: startedAt + 14400000,
+    token,
+    previewKey: "b".repeat(40),
+    tenancy: "fixture",
+    user: "fixture",
+    fingerprint: "fixture",
+    privateKey: "unused",
+    connection: "unused",
+  };
+  const api = liveAdmissionApi(
+    {
+      query: async () => ({
+        rows: [
+          {
+            result: {
+              admitted: false,
+              verifiedAt: Date.now(),
+              authorizationVersion: 1,
+              evidenceBound: false,
+              evidence: {
+                ...evidence,
+                checkedAt: Date.now(),
+                iamCheckedAt: Date.now(),
+                iamReviewed: true,
+              },
+              feasibility: {
+                mode: "free-functions-one-trial",
+                verdict: "partial",
+                functionsAllowance: "unknown",
+                shutdownBy: e.expiresAt + 900000,
+              },
+            },
+          },
+        ],
+      }),
+    },
+    e,
+    async () => true,
+  );
+  assert.equal((await api.fetch(request("preview"))).status, 409);
+});

@@ -31,6 +31,8 @@ export async function admissionStatus(
     ])
   ).rows[0]?.result as {
     admitted: boolean;
+    authorizationVersion?: number;
+    evidenceBound?: boolean;
     verifiedAt: number | null;
     evidence: unknown;
   };
@@ -133,6 +135,8 @@ export function liveAdmissionApi(
           checkedAt?: number;
           functionsMode?: string;
         };
+      if (status.authorizationVersion !== 1 || status.evidenceBound !== true)
+        return null;
       if (evidence?.functionsMode === "free-functions-one-trial") {
         const qualification = (await executorStore(db).report(e.operation))
           .feasibility;
