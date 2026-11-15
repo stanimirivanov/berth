@@ -9,6 +9,8 @@ import { Client } from "pg";
 import { makeLedger } from "../../src/trial/ledger.js";
 import { classifyRecovery, cloudService } from "../fakes/faults.js";
 
+import { recoverySites } from "../fakes/recovery-shard.js";
+
 const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
 assert.ok(
   Number.isInteger(port) && port > 0 && port < 65536,
@@ -257,10 +259,17 @@ test("checkpoint seed 13: process death at each observed semantic write boundary
   t.diagnostic(
     `seed=13 semantic boundaries=${sites.size}; first occurrence per label per trajectory`,
   );
-  const selected = process.env.BERTH_RECOVERY_POINT;
-  assert.ok(!selected || sites.has(selected), "Unknown checkpoint selection");
+  const selected = recoverySites(
+    [...sites.keys()],
+    process.env.BERTH_RECOVERY_SHARD,
+    process.env.BERTH_RECOVERY_POINT,
+    Boolean(process.env.CI),
+  );
+  t.diagnostic(
+    `recovery shard=${process.env.BERTH_RECOVERY_SHARD ?? "all"} selected=${selected.length}/${sites.size}`,
+  );
   for (const [label, site] of sites) {
-    if (selected && label !== selected) continue;
+    if (!selected.includes(label)) continue;
     await t.test(label, () =>
       fixture(async (f) => {
         for (let step = 0; step <= site.step; step++) {

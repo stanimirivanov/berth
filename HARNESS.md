@@ -163,3 +163,48 @@ are explicit operator actions outside all verification gates.
 same disposable loopback PostgreSQL fixture, after `test:setup-db`. CI runs its
 concurrency, protected-budget and actual backend-termination tests without cloud
 credentials. `pnpm test` includes the ledger boundary's deterministic unit tests.
+
+## Recovery CI partitions
+
+Issue #51 separates ordinary verification (`verify`) from four `recovery` jobs.
+Every job retains its 15-minute deadline. Each recovery job starts its own pinned
+PostgreSQL service and bootstraps it before running the unchanged
+`pnpm run test:recovery-db` command. `fail-fast: false` lets the other shards finish
+if one fails; it does not turn failures into success. The stable `check` job runs
+after both job groups and requires each result to be `success`, including when a
+dependency failed, was canceled or skipped. Branch protection should require this
+`check` result; external protection settings are not changed by the repository.
+
+The crash suite discovers the same seven baseline trajectories on each shard,
+sorts unique semantic labels and assigns label index modulo four. All assertions,
+seeds, process kills, SQL fixtures, action/request budgets and test timeouts remain.
+Each shard also runs the other recovery and security tests in full. This duplicates
+some setup/work to reduce wall-clock runtime; it is not a reduction in coverage.
+Unit tests prove deterministic, balanced, disjoint, complete partitioning and reject
+invalid/empty shards. Workflow tests require all four matrix entries and exercise
+the actual final shell gate against success/failure/cancellation/skipping outcomes.
+
+Local reproduction, after `test:setup-db` on a fresh loopback database:
+
+```bash
+BERTH_TEST_POSTGRES_PORT=your_port BERTH_RECOVERY_SHARD=1/4 pnpm run test:recovery-db
+```
+
+Repeat with `2/4`, `3/4`, `4/4`; parallel runs need separate databases/ports.
+Omit `BERTH_RECOVERY_SHARD` to retain the complete original local run. The existing
+`BERTH_RECOVERY_POINT` diagnostic filter is local-only and cannot be combined with
+a shard; CI rejects it. Diagnostic output records discovered and selected counts.
+A canceled shard is incomplete and cannot establish checkpoint success.
+
+GitHub semantics: [job dependencies and always()](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs).
+
+Local validation for #51 (2026-11-15): four fresh PostgreSQL 17 containers, each
+bootstrapped with the real permission suite. All shards passed 47 tests each,
+including repeated non-matrix recovery/security cases, with no skips/cancellations.
+Their 34-label sets formed a disjoint union of all 136 discovered crash sites;
+observed labels matched the selector's assignment. Full shard times were 147.3,
+158.9, 151.1 and 155.0 seconds. Shard 1's main matrix accounted for 112.9 seconds.
+These timings include shared local CPU contention, not hosted-runner setup; the
+new PR's hosted CI must still confirm its runtime margin. No timeout was increased.
+The full local check passed 146 application and 25 harness tests. A mutated selector
+assigning every shard the same slice failed the completeness test as intended.

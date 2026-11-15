@@ -10,7 +10,7 @@ concurrency:
   group: berth-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  check:
+  verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -90,10 +90,58 @@ jobs:
       - run: pnpm run test:usage-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-      - run: pnpm run test:recovery-db
-        env:
-          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
       - run: pnpm run build:live-executor
       - run: pnpm run test:admission-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+  recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/4", "2/4", "3/4", "4/4"]
+    services:
+      postgres:
+        image: postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
+        env:
+          POSTGRES_DB: neondb
+          POSTGRES_USER: postgres
+          # Fixed disposable fixture credentials required by the loopback-only test.
+          POSTGRES_PASSWORD: berth-test-only
+        ports: [5432/tcp]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.22.3
+      - run: npm install --global pnpm@12.16.1 --ignore-scripts
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:setup-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run test:recovery-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          BERTH_RECOVERY_SHARD: ${{ matrix.shard }}
+  check:
+    needs: [verify, recovery]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require complete verification
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          RECOVERY_RESULT: ${{ needs.recovery.result }}
+        run: |
+          test "$VERIFY_RESULT" = success
+          test "$RECOVERY_RESULT" = success
