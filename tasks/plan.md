@@ -181,3 +181,18 @@ meter requests. Complete these bounded engineering tasks before #14 activation:
 
 The tasks are independent. Resume #14 only after both gates are satisfied; follow
 with #15 owner closeout. No paid fallback or weakening of the trial bounds.
+## Live trial result — 2026-11-15
+
+#14 used the approved exception once and recorded a partial/no-go verdict in PR
+#50. Hosted bucket creation succeeded; an omitted optional OCI metadata field
+blocked upload. Owner recovery removed the bucket within the original cleanup
+reserve, then deleted hosting and revoked the trial key. No live metrics/warning
+or controlled-interruption pass is claimed.
+
+- [#57](https://github.com/stanimirivanov/berth/issues/57): explicitly request
+  auto-tiering metadata, with failing-first provider contract tests; preserve all
+  ownership and recovery checks. Code-only scope, no new live activation.
+- #15: review/complete owner closeout and retained evidence after the failed run.
+
+PR #50 remains draft. The one-use exception stays consumed; a corrected adapter
+alone cannot authorize another trial or change this partial verdict.

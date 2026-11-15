@@ -252,3 +252,26 @@ is 1.0667 capacity-hours, but cannot establish remaining historical allowance.
 Keep the live verdict blocked until the complete recovery gate and an explicitly
 reviewed headroom evidence method are satisfied. The existing application limits,
 free-only requirement and unknown-headroom rejection remain unchanged.
+## Approved live attempt — 2026-11-15: partial / no-go
+
+The owner-approved one-trial exception was consumed once. The hosted Node 24
+executor created a real private OCI bucket through Alchemy after the initiating
+client exited, but bucket inspection failed before object upload: GetBucket did
+not request the optional `autoTiering` field required by the strict validator.
+[#57](https://github.com/stanimirivanov/berth/issues/57) tracks the bounded fix and
+SDK contract regression coverage; missing fields must not be accepted as safe.
+
+The schedule was stopped. Local owner recovery requested the field explicitly and
+used the existing cleanup executor, ownership/revision checks and ledger to remove
+the bucket. Cleanup consumed 16 ledger requests plus two separately journaled
+post-terminal absence checks, **18 of the unchanged 40-request ceiling**. There
+are no unresolved requests or open attempts. Hosted function/trigger inventories
+are empty and the dedicated trial key is revoked. The immutable SQL verdict is
+partial and resource lifecycle outcome is failed.
+
+Full object checksum, metrics/warning, controlled interruption and autonomous
+hosted teardown remain unproven. Functions headroom and contemporaneous billed
+deltas remain unknown. See [timestamped live results](live-results.md#approved-one-trial-exception--2026-11-15).
+No production rollout or new live run is supported by this evidence. Review the
+partial PR #50, fix #57 and complete #15 closeout. The consumed exception must not
+be reset; any future live authorization requires a separate explicit decision.

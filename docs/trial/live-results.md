@@ -1,5 +1,11 @@
 # Hosted OCI trial — issue #14
 
+**Latest result (2026-11-15): partial / no-go.** The approved one-use live attempt
+created a bucket, failed before upload, and required bounded owner cleanup.
+The bucket, function and trigger are gone; the trial key is revoked. See the
+[final acceptance ledger](#final-acceptance-ledger-and-decision). Earlier blocked
+preflight entries below are retained as dated history.
+
 ## Initial status on 2026-11-14
 
 **Blocked before activation; no live feasibility pass.** The implementation
@@ -291,3 +297,187 @@ Sources rechecked:
 - [Functions capacity units and allowances](https://neon.com/docs/introduction/plans#functions)
 - [Runtime concurrency limitations](https://neon.com/docs/compute/functions/reference/runtime-limits#concurrency)
 - [Retry behavior](https://neon.com/docs/compute/functions/triggers/overview#delivery-and-retries)
+
+## Approved one-trial exception — 2026-11-15
+
+The owner explicitly authorized activation after PR #56 merged. This supersedes
+previous activation blockers without turning missing Functions billing evidence
+into headroom. The immutable exception is consumed once; overall feasibility must
+remain **partial**, even if resource lifecycle cleanup succeeds. No paid upgrade,
+new operation, expanded allowance or reset of the exception is permitted.
+
+### Preparation and build
+
+- Branch `feature/issue-14`, merged prerequisites at `d0faacf`; merged trial source
+  commit `7c940b1`. Node 24.22.3, pnpm 12.16.1, Alchemy 2.0.0-beta.86,
+  Effect 4.1.4, OCI SDK 2.146.0 and Neon CLI 9.4.0.
+- Full local `pnpm check` passed: 156 application tests, 28 harness tests, bundle,
+  secret and advisory gates. Existing seven moderate / one low advisories remain;
+  no high/critical findings. Recovery coverage and its sharded CI gates are unchanged.
+- Live ZIP: 375,420 bytes, SHA-256
+  `145b3ea81137a77422bac8e9630b14c26c933b95cf396779b55441c2f74fb39a`.
+- Fresh OCI doctor at 13:10:43 UTC passed one attempt / three requests, zero clock
+  skew, empty dedicated compartment and inconclusive metrics. Fresh administrator
+  reads reconfirmed the sole Frankfurt region, the trial user's sole restricted
+  group, its three scoped policy statements and no compartment policies. The
+  unrelated root bucket (approximately one object / 46,377 bytes) is untouched.
+- Neon API at 13:12:30 UTC returned Free, Ohio, one branch / one endpoint, zero
+  functions / triggers and no pre-existing trial schemas. Restricted SQL checks
+  passed before and after installing migrations 001–005. Database size before
+  installation: 8,052,736 bytes; this is not the billing storage meter.
+- Owner Free Tier / exclusive-use observations remain the previously supplied
+  evidence. Their conservative freshness lower bound is November 14 17:57:23 UTC,
+  not a newly invented Console reading. It covers creation cutoff on November 15
+  at 14:05 UTC. IAM was independently rechecked during this preparation.
+- Owner preparation committed at 13:20:56 UTC. Exactly one operation is bound to
+  **13:35–17:35 UTC** (15:35–19:35 Sofia), shutdown due **17:50 UTC**. The stored
+  report immediately returned `feasibility.verdict=partial` and Functions allowance
+  `unknown`. The slot remains consumed even if deployment or execution fails.
+- Limits are unchanged: Object Storage **160 normal + 40 cleanup**, Monitoring
+  **20**, Neon application units **64**, including **12 protected cleanup units**.
+  The 6,000-capacity-second forward scenario is an assumption, not remaining
+  allowance or a provider spending cap.
+- Deployment 1 completed at 13:24:43 UTC with Node 24. Both database URLs use the
+  restricted role; injected privileged defaults are overridden. No Neon API key or
+  owner SQL credential is deployed. The fixed 15-minute trigger was created
+  disabled and inspected before activation.
+
+### Aggregate evidence limitations
+
+OCI billing usage through November 15 00:00 UTC (exclusive) reports 54 Object
+Storage requests and 60,480 Monitoring retrieval datapoints. Storage is expressed
+as GB-month, not current bytes. The transfer SKU has an inconsistent provider unit
+(`GB Months`); it is retained privately without converting it into an invented
+remaining transfer allowance. Current-day activity and reporting lag are excluded.
+Fresh storage inventory, the owner-confirmed exclusive workload scope and recorded
+small Berth activity support the reserved trial headroom; they are not a hard cap.
+
+This preparation made four Object Storage diagnostic reads and one Monitoring
+query before the operation ledger existed, plus bounded IAM/billing/Neon management
+reads. These remain separate aggregate usage; they are not retroactively booked
+into the ledger. The 40-request cleanup reserve is not borrowed for preparation.
+Neon's delayed project counters and the owner's previously recorded Postgres
+usage are distinct from the unavailable Functions meter. Functions allowance stays
+unknown throughout this exception.
+
+### Activation — 13:35 UTC
+
+- Missing bearer on `/evidence`: HTTP 401 (580 ms). Manual `/scheduled` without
+  gateway attestation: HTTP 401 (160 ms). Neither starts provider work.
+- `/preview`: HTTP 200 (1,820 ms), exact private Standard bucket / disabled
+  versioning and one create-only 1 MiB object, fixed digest and budgets. Returned
+  signed qualification: partial, unknown Functions allowance, no hard spending cap.
+- `/submit`: HTTP 202 (909 ms), same operation/window and partial qualification.
+  Trigger enabled for the first scheduled delivery at 13:45 UTC. The initiating
+  client process exited after submission and enablement. This establishes client
+  independence for subsequent deliveries, not physical disconnection of the owner's
+  computer; separate read-only observation/admin processes remain available.
+- SQL snapshot after that exit: phase `bucket`, active, two normal requests for
+  admission checks, two Neon units, zero Monitoring / cleanup usage, zero hosted
+  deliveries. All 40 cleanup requests and 12 protected Neon units remain reserved.
+
+### Hosted failure and bounded owner recovery
+
+At 13:45:01 UTC the scheduled function acquired durable execution state after the
+initiating client had exited. Alchemy created the owned bucket at 13:45:02 UTC and
+persisted its provider identity, revision and marker. The second deterministic
+subdelivery selected the object phase, but stopped during bucket list/get before
+persisting an upload intent or issuing PUT. At 13:46 UTC the database reported
+`phase=cleanup`, `outcome=needs-reconciliation`, `reason=unresolved-provider-call`.
+All nine normal request reservations were settled; two logical attempts remained
+open. No 1 MiB object was uploaded and no checksum receipt exists.
+
+The failure is an OCI read-contract mismatch, tracked in
+[#57](https://github.com/stanimirivanov/berth/issues/57). `bucketClient.get` does not
+request `fields: ["autoTiering"]`; OCI's pinned SDK documents this as an opt-in
+GetBucket field. Validation nevertheless requires the returned value to be
+`Disabled`. Create returned the setting, while the subsequent unqualified read
+could not satisfy that validation. The SDK contract and live corrective reads
+support this diagnosis; the hosted stored reason itself is generic and does not
+identify the individual failed guard.
+
+The schedule was disabled before its next delivery to avoid repeating the same
+failure. No deployment was changed and no second trial was prepared. The owner
+recovery client used the existing compiled executor, restricted DB/OCI credentials,
+existing operation and cleanup phase, with only its SDK GetBucket calls adding the
+explicit `autoTiering` field. This was **local manual recovery**, not a successful
+hosted continuation or the planned interruption experiment. Existing ownership,
+configuration, revision, empty-inventory, reservation and no-retry guards remained
+in force; no omitted setting was treated as safe.
+
+Three corrective reads returned `autoTiering=Disabled`, private access, Standard
+storage, disabled versioning and matching body/header ETags. The executor verified
+empty object/version/upload inventories, used Alchemy's destroy path and deleted
+the bucket conditionally at 13:50:23–13:50:25 UTC. The 13:50:32 SQL report retained
+`trial.outcome=failed` and `feasibility.verdict=partial`, with zero unresolved
+requests and zero open attempts. Each logical action used ordinal 1; no retries
+or new upload/create attempts were introduced. `object_removed=true` means the
+empty inventories were verified, not that an uploaded object was successfully
+round-tripped.
+
+### Final accounting and shutdown
+
+| Scope | Final evidence |
+| --- | --- |
+| Normal Object Storage ledger | 9 / 160 requests; includes two admission checks and one bucket creation |
+| Cleanup Object Storage ledger | 16 / 40 requests; includes conditional bucket deletion and absence listing |
+| Independent owner absence checks | Two additional cleanup reads reserved in the private owner journal before dispatch, after SQL terminal status; combined cleanup use **18 / 40**, 22 unused |
+| Preparation Object Storage reads | Four before the operation; total documented Object Storage requests for this resumption **31** (4 + 9 + 16 + 2) |
+| Monitoring | Operation 0 / 20; one separate preparation query; no post-upload samples |
+| Neon application accounting | 5 / 64 units: two HTTP admissions, two hosted subdeliveries, one local recovery execution; these are not provider-billed invocation counts |
+| Invocation/attempt records | Three execution request reservations plus two HTTP receipts; all 28 ledger reservations settled; all five logical attempts closed |
+| Resource footprint | One bucket created/deleted, zero object uploads; unrelated root bucket untouched |
+| Protected cleanup | Only one execution unit was needed for local cleanup; neither the 40-request nor 12-unit protected allowance was expanded |
+| Function / trigger shutdown | Both deleted, inventories verified empty at **13:51:12 UTC**, well before the 17:50 shutdown deadline |
+| Authenticated final absence | At **13:51:48 UTC**, the restricted key authenticated GetNamespace and a complete empty dedicated-compartment listing; errors were not interpreted as absence |
+| Credential revocation | Dedicated trial API key deleted at **13:52:29 UTC**; subsequent administrator key inventory contains zero keys for the trial user; administrator key untouched |
+| Durable evidence | SQL operation, consumed exception, usage history and private recovery journal retained; no counter/slot reset |
+
+The two owner post-terminal reads are **not** silently inserted into SQL's finalized
+16-request cleanup counter. Their separate reservations and results are retained
+in the owner journal and included in the same 40-request overall cleanup ceiling.
+No further provider request was used to test the revoked key. Old local bootstrap
+configuration now references a revoked key and must not be treated as reusable.
+Dedicated IAM/compartment remnants and private-file retention remain owner closeout
+items under #15; no unrelated account resource was removed.
+
+Neon's post-shutdown API snapshot at 13:52:55 UTC was unchanged from preflight:
+`compute_time_seconds=1344`, `cpu_used_sec=0`, `data_transfer_bytes=616670`,
+`synthetic_storage_size=0`. The unchanged delayed counters do **not** mean this run
+was free of consumption. OCI's latest available complete daily billing window
+still predates this attempt; no contemporaneous billed after-value is claimed.
+The application/request journals establish bounded activity, not billed cost or
+remaining Functions allowance. Functions allowance remains unknown.
+
+### Final acceptance ledger and decision
+
+| Acceptance row | Verdict and actual evidence |
+| --- | --- |
+| Runtime | Partial: hosted Node 24 / Alchemy created a real OCI bucket after the initiating client exited; durable state was recovered by a separate local process |
+| Permissions | Restricted SQL and IAM checks passed; unauthenticated controls rejected; private bucket settings verified during owned recovery |
+| Preview | Passed exact signed proposal, credential checks and durable 202 admission, with explicit partial/no-hard-cap qualification |
+| Lifecycle | Failed before object upload/read/checksum; bucket creation alone does not satisfy the full journey |
+| Usage / warning | Inconclusive: no uploaded object, no fresh metrics and no persisted warning; absent data is not zero usage |
+| Controlled interruption | Not performed: the upload/observe prerequisite failed; schedule disablement for recovery is not counted as that proof |
+| Teardown | Owner recovery and authenticated absence passed within reserve; **hosted autonomous teardown is unproven** |
+| Outcome / allowance | Durable failed lifecycle, mandatory partial feasibility, early verified hosted shutdown, revoked trial key; provider billing deltas and Functions allowance remain unknown |
+
+**Partial verdict; no-go for rollout or another live attempt.** The experiment
+found a concrete provider integration defect and safely removed its resource with
+manual assistance. Fix #57 with failing-first SDK contract tests, preserving all
+recovery coverage and fail-closed validation. Complete/review #15 owner closeout.
+The one-use exception is consumed: merging a fix does not authorize another trial,
+reset the slot, replenish counters, or prove the remaining live acceptance rows.
+PR #50 remains draft for review of this partial evidence; #14 is not presented as
+a successful feasibility pass.
+
+### Evidence hygiene and final local checks
+
+A single bounded Neon log query covering 13:24–13:53 UTC returned 22 records, with
+no truncation or next page. A private comparison found no deployed secret, database
+password/URL, owner connection URL or Neon API key values in those records. This
+checks that returned window only, not all possible platform logs. Raw responses,
+credentials and resource identifiers remain outside Git. The worktree/index/history
+secret scan and `git diff --check` passed. No production behavior or recovery tests
+were changed in this evidence PR; the earlier full canonical check applies to the
+exact deployed source, with commit-time fast gates checking the final documents.
