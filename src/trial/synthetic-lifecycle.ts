@@ -16,6 +16,7 @@ interface Synthetic
     never
   > {}
 const Synthetic = Resource<Synthetic>("Berth.Probe");
+
 /**
  * Runs real Alchemy create, refresh/read and destroy against isolated memory.
  * State is per invocation; successful deletion is not a durable-backend proof.

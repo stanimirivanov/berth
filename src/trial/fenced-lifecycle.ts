@@ -16,6 +16,7 @@ interface Synthetic
     never
   > {}
 const Synthetic = Resource<Synthetic>("Berth.FencedProbe");
+
 /** Exercise the pinned real engine; echo provider has no remote side effects. */
 export async function lifecycle(
   state: StateService,

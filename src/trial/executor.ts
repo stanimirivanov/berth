@@ -27,6 +27,7 @@ export const timing = {
   invocationMs: 50000,
   deliveryMarginMs: 300000,
 } as const;
+
 /** Pure phase admission, evaluated again at every underlying dispatch. */
 export function nextPhase(
   phase: Phase,
@@ -50,6 +51,7 @@ export function nextPhase(
     return "cleanup";
   return phase;
 }
+
 /** Durable ledger request projection used only for reconciliation, never dispatch authorization. */
 interface RequestRecord {
   id: string;
@@ -84,6 +86,7 @@ export interface ExecutorOptions {
     },
   ) => ObjectSdk;
 }
+
 /**
  * One bounded scheduled step using real ledger fencing and the narrow providers.
  * Every callback is reserved before send. Unknown writes are never replayed or
@@ -123,6 +126,7 @@ export async function runExecutor(
     Math.max(0, deadline - clock()),
   );
   timer.unref();
+
   /** SQL is authoritative even after local clock checks; renewal never revives an expired owner. */
   async function guard(action: TrialAction) {
     const now = clock();
@@ -155,12 +159,14 @@ export async function runExecutor(
     )
       throw new BucketFailure("budget");
   }
+
   /** Re-read the persisted request journal under the captured generation. */
   const journal = () =>
     ledger.read(claim) as Promise<{
       attempts: AttemptRecord[];
       requests: RequestRecord[];
     }>;
+
   /** Stable open inspection/invocation attempts are resumed; each mutation gets one bounded attempt. */
   async function attempt(action: TrialAction) {
     const j = await journal();
@@ -177,6 +183,7 @@ export async function runExecutor(
     );
     return old?.id ?? (await ledger.begin(claim, randomUUID(), action));
   }
+
   const dispatcher: BudgetedDispatcher & {
     dispatch<T>(action: TrialAction, send: () => Promise<T>): Promise<T>;
   } = {
@@ -274,6 +281,7 @@ export async function runExecutor(
       namespace: snapshot.trial.namespace,
       region: snapshot.trial.region,
     };
+
     /** Reconcile only positively observed ownership or a deletion's authenticated absence. */
     async function reconcile() {
       const j = await journal();
@@ -377,6 +385,7 @@ export async function runExecutor(
       }
       snapshot = await store.access<ExecutionSnapshot>(claim, "snapshot");
     }
+
     await reconcile();
     const phase = nextPhase(
       snapshot.phase,

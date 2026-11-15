@@ -4,6 +4,7 @@ import { makeCheckpointHandler } from "./checkpoint-handler.js";
 import { runCheckpoint } from "./checkpoint-run.js";
 
 const boot = randomUUID();
+
 /** Checks both injected URLs and unused service credentials before any database connection. */
 export function checkpointDatabaseUrl(
   env: Record<string, string | undefined>,
@@ -34,6 +35,7 @@ export function checkpointDatabaseUrl(
   uri.searchParams.set("sslmode", "verify-full");
   return uri.href;
 }
+
 /** Owns one bounded connection per invocation; errors are discarded at HTTP boundary. */
 async function execute(idHash?: string) {
   const db = new Client({
@@ -66,6 +68,7 @@ async function execute(idHash?: string) {
     await db.end();
   }
 }
+
 /** Only Neon's attested scheduler mutates; bearer evidence is read-only. No OCI credentials. */
 export default makeCheckpointHandler({
   token: process.env.BERTH_TRIAL_TOKEN ?? "",

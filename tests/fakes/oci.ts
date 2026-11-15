@@ -15,6 +15,7 @@ export const intent: BucketIntent = {
   namespace: "fixture",
   region: "eu-frankfurt-1",
 };
+
 export function dispatcher() {
   const calls: BucketAction[] = [];
   return {
@@ -28,6 +29,7 @@ export function dispatcher() {
     },
   } satisfies BudgetedDispatcher & { calls: BucketAction[] };
 }
+
 export class FakeOci implements BucketSdk {
   endpoint = "";
   value: model.Bucket | undefined;

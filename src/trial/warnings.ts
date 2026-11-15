@@ -14,6 +14,7 @@ export const usageThreshold = {
   enforcement: "app" as const,
   providerHardCap: false,
 };
+
 /** Equality warns; unknown observations never manufacture zero or a warning. */
 export function thresholdWarning(metric: {
   status: string;
@@ -26,6 +27,7 @@ export function thresholdWarning(metric: {
     metric.value >= (usageThreshold.bytes * usageThreshold.warningPercent) / 100
   );
 }
+
 /** SQL owns cadence, fencing and warning dedup; no raw provider payload crosses this port. */
 export function usageStore(db: LedgerDatabase) {
   /** Fixed guarded commands; SQL exceptions remain private and are never automatically retried. */
@@ -51,6 +53,7 @@ export function usageStore(db: LedgerDatabase) {
       throw Error("Usage persistence unavailable");
     }
   }
+
   return {
     /** Set verified upload time once, before entering the observation phase. */
     uploaded: (c: LedgerClaim) => command(c, "uploaded"),
@@ -83,6 +86,7 @@ export function usageStore(db: LedgerDatabase) {
     },
   };
 }
+
 /** Collect only when SQL grants a due slot; each of the three requests has its own reservation. */
 export async function collectUsage(
   db: LedgerDatabase,

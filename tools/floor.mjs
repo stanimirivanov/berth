@@ -17,6 +17,7 @@ function titles(files) {
         ts.ScriptTarget.Latest,
         true,
       );
+
       /** Walk syntax rather than matching test-like text in fixture strings. @param {ts.Node} node */
       function visit(node) {
         if (
@@ -31,6 +32,7 @@ function titles(files) {
         }
         ts.forEachChild(node, visit);
       }
+
       visit(source);
     }
   return found;

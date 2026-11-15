@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { qualifyFunctions } from "../scripts/functions-headroom.js";
 import { makeTrialApi } from "../src/trial/api.js";
 import type { TrialIntent, TrialRecord } from "../src/trial/ledger.js";
 import { config, evidence, now } from "./fakes/admission.js";
 
 const token = "a".repeat(40);
+
 function fixture() {
   let headroom: unknown = evidence,
     credentials = true,
@@ -76,6 +78,7 @@ function fixture() {
     },
   };
 }
+
 function request(route: string, body: unknown = {}, auth = token) {
   return new Request(`https://trial.invalid/${route}`, {
     method: "POST",
@@ -86,6 +89,7 @@ function request(route: string, body: unknown = {}, auth = token) {
     body: JSON.stringify(body),
   });
 }
+
 test("authenticated preview is exact and read-only; submission reuses the previewed operation", async () => {
   const f = fixture();
   assert.equal(
@@ -340,4 +344,18 @@ test("prepared API previews bind one fixed operation and reject previews from an
     (await other.fetch(request("submit", { preview: preview.preview }))).status,
     400,
   );
+});
+
+test("offline Functions qualification cannot replace configured admission headroom", async () => {
+  const f = fixture();
+  f.headroom = qualifyFunctions(
+    {
+      checkedAt: now,
+      probe: { clientMs: 2252, handlerMs: 1547, unit: "milliseconds" },
+      history: { source: "client-log", complete: false, truncated: true },
+    },
+    now,
+  );
+  assert.equal((await f.handler.fetch(request("preview"))).status, 409);
+  assert.equal(f.starts, 0);
 });

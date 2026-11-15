@@ -255,6 +255,7 @@ async function privateDirectory(path: string) {
       "Recovery directory must be owner-only and outside the checkout",
     );
 }
+
 async function syncDirectory(path: string) {
   const file = await open(path, "r");
   try {
@@ -360,12 +361,14 @@ export async function runOciRecovery(
         (await journal.readFile("utf8")) !== text
       )
         throw new OciSetupError("Recovery journal changed during validation");
+
       async function append(event: Record<string, unknown>) {
         await journal.writeFile(
           `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`,
         );
         await journal.sync();
       }
+
       const result = await bootstrapOci(
         config,
         pem,

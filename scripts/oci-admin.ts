@@ -22,11 +22,13 @@ export interface AdminConfig {
   name: string;
   trialEmail: string;
 }
+
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new OciSetupError("Unexpected OCI response/configuration shape");
   return value as Record<string, unknown>;
 }
+
 function ocid(value: unknown, kind: string): string {
   if (
     typeof value !== "string" ||
@@ -39,6 +41,7 @@ function ocid(value: unknown, kind: string): string {
     );
   return value;
 }
+
 function regionFor(id: string) {
   const region = Object.values(Region).find(
     (entry) =>
@@ -50,6 +53,7 @@ function regionFor(id: string) {
     throw new OciSetupError("Select a known commercial OCI home region");
   return region;
 }
+
 export function parseAdminConfig(value: unknown): AdminConfig {
   const v = record(value);
   const required = [
@@ -93,6 +97,7 @@ export function parseAdminConfig(value: unknown): AdminConfig {
     );
   return v as unknown as AdminConfig;
 }
+
 export const capabilities = {
   canUseApiKeys: true,
   canUseAuthTokens: false,
@@ -107,6 +112,7 @@ const notificationExtension =
   "urn:ietf:params:scim:schemas:oracle:idcs:extension:user:User";
 const extension =
   "urn:ietf:params:scim:schemas:oracle:idcs:extension:capabilities:User";
+
 export function userCreationBody(config: AdminConfig) {
   return {
     schemas: [
@@ -125,12 +131,14 @@ export function userCreationBody(config: AdminConfig) {
     [extension]: capabilities,
   };
 }
+
 type Journal = (event: Record<string, unknown>) => Promise<void>;
 type TrialKey = {
   publicKey: string;
   fingerprint: string;
   privateKeyFile: string;
 };
+
 function scimId(value: unknown): string {
   if (typeof value !== "string" || !/^[a-zA-Z0-9-]{1,128}$/.test(value))
     throw new OciSetupError(
@@ -158,6 +166,7 @@ export function bootstrapOci(
   transport: Transport,
   recovery: Recovery,
 ): Promise<OciConfig | RecoveryPlan>;
+
 export async function bootstrapOci(
   config: AdminConfig,
   pem: string,
@@ -170,6 +179,7 @@ export async function bootstrapOci(
   parseAdminConfig(config);
   const signer = createOciSigner(config, pem, passphrase);
   const identity = `https://identity.${config.region}.oci.oraclecloud.com/20160918`;
+
   async function request(
     operation: string,
     url: string,
@@ -253,6 +263,7 @@ export async function bootstrapOci(
       );
     }
   }
+
   const tenancy = record(
     await request("GetTenancy", `${identity}/tenancies/${config.tenancyOcid}`),
   );

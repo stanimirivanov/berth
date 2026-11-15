@@ -34,6 +34,7 @@ export interface LivePorts {
   /** Local provider fake for SQL integration tests; production always uses signed transport. */
   sdk?: import("./executor.js").ExecutorOptions["sdk"];
 }
+
 /** Construct single-send transports; merely constructing a signer dispatches no requests. */
 export function liveTransports(
   e: ReturnType<typeof liveEnvironment>,
@@ -62,6 +63,7 @@ export function liveTransports(
     usage: monitoringTransport(e.region, e.compartment, signer, fetcher),
   };
 }
+
 /**
  * Execute one fixed admitted operation. Identity/target/window drift fails before
  * claims or provider dispatch; SQL remains the budget and ownership authority.
@@ -142,6 +144,7 @@ export async function executeLive(
     return first;
   });
 }
+
 /** One restricted connection and exact target/window check shared by admission and continuation. */
 async function withLiveDatabase<T>(
   e: ReturnType<typeof liveEnvironment>,

@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit && pnpm run typecheck:harness",
-    "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json && pnpm run lint:harness",
+    "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json && pnpm run lint:harness && pnpm run lint:spacing",
     "test": "pnpm run build && node --test dist/tests/*.test.js && pnpm run test:harness",
     "test:smoke": "pnpm run build && node --test dist/tests/runtime-smoke.test.js",
     "neon": "neon",
@@ -46,7 +46,8 @@
     "test:usage-db": "pnpm run build && node --test dist/tests/integration/usage.test.js",
     "test:recovery-db": "pnpm run build && node --test --test-concurrency=1 dist/tests/integration/recovery.test.js dist/tests/integration/security.test.js",
     "build:live-executor": "pnpm run build && node dist/scripts/build-live-executor.js",
-    "test:admission-db": "pnpm run build && node --test dist/tests/integration/admission.test.js"
+    "test:admission-db": "pnpm run build && node --test dist/tests/integration/admission.test.js",
+    "lint:spacing": "eslint scripts tests src tools neon.ts eslint.config.mjs"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
@@ -58,13 +59,17 @@
   "devDependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.86",
     "@alchemy.run/sql": "2.0.0-beta.86",
+    "@babel/core": "8.1.2",
+    "@babel/eslint-parser": "8.1.2",
     "@biomejs/biome": "2.6.7",
     "@effect/sql-pg": "4.1.4",
     "@neon/config-runtime": "1.12.3",
+    "@stylistic/eslint-plugin": "6.0.0",
     "@types/node": "24.19.2",
     "@types/node-fetch": "2.6.13",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
+    "eslint": "10.15.0",
     "neon": "9.4.0",
     "pg": "8.23.1",
     "typescript": "7.0.2",

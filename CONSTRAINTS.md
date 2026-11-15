@@ -6,6 +6,7 @@ strength need explicit review in a dedicated issue/PR; never add a silent bypass
 | Control | Required result | Sensor |
 | --- | --- | --- |
 | Formatting and types | Zero diagnostics; strict application and checkJs harness projects | `pnpm lint`, `pnpm typecheck` |
+| Function spacing | Blank lines before/after function declarations and before their leading documentation | `pnpm lint:spacing` |
 | Trial/tool contracts | Attached prose JSDoc/TSDoc on public declarations, types, methods and named helpers of at least six lines | `pnpm harness` |
 | Runtime ownership | Closed module/package imports; no hosted/admin coupling, CommonJS/dynamic loaders or runtime cycles | `pnpm harness` |
 | Verification integrity | No suppression comments or disabled/focused tests; baseline literal test-name counts preserved | `pnpm harness`, `pnpm floor` |

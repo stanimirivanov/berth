@@ -33,10 +33,12 @@ export interface ProbeRecord {
   pending?: boolean;
   receipt?: ProbeReceipt;
 }
+
 /** Exactly 1 MiB, each byte is its offset modulo 256; returns a fresh buffer. */
 export function probeContent(): Uint8Array {
   return Uint8Array.from({ length: 1024 * 1024 }, (_, index) => index % 256);
 }
+
 /** Produce the intent to persist; no cloud access or caller-defined payload. */
 export function probeIntent(bucket: BucketIntent): ProbeIntent {
   return {
@@ -45,6 +47,7 @@ export function probeIntent(bucket: BucketIntent): ProbeIntent {
     digest: createHash("sha256").update(probeContent()).digest("hex"),
   };
 }
+
 /**
  * Bounded fixed-object lifecycle. Journal and dispatcher must be durable/fenced;
  * a pending absent upload is never replayed. All failures stop for reconciliation.
@@ -68,6 +71,7 @@ export function makeTrialObject(
       !known.etag)
   )
     throw new BucketFailure("ownership");
+
   /** Complete authenticated inventories; absence never comes from a failed GET. */
   async function inventory(cleanup: boolean, checkBucket = true) {
     if (checkBucket && !(await bucket.read(ownedBucket, cleanup)))
@@ -98,6 +102,7 @@ export function makeTrialObject(
       throw new BucketFailure("configuration");
     return listing.objects.length === 1;
   }
+
   /** Metadata is necessary, never sufficient: the stream checksum is also required. */
   function validate(o: ObjectObservation, etag?: string) {
     if (
@@ -120,6 +125,7 @@ export function makeTrialObject(
     )
       throw new BucketFailure("configuration");
   }
+
   /** Consume at most 1 MiB; cancel both Node and Web streams on any failure. */
   async function observe(cleanup: boolean) {
     if (!pending && !known) throw new BucketFailure("identity-unrecorded");
@@ -171,6 +177,7 @@ export function makeTrialObject(
     known = receipt;
     return receipt;
   }
+
   /** Prevent raw journal/stream exceptions from escaping into receipts or logs. */
   async function safe<T>(work: () => Promise<T>): Promise<T> {
     try {
@@ -181,6 +188,7 @@ export function makeTrialObject(
         : new BucketFailure("unknown-outcome");
     }
   }
+
   return {
     /** Persist before create-only PUT; repeated or pending attempts only observe. */
     upload: () =>

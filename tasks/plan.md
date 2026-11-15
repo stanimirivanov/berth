@@ -121,3 +121,13 @@ verdict; #14 stays blocked until these prerequisites and current owner gates pas
 Issue #47 connects signed admission to the prepared live executor. Follow
 `docs/trial/hosted-admission.md` for fresh owner gates, activation and shutdown.
 The next operational step is #14; local integration is not live acceptance.
+
+## Free Functions evidence qualification
+
+[#52](https://github.com/stanimirivanov/berth/issues/52) records the completed
+headroom investigation in [functions-headroom.md](../docs/trial/functions-headroom.md).
+Its current-contract verdict is no-go; it includes an explicitly inactive proposal
+for an owner-reviewed uncertain one-trial mode. Do not confuse completion of that
+investigation with completion of #14, or fill missing live headroom fields with
+forward estimates. PR #50 remains draft pending supported evidence or an explicit
+contract/implementation revision. No further owner Console search is requested.

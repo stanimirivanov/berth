@@ -49,6 +49,7 @@ interface Dependencies {
   sleep?: (ms: number) => Promise<void>;
   cli?: (args: string[]) => Promise<string>;
 }
+
 async function save(path: string, value: unknown) {
   const handle = await open(path, "wx", 0o600);
   try {
@@ -60,6 +61,7 @@ async function save(path: string, value: unknown) {
     await handle.close();
   }
 }
+
 async function createOutput(path: string) {
   if (!isAbsolute(path) || resolve(path) !== path)
     throw new Error("Use a normalized absolute output directory");
@@ -77,6 +79,7 @@ async function createOutput(path: string) {
     throw new Error("Use an owner-only private parent outside the checkout");
   await mkdir(path, { mode: 0o700 }); // Exclusive: never reuse a previous diagnostic directory.
 }
+
 async function boundedBody(response: Response, limit: number) {
   const reader = response.body?.getReader();
   const chunks: Uint8Array[] = [];
@@ -107,6 +110,7 @@ async function boundedBody(response: Response, limit: number) {
     reader?.releaseLock();
   }
 }
+
 function operation(config: OciConfig, url: string, method: string | undefined) {
   const storage = `https://objectstorage.${config.region}.oraclecloud.com`;
   if (method === "GET" && url === `${storage}/n/`) return "GetNamespace";
@@ -116,7 +120,9 @@ function operation(config: OciConfig, url: string, method: string | undefined) {
   if (method === "POST" && url === metrics) return "SummarizeMetricsData"; // Read-only query, despite HTTP POST.
   throw new Error("Unexpected operation blocked");
 }
+
 const cliExec = promisify(execFile);
+
 async function executeCli(args: string[]) {
   const { stdout } = await cliExec("oci", args, {
     timeout: 20000,
@@ -375,6 +381,7 @@ export async function runDoctor(
   await save(join(output, "report.json"), report);
   return report;
 }
+
 if (
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)

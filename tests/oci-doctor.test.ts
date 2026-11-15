@@ -21,6 +21,7 @@ const fingerprint = createHash("md5")
   .digest("hex")
   .match(/../g)
   ?.join(":");
+
 async function fixture(
   fn: (f: {
     args: string[];
@@ -63,6 +64,7 @@ async function fixture(
     await rm(dir, { recursive: true, force: true });
   }
 }
+
 const good = async (url: string, init: RequestInit) => {
   assert.ok(init.headers instanceof Headers);
   assert.ok(init.headers.has("authorization"));

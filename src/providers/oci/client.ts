@@ -99,6 +99,7 @@ export class BucketFailure extends Error {
     super(code);
   }
 }
+
 /** Exact private Standard proposal; absence of a KMS key selects Oracle-managed encryption. */
 export function createProposal(i: BucketIntent): requests.CreateBucketRequest {
   return {
@@ -119,6 +120,7 @@ export function createProposal(i: BucketIntent): requests.CreateBucketRequest {
     },
   };
 }
+
 /** All network entry points pass through a mandatory dispatcher and per-request no-retry configuration. */
 export function bucketClient(
   sdk: BucketSdk,
@@ -206,6 +208,7 @@ export function bucketClient(
     },
   };
 }
+
 /** Budgeted client port shared with the pure lifecycle owner. */
 export type BucketClient = ReturnType<typeof bucketClient>;
 /** Pinned SDK's observed bucket shape, never a credential container. */
@@ -257,6 +260,7 @@ function requestSender(
     throw new BucketFailure("invalid-intent");
   const endpoint = `https://objectstorage.${homeRegion}.oraclecloud.com`;
   sdk.endpoint = endpoint;
+
   /** Catch only after the dispatcher has observed the original transport result for its journal. */
   async function send<T>(
     action: BucketAction,
@@ -294,6 +298,7 @@ function requestSender(
       );
     }
   }
+
   return send;
 }
 
@@ -342,6 +347,7 @@ export interface ObjectSdk extends BucketSdk {
   /** Delete only at an inspected revision, never by version ID. */
   deleteObject(r: requests.DeleteObjectRequest): Promise<unknown>;
 }
+
 /** Budgeted object adapter using the same explicit endpoint and safe error contract. */
 export function objectClient(
   sdk: ObjectSdk,
@@ -421,6 +427,7 @@ export function objectClient(
     },
   };
 }
+
 /** Lifecycle port carries no credentials and has no overwrite operation. */
 export type ObjectClient = ReturnType<typeof objectClient>;
 

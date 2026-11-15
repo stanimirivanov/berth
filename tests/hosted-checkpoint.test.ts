@@ -3,6 +3,7 @@ import test from "node:test";
 import { makeCheckpointHandler } from "../src/trial/checkpoint-handler.js";
 
 const token = "x".repeat(32);
+
 function scheduled(id = "delivery-1") {
   return new Request("https://test/scheduled", {
     method: "POST",
@@ -15,6 +16,7 @@ function scheduled(id = "delivery-1") {
     }),
   });
 }
+
 test("checkpoint admits only bounded attested schedules and authenticated evidence", async () => {
   let work = 0;
   let reads = 0;

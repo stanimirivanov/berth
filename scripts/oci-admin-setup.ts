@@ -26,6 +26,7 @@ async function save(path: string, text: string) {
     await file.close();
   }
 }
+
 async function syncDirectory(path: string) {
   const directory = await open(path, "r");
   try {
@@ -34,6 +35,7 @@ async function syncDirectory(path: string) {
     await directory.close();
   }
 }
+
 async function createOutput(path: string) {
   if (!isAbsolute(path) || resolve(path) !== path)
     throw new OciSetupError(
@@ -159,6 +161,7 @@ export async function runOciAdmin(
       );
       await journal.sync();
     }
+
     await append({
       phase: "start",
       name: config.name,
@@ -204,6 +207,7 @@ export async function runOciAdmin(
     await journal.close();
   }
 }
+
 if (
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)

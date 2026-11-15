@@ -12,6 +12,7 @@ import { FakeObjects } from "../fakes/oci.js";
 
 const digest =
   "fbbab289f7f94b25736c58be46a994c441fd02552cc6022352e3d86d2fab7c83";
+
 async function fixture(work: (owner: Client, db: Client) => Promise<void>) {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
   assert.ok(Number.isInteger(port) && port > 0 && port < 65536);
@@ -51,6 +52,7 @@ async function fixture(work: (owner: Client, db: Client) => Promise<void>) {
     await owner.end();
   }
 }
+
 async function start(db: Client, monitoringLimit = 20) {
   return makeLedger(db).start({
     operation: randomUUID(),
@@ -62,6 +64,7 @@ async function start(db: Client, monitoringLimit = 20) {
     neonLimit: 30,
   });
 }
+
 function delivery(n: number) {
   return createHash("sha256").update(String(n)).digest("hex");
 }

@@ -58,6 +58,7 @@ test("native Postgres state qualification under the trial permission boundary", 
   let roleOwned = false;
   let schemaOwned = false;
   const request = { stack: "qualification", stage: "local", fqn: "probe" };
+
   /** Each store owns a separate pool and lease; all scopes close before fixture teardown. */
   async function open() {
     const scope = await Effect.runPromise(Scope.make());
@@ -85,6 +86,7 @@ test("native Postgres state qualification under the trial permission boundary", 
       close: () => Effect.runPromise(Scope.close(scope, Exit.void)),
     };
   }
+
   try {
     await admin.connect();
     // Refuse to adopt an existing fixture. No IF NOT EXISTS on creation.

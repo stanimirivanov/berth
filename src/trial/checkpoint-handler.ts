@@ -7,6 +7,7 @@ interface Options {
   run: (idHash: string) => Promise<unknown>;
   evidence: () => Promise<unknown>;
 }
+
 /** Read a bounded envelope without buffering an attacker-controlled stream. */
 async function body(request: Request, limit: number) {
   const reader = request.body?.getReader();
@@ -30,6 +31,7 @@ async function body(request: Request, limit: number) {
     reader?.releaseLock();
   }
 }
+
 /** Exposes evidence and attested scheduled work only; expiry precedes all database access. */
 export function makeCheckpointHandler(options: Options) {
   return {

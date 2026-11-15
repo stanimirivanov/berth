@@ -126,6 +126,7 @@ export function analyze(files) {
         "Register the new runtime owner and its allowed imports with tests.",
       );
     graph.set(file, []);
+
     /** Resolve reviewed module forms; unsupported dynamic targets fail closed.
      * @param {ts.Node} node @param {ts.Node|undefined} target @param {boolean} typeOnly
      */
@@ -300,6 +301,7 @@ export function analyze(files) {
           );
       }
     }
+
     /** Visit declaration contracts, import forms and disabled-test syntax.
      * @param {ts.Node} node
      */
@@ -432,8 +434,10 @@ export function analyze(files) {
       }
       ts.forEachChild(node, visit);
     }
+
     visit(source);
     const seenComments = new Set();
+
     /** Inspect parser-aligned trivia, including closing tokens, without rescanning template text.
      * @param {ts.Node} node
      */
@@ -461,10 +465,12 @@ export function analyze(files) {
       }
       for (const child of node.getChildren(source)) comments(child);
     }
+
     comments(source);
   }
   const active = new Set();
   const done = new Set();
+
   /** Follow runtime edges only; an active-path revisit is a dependency cycle.
    * @param {string} file
    */
@@ -485,6 +491,7 @@ export function analyze(files) {
     active.delete(file);
     done.add(file);
   }
+
   for (const file of graph.keys()) walk(file);
   return errors;
 }

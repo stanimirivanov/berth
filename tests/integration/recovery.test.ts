@@ -18,6 +18,7 @@ assert.ok(
 );
 const operation = "00000000-0000-4000-8000-000000000013";
 type Point = { label: string; occurrence: number };
+
 /** Each seed owns fresh schemas and a provider outside all executor process lifetimes. */
 async function fixture(
   work: (f: Awaited<ReturnType<typeof setup>>) => Promise<void>,
@@ -31,6 +32,7 @@ async function fixture(
     await f.close();
   }
 }
+
 async function setup(loss?: string, delay = false) {
   const owner = new Client({
     host: "127.0.0.1",
@@ -54,6 +56,7 @@ async function setup(loss?: string, delay = false) {
   const cloud = await cloudService(owner, loss, delay),
     dir = await mkdtemp(join(tmpdir(), "berth-checkpoint-"));
   let serial = 0;
+
   async function launch(
     fault?: Point,
     cancel = false,
@@ -120,10 +123,12 @@ async function setup(loss?: string, delay = false) {
     });
     return { done };
   }
+
   const expire = () =>
     owner.query(
       "UPDATE berth_ledger.trials SET lease_until=clock_timestamp()-interval '1 second'",
     );
+
   async function evidence() {
     assert.deepEqual(cloud.violations, []);
     const row = (
@@ -180,6 +185,7 @@ async function setup(loss?: string, delay = false) {
     );
     return row;
   }
+
   async function converge() {
     // Stop when safe terminal or uncertainty cannot be resolved; no unlimited retry runner.
     for (let n = 0; n < 5; n++) {
@@ -199,6 +205,7 @@ async function setup(loss?: string, delay = false) {
     }
     return evidence();
   }
+
   return {
     owner,
     cloud,

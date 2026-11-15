@@ -119,6 +119,7 @@ test("public Alchemy lifecycle plans without writes and destroys using only clea
     intent.region,
   );
   const state: Parameters<typeof inMemoryState>[0] = {};
+
   async function execute(mode: "plan" | "apply" | "destroy") {
     const stack: StackSpec = {
       name: "bucket-test",
@@ -148,6 +149,7 @@ test("public Alchemy lifecycle plans without writes and destroys using only clea
       ),
     );
   }
+
   await execute("plan");
   assert.equal(fake.creates, 0);
   await execute("apply");

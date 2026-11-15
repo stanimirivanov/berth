@@ -41,6 +41,7 @@ export function executorEnvironment(env: Record<string, string | undefined>) {
     token: env.BERTH_TRIAL_TOKEN ?? "",
   };
 }
+
 /** One bounded restricted connection; runtime never installs schema or reads owner files. */
 export async function execute(
   e: ReturnType<typeof executorEnvironment>,
@@ -91,6 +92,7 @@ export async function execute(
     await db.end();
   }
 }
+
 /** Hosted synthetic proof shares the real executor/ledger/Alchemy path, with no OCI transport. */
 export default {
   /** Expired requests return before environment credentials are parsed or a connection is created. */

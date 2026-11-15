@@ -28,6 +28,7 @@ export function restrictedConnection(env: Record<string, string | undefined>) {
   }
   return connection;
 }
+
 /**
  * Fail closed before ledger access if the dedicated login has gained administrator,
  * ownership, role-switching, schema creation or protected-table privileges. This is

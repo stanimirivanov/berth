@@ -38,6 +38,7 @@ export interface TrialApiOptions {
 }
 const uuid =
   /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+
 /** Read a bounded JSON object; cancel oversized input without buffering the rest. */
 async function envelope(request: Request) {
   if (request.headers.get("content-type") !== "application/json") throw Error();
@@ -65,6 +66,7 @@ async function envelope(request: Request) {
     reader?.releaseLock();
   }
 }
+
 /** Constant-length digest comparison also bounds token processing before authentication. */
 function equal(a: string, b: string) {
   return timingSafeEqual(
@@ -72,6 +74,7 @@ function equal(a: string, b: string) {
     createHash("sha256").update(b).digest(),
   );
 }
+
 /**
  * Fixed private POST API: signed read-only preview, atomic ledger submission and
  * owned cleanup admission plus read-only usage history. No cloud executor is
@@ -105,6 +108,7 @@ export function makeTrialApi(options: TrialApiOptions) {
         "x-content-type-options": "nosniff",
       },
     });
+
   /** Preview is a signed immutable proposal, persisted atomically only on accepted submission. */
   function decode(value: unknown, now: number) {
     if (typeof value !== "string" || value.length > 1024) throw Error();
@@ -132,6 +136,7 @@ export function makeTrialApi(options: TrialApiOptions) {
       throw Error();
     return p.operation;
   }
+
   return {
     /** Authentication precedes body parsing or any port call; all failures have fixed diagnostics. */
     async fetch(request: Request): Promise<Response> {

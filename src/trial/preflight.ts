@@ -20,6 +20,7 @@ export interface Headroom {
   neonComputeSeconds: number;
   measuredComputeSeconds: number;
 }
+
 /** Fail closed on unsupported target/configuration before admission can be constructed. */
 export function validateConfiguration(c: TrialConfiguration) {
   if (
@@ -36,6 +37,7 @@ export function validateConfiguration(c: TrialConfiguration) {
   )
     throw Error("Invalid trial configuration");
 }
+
 /** Pure creation gate. Cleanup deliberately does not call this gate. Values are never echoed. */
 export function preflight(
   c: TrialConfiguration,
@@ -73,6 +75,7 @@ export function preflight(
     return ["headroom-insufficient-or-unmeasured"];
   return [];
 }
+
 /** Shared runtime/deployment projection of the authoritative ledger's four-hour window. */
 export function trialWindow(started: string, expires: string) {
   const start = Date.parse(started),
@@ -89,6 +92,7 @@ export function trialWindow(started: string, expires: string) {
     deploymentExpiresAt: new Date(end).toISOString(),
   };
 }
+
 /** Exact non-secret proposal; markers are generated atomically by the ledger on submission. */
 export function proposal(c: TrialConfiguration, operation: string) {
   return {
