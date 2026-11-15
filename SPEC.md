@@ -35,8 +35,28 @@ Use a create-only precondition for the object. Inspect marker and content agains
 - One active trial, one bucket, one 1 MiB object. No automatic adoption of pre-existing names.
 - Maximum three attempts per action with bounded backoff and a 200-request Object Storage budget: 160 for setup/probes/permission tests/lifecycle and 40 exclusively for cleanup/reconciliation/absence verification. Atomically reserve both attempt and request allowance in Postgres before every dispatch; uncertain dispatches remain spent. Disable automatic SDK/transport retries or reserve every underlying request, including pagination. No dispatch if reservation fails. Monitoring calls and Neon invocations need separate measured budgets; the 200-request count does not cover those services. Exhaustion produces an explicit recovery report, not an infinite loop.
 - Four-hour cloud-work window from persisted start time. Proposed scheduler cadence: 15 minutes; metrics are due hourly. Stop starting create/upload operations after minute 30. Start cleanup by hour three, or earlier on failure, leaving one hour for bounded reconciliation and deletion. The metric window ends at cleanup start even if fewer than three observations arrived; missing data is inconclusive. Before enabling mutations, show that measured invocation duration, bounded backoff and trigger delay fit this schedule with margin. No provider delivery deadline is assumed; excessive delay or unresolved calls produce needs-reconciliation at hour four, not success. Do not restart cloud work on late or duplicate triggers.
-- Owner-provided eligibility/headroom check at most 24 hours old: account status, home region, aggregate storage, month-to-date requests, applicable transfer allowance, and Neon usage. Reserve at least 10 MiB storage and 200 OCI requests. Estimate Neon consumption from a measured no-cloud-write probe before mutation. Unknown headroom blocks creation, not owned-resource cleanup.
+- Owner-provided eligibility/headroom check at most 24 hours old: account status, home region, aggregate storage, month-to-date requests, applicable transfer allowance, and Neon usage. Reserve at least 10 MiB storage and 200 OCI requests. Estimate Neon consumption from a measured no-cloud-write probe before mutation. Unknown headroom blocks creation, not owned-resource cleanup, except for the explicit one-trial Functions exception below.
 - Compartment metrics provide partial coverage. The dated owner check is not a guarantee against concurrent consumption elsewhere in the account. No provider-enforced spending cap is claimed.
+
+## Approved one-trial Functions exception (issue #55)
+
+The owner accepted this exception on 2026-11-15: one four-hour OCI trial on the
+existing Neon Free project may proceed with unknown remaining Functions allowance.
+Require exclusive project use, dated Free-plan/other-service usage and IAM evidence,
+explicit acknowledgement of unknown consumption and partial verdict, the separately
+labeled 6,000-capacity-second forward scenario, and owner administrative shutdown by
+expiry + 15 minutes. Quota exhaustion may prevent hosted cleanup and require manual
+owned-resource recovery. All resource, request, ownership and cleanup bounds remain.
+A durable owner-prepared singleton binds the authorization to one operation/window;
+it remains consumed after failure or success. No invented numeric Functions quota,
+paid upgrade, renewed window or automatic reset is allowed. Normal admission remains
+fail-closed. This run cannot pass before/after Functions allowance acceptance and
+must retain an overall partial verdict independently of lifecycle outcome.
+
+Implementation and precise preparation/shutdown steps are in
+[the exception runbook](docs/trial/free-functions-exception.md). The trial owner owns
+closure under #14; expiry ends cloud work and the consumed authorization is retained
+for audit. No schema installation, deployment or live activation occurs in this PR.
 
 ## Acceptance and verification
 

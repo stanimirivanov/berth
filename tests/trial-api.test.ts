@@ -7,7 +7,11 @@ import { config, evidence, now } from "./fakes/admission.js";
 
 const token = "a".repeat(40);
 
-function fixture() {
+function fixture(preparedWindow?: {
+  operation: string;
+  startedAt: number;
+  expiresAt: number;
+}) {
   let headroom: unknown = evidence,
     credentials = true,
     starts = 0,
@@ -19,7 +23,10 @@ function fixture() {
   const handler = makeTrialApi({
     token,
     previewKey: "b".repeat(40),
-    configuration: config,
+    configuration: preparedWindow ? { ...config, neonLimit: 64 } : config,
+    ...(preparedWindow
+      ? { operation: preparedWindow.operation, preparedWindow }
+      : {}),
     now: () => time,
     headroom: async () => headroom,
     verifyCredentials: async () => {
@@ -358,4 +365,120 @@ test("offline Functions qualification cannot replace configured admission headro
   );
   assert.equal((await f.handler.fetch(request("preview"))).status, 409);
   assert.equal(f.starts, 0);
+});
+
+test("exception preview and submit disclose partial feasibility without invented quota", async () => {
+  const prepared = {
+    operation: "00000000-0000-4000-8000-000000000055",
+    startedAt: now,
+    expiresAt: now + 14400000,
+  };
+  const f = fixture(prepared);
+  const {
+    neonInvocations: _i,
+    neonComputeSeconds: _c,
+    measuredComputeSeconds: _m,
+    ...other
+  } = evidence;
+  f.headroom = {
+    ...other,
+    functionsMode: "free-functions-one-trial",
+    functionsException: {
+      ...prepared,
+      unknownAllowanceAccepted: true,
+      partialVerdictAccepted: true,
+      exclusiveProjectUse: true,
+      manualRecoveryReady: true,
+      otherServicesEvidence: "owner-review",
+      shutdownBy: prepared.expiresAt + 900000,
+      probeClientMs: 2252,
+      scenario: "64x60-plus36x60-v1",
+    },
+  };
+  const preview = await f.handler.fetch(request("preview"));
+  assert.equal(preview.status, 200);
+  const body = await preview.json();
+  assert.equal(body.feasibility.verdict, "partial");
+  assert.equal(body.feasibility.functionsAllowance, "unknown");
+  assert.equal(body.proposal.budgets.neonInvocations, 64);
+  assert.equal(body.feasibility.scenarioCapacitySeconds, 6000);
+  const submitted = await f.handler.fetch(
+    request("submit", { preview: body.preview }),
+  );
+  assert.equal(submitted.status, 202);
+  assert.equal((await submitted.json()).feasibility.verdict, "partial");
+  assert.equal(f.starts, 1);
+  f.headroom = null;
+  assert.equal(
+    (
+      await f.handler.fetch(
+        request("cleanup", { operation: prepared.operation }),
+      )
+    ).status,
+    202,
+  );
+});
+
+test("live exception refuses deployment without durable migration qualification", async () => {
+  const { liveAdmissionApi } = await import("../src/trial/live-admission.js");
+  const startedAt = Date.now() - 1000,
+    expiresAt = startedAt + 14400000;
+  const e = {
+    ...config,
+    neonLimit: 64,
+    operation: "00000000-0000-4000-8000-000000000055",
+    startedAt,
+    expiresAt,
+    tenancy: "fixture",
+    user: "fixture",
+    fingerprint: "fixture",
+    token,
+    previewKey: "b".repeat(40),
+    privateKey: "unused",
+    connection: "unused",
+  };
+  const {
+    neonInvocations: _i,
+    neonComputeSeconds: _c,
+    measuredComputeSeconds: _m,
+    ...other
+  } = evidence;
+  const input = {
+    ...other,
+    checkedAt: Date.now(),
+    iamCheckedAt: Date.now(),
+    iamReviewed: true,
+    functionsMode: "free-functions-one-trial",
+    functionsException: {
+      operation: e.operation,
+      startedAt,
+      expiresAt,
+      unknownAllowanceAccepted: true,
+      partialVerdictAccepted: true,
+      exclusiveProjectUse: true,
+      manualRecoveryReady: true,
+      otherServicesEvidence: "owner-review",
+      shutdownBy: expiresAt + 900000,
+      probeClientMs: 2252,
+      scenario: "64x60-plus36x60-v1",
+    },
+  };
+  const api = liveAdmissionApi(
+    {
+      query: async () => ({
+        rows: [
+          {
+            result: {
+              admitted: false,
+              verifiedAt: Date.now(),
+              evidence: input,
+            },
+          },
+        ],
+      }),
+    },
+    e,
+    async () => true,
+  );
+  assert.equal((await api.fetch(request("preview"))).status, 409);
 });

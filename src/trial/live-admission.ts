@@ -123,6 +123,7 @@ export function liveAdmissionApi(
     token: e.token,
     previewKey: e.previewKey,
     operation: e.operation,
+    preparedWindow: e,
     configuration,
     headroom: async () => {
       const status = await admissionStatus(db, e),
@@ -130,14 +131,26 @@ export function liveAdmissionApi(
           iamReviewed?: boolean;
           iamCheckedAt?: number;
           checkedAt?: number;
+          functionsMode?: string;
         };
+      if (evidence?.functionsMode === "free-functions-one-trial") {
+        const qualification = (await executorStore(db).report(e.operation))
+          .feasibility;
+        if (
+          qualification?.mode !== "free-functions-one-trial" ||
+          qualification.verdict !== "partial" ||
+          qualification.functionsAllowance !== "unknown" ||
+          qualification.shutdownBy !== e.expiresAt + 900000
+        )
+          return null;
+      }
       const now = Date.now();
       if (
         evidence?.iamReviewed !== true ||
         !Number.isFinite(evidence.iamCheckedAt) ||
         (evidence.iamCheckedAt ?? Infinity) > now ||
         now - (evidence.iamCheckedAt ?? 0) > 86400000 ||
-        preflight(configuration, evidence, now).length ||
+        preflight(configuration, evidence, now, e).length ||
         (!status.admitted &&
           [evidence.checkedAt, evidence.iamCheckedAt].some(
             (at) =>

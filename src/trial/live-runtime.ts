@@ -99,12 +99,18 @@ export async function executeLive(
     // meter_http atomically persisted the cleanup flag with its single control charge.
     if (action === "cleanup")
       return { operation: e.operation, status: "cleanup-requested" };
-    if (action === "usage") return await usageStore(db).report(e.operation);
+    if (action === "usage") {
+      const usage = await usageStore(db).report(e.operation);
+      return snapshot.feasibility
+        ? { usage, feasibility: snapshot.feasibility }
+        : usage;
+    }
     if (action === "evidence")
       return {
         operation: e.operation,
         phase: snapshot.phase,
         status: trial.outcome,
+        ...(snapshot.feasibility ? { feasibility: snapshot.feasibility } : {}),
         reason: snapshot.reason,
         objectRemoved: snapshot.object_removed,
         startedAt: trial.started_at,

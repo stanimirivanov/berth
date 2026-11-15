@@ -30,6 +30,7 @@ test("prepared admission refuses mutations, charges credential requests, admits 
       "002_executor",
       "003_usage",
       "004_admission",
+      "005_functions_exception",
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
     const operation = randomUUID(),
@@ -367,6 +368,7 @@ test("one hosted delivery creates and uploads under one deadline and replay does
       "002_executor",
       "003_usage",
       "004_admission",
+      "005_functions_exception",
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
     const { FakeObjects } = await import("../fakes/oci.js"),
@@ -498,6 +500,7 @@ async function reviewedAdmission(
       "002_executor",
       "003_usage",
       "004_admission",
+      "005_functions_exception",
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
     const operation = randomUUID(),
@@ -685,4 +688,269 @@ test("failure and creation cutoff admit protected invocation only into durable c
       await assert.rejects(ledger.begin(claim, randomUUID(), "put_object"));
     });
   }
+});
+
+test("Free exception is owner-prepared once, preserves gates and durably reports partial after success", async () => {
+  await reviewedAdmission(async (owner, db, _prior, original) => {
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='failed' WHERE operation=$1",
+      [_prior],
+    );
+    const operation = randomUUID(),
+      startedAt = Date.now() - 1000,
+      expiresAt = startedAt + 14400000;
+    const binding = { ...original, neonLimit: 64 };
+    const evidence = {
+      checkedAt: Date.now(),
+      iamCheckedAt: Date.now(),
+      iamReviewed: true,
+      accountType: "always-free",
+      homeRegion: original.region,
+      neonFree: true,
+      storageBytes: 10485760,
+      objectRequests: 200,
+      transferBytes: 1048576,
+      monitoringRequests: 20,
+      functionsMode: "free-functions-one-trial",
+      functionsException: {
+        operation,
+        startedAt,
+        expiresAt,
+        unknownAllowanceAccepted: true,
+        partialVerdictAccepted: true,
+        exclusiveProjectUse: true,
+        manualRecoveryReady: true,
+        otherServicesEvidence: "review-2026-11-15",
+        shutdownBy: expiresAt + 900000,
+        probeClientMs: 2252,
+        scenario: "64x60-plus36x60-v1",
+      },
+    };
+    const args = [
+      operation,
+      new Date(startedAt).toISOString(),
+      JSON.stringify(binding),
+      JSON.stringify(evidence),
+    ];
+    await assert.rejects(
+      db.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+    );
+    for (const change of [
+      { neonInvocations: 1000 },
+      { neonComputeSeconds: 6000 },
+      { measuredComputeSeconds: 6000 },
+      { storageBytes: 0 },
+      { objectRequests: 199 },
+      { transferBytes: 0 },
+      { monitoringRequests: 0 },
+      { neonFree: false },
+      { accountType: "paid" },
+      { iamReviewed: false },
+      { checkedAt: Date.now() - 86340000 },
+      {
+        functionsException: {
+          ...evidence.functionsException,
+          unknownAllowanceAccepted: false,
+        },
+      },
+      {
+        functionsException: {
+          ...evidence.functionsException,
+          scenario: "invented",
+        },
+      },
+      {
+        functionsException: {
+          ...evidence.functionsException,
+          operation: randomUUID(),
+        },
+      },
+    ])
+      await assert.rejects(
+        owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+          ...args.slice(0, 3),
+          JSON.stringify({ ...evidence, ...change }),
+        ]),
+      );
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+        operation,
+        args[1],
+        JSON.stringify({ ...binding, neonLimit: 65 }),
+        args[3],
+      ]),
+    );
+    const competingOwner = new Client({
+      host: "127.0.0.1",
+      port: Number(process.env.BERTH_TEST_POSTGRES_PORT),
+      database: "neondb",
+      user: "neondb_owner",
+      password: "berth-test-only",
+    });
+    await competingOwner.connect();
+    try {
+      const races = await Promise.allSettled([
+        owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+        competingOwner.query(
+          "SELECT berth_executor.prepare($1,$2,$3,$4)",
+          args,
+        ),
+      ]);
+      assert.equal(
+        races.filter((result) => result.status === "fulfilled").length,
+        1,
+      );
+      assert.equal(
+        (
+          await owner.query(
+            "SELECT count(*) FROM berth_executor.functions_exception",
+          )
+        ).rows[0].count,
+        "1",
+      );
+    } finally {
+      await competingOwner.end();
+    }
+
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+    );
+    const second = randomUUID();
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+        second,
+        args[1],
+        args[2],
+        JSON.stringify({
+          ...evidence,
+          functionsException: {
+            ...evidence.functionsException,
+            operation: second,
+          },
+        }),
+      ]),
+    );
+    await assert.rejects(
+      db.query("DELETE FROM berth_executor.functions_exception"),
+    );
+    await assert.rejects(
+      db.query("UPDATE berth_executor.admission SET evidence='{}'"),
+    );
+    await assert.rejects(
+      db.query(
+        "SELECT berth_executor.prepare_without_exception($1,$2,$3,$4)",
+        args,
+      ),
+    );
+    await owner.query(
+      "UPDATE berth_executor.admission SET verified_at=clock_timestamp() WHERE operation=$1",
+      [operation],
+    );
+    for (const change of [
+      { storageBytes: 0 },
+      { neonFree: false },
+      { objectRequests: 0 },
+      { functionsMode: "verified" },
+    ]) {
+      await owner.query(
+        "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+        [operation, JSON.stringify({ ...evidence, ...change })],
+      );
+      await assert.rejects(
+        db.query("SELECT berth_executor.admit($1,$2)", [operation, args[2]]),
+      );
+    }
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [operation, args[3]],
+    );
+    const environment = {
+      compartment: String(original.compartment),
+      namespace: String(original.namespace),
+      region: String(original.region),
+      tenancy: String(original.tenancy),
+      user: String(original.user),
+      fingerprint: String(original.fingerprint),
+      monitoringLimit: 20,
+      neonLimit: 64,
+      operation,
+      startedAt,
+      expiresAt,
+      token: "a".repeat(40),
+      previewKey: "b".repeat(40),
+      connection: "unused",
+      privateKey: "unused",
+    };
+    const { liveAdmissionApi } = await import(
+      "../../src/trial/live-admission.js"
+    );
+    const api = liveAdmissionApi(db, environment, async () => {
+      throw Error("Cached receipt should avoid provider work");
+    });
+    const call = (route: string, body: unknown) =>
+      api.fetch(
+        new Request(`https://fixture/${route}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${environment.token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    const preview = await call("preview", {});
+    assert.equal(preview.status, 200);
+    const previewBody = await preview.json();
+    assert.equal(previewBody.feasibility.verdict, "partial");
+    const submit = await call("submit", { preview: previewBody.preview });
+    assert.equal(submit.status, 202);
+    assert.equal((await submit.json()).feasibility.verdict, "partial");
+    assert.equal(
+      (
+        await db.query("SELECT berth_executor.admit($1,$2) AS admitted", [
+          operation,
+          args[2],
+        ])
+      ).rows[0].admitted,
+      false,
+    );
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='succeeded' WHERE operation=$1",
+      [operation],
+    );
+    const report = (
+      await db.query("SELECT berth_executor.report($1) AS result", [operation])
+    ).rows[0].result;
+    assert.equal(report.trial.outcome, "succeeded");
+    assert.equal(report.feasibility.verdict, "partial");
+    assert.equal(report.feasibility.functionsAllowance, "unknown");
+    assert.equal(report.feasibility.hardSpendingCap, false);
+    const { executeLive } = await import("../../src/trial/live-runtime.js");
+    const live = await executeLive(environment, "evidence", undefined, {
+      database: () => ({
+        connect: async () => {},
+        end: async () => {},
+        query: (text, values) => db.query(text, values ? [...values] : []),
+      }),
+    });
+    assert.deepEqual(
+      (live as { feasibility: unknown }).feasibility,
+      report.feasibility,
+    );
+
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+        second,
+        args[1],
+        args[2],
+        JSON.stringify({
+          ...evidence,
+          functionsException: {
+            ...evidence.functionsException,
+            operation: second,
+          },
+        }),
+      ]),
+    );
+  });
 });

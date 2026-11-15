@@ -25,3 +25,9 @@ does not authorize weakening the approved SPEC.md resource/request/time budgets.
 Exceptions must identify scope, reason, owner, removal issue and expiry. A prose
 exception does not bypass a check: a deliberate policy revision and owner review
 are required. External branch protection is necessary to make CI merge-blocking.
+
+The owner-approved #55 Functions-evidence exception is limited to the single
+operation/window defined in SPEC.md. It changes only the unknown Functions
+headroom gate and requires a partial verdict. Resource/request/time limits and all
+verification controls remain. The owner closes it under #14; authorization expires
+with that four-hour window and cannot be reset after success or failure.

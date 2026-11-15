@@ -5,6 +5,11 @@ or establish the live verdict in #14. Complete the current account, IAM and allo
 checks in [the setup guide](../oci-neon-setup.md) before activation. Use the pinned
 Node/pnpm tools and a local PostgreSQL `psql` client. All timestamps below are UTC; SQL is the time authority.
 
+For the owner-approved one-trial unknown Functions allowance mode, follow
+[the exception supplement](free-functions-exception.md) before preparation. It
+requires migration 005, consumes one durable authorization and mandates a partial
+verdict. The normal measured-evidence instructions below remain unchanged.
+
 ## What changed
 
 - Live `/preview` is cloud-read-only, **not persistence-free**. It records a Neon
