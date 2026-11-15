@@ -45,6 +45,7 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
     i.region !== client.region
   )
     throw new BucketFailure("invalid-intent");
+
   /** Compare provider identity and every supported security setting, not just name or marker. */
   function verify(
     b: ObservedBucket,
@@ -83,6 +84,7 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
       throw new BucketFailure("configuration");
     return { id: b.id, etag, operation: i.operation, marker: i.marker };
   }
+
   /** Complete bounded listing is the only absence proof; HTTP errors never mean absent. */
   async function exists(cleanup: boolean) {
     const r = await client.list(i, cleanup);
@@ -99,6 +101,7 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
       throw new BucketFailure("collision");
     return r.items.length === 1;
   }
+
   /** Separate retention rules and access grants must be empty, without hidden pagination. */
   async function restrictions(cleanup: boolean) {
     const r = await client.retention(i, cleanup),
@@ -111,6 +114,7 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
     )
       throw new BucketFailure("configuration");
   }
+
   /** Read may establish absence, but never adopts an existing name without saved identity. */
   async function read(known?: BucketAttributes, cleanup = false) {
     if (!(await exists(cleanup))) return undefined;
@@ -120,6 +124,7 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
     await restrictions(cleanup);
     return value;
   }
+
   return {
     /** Pure exact proposal; IAM alone does not enforce private settings or resource count. */
     plan: () => createProposal(i),
@@ -154,6 +159,7 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
     },
   };
 }
+
 /**
  * Public provider API; immutable intent is injected, never read from arbitrary props.
  * Set cleanup for destroy planning/apply: reads use the protected cleanup reserve

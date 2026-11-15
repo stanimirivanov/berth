@@ -6,6 +6,7 @@ import type { TrialIntent, TrialRecord } from "../src/trial/ledger.js";
 import { config, evidence, now } from "./fakes/admission.js";
 
 const token = "a".repeat(40);
+
 function fixture() {
   let headroom: unknown = evidence,
     credentials = true,
@@ -77,6 +78,7 @@ function fixture() {
     },
   };
 }
+
 function request(route: string, body: unknown = {}, auth = token) {
   return new Request(`https://trial.invalid/${route}`, {
     method: "POST",
@@ -87,6 +89,7 @@ function request(route: string, body: unknown = {}, auth = token) {
     body: JSON.stringify(body),
   });
 }
+
 test("authenticated preview is exact and read-only; submission reuses the previewed operation", async () => {
   const f = fixture();
   assert.equal(

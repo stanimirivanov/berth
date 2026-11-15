@@ -18,6 +18,7 @@ export function admissionBinding(e: ReturnType<typeof liveEnvironment>) {
     neonLimit: e.neonLimit,
   };
 }
+
 /** Read-only projection; SQL refuses a changed identity, key or target before any provider work. */
 export async function admissionStatus(
   db: LedgerDatabase,
@@ -34,6 +35,7 @@ export async function admissionStatus(
     evidence: unknown;
   };
 }
+
 /** Each admitted HTTP call spends a Neon reservation; provider-side rejected invocations remain outside this app cap. */
 export async function meterAdmission(
   db: LedgerDatabase,
@@ -47,6 +49,7 @@ export async function meterAdmission(
     purpose,
   ]);
 }
+
 /** Reuses a five-minute receipt; failed/uncertain checks remain spent and never authorize submission. */
 export async function verifyAdmission(
   db: LedgerDatabase,
@@ -101,6 +104,7 @@ export async function verifyAdmission(
     await ledger.release(c);
   }
 }
+
 /** Connect the signed API to the prepared SQL gate; preview can persist charged read-only checks. */
 export function liveAdmissionApi(
   db: LedgerDatabase,

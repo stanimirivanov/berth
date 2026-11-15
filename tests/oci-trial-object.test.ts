@@ -54,6 +54,7 @@ async function fixture() {
     probe: makeTrialObject({ intent: saved, bucket }, client, journal),
   };
 }
+
 test("fixed probe persists intent before create-only upload and verifies exactly one MiB", async () => {
   const f = await fixture();
   f.sdk.beforePut = () => assert.equal(f.persisted, true);

@@ -66,6 +66,7 @@ export function scanSecrets() {
     if (status !== "clean") throw Error(status);
   }
 }
+
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href

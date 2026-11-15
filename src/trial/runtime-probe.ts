@@ -27,6 +27,7 @@ interface Options {
   /** Runs only after manual authentication and empty-input checks; never from schedules. */
   run: () => Promise<unknown>;
 }
+
 /**
  * Reads at most the byte limit, cancelling an oversized stream before parsing.
  * A zero limit admits empty adapter streams while rejecting all caller input.
@@ -55,6 +56,7 @@ async function readBody(request: Request, limit: number) {
     reader?.releaseLock();
   }
 }
+
 /**
  * Creates the fixed-route, expiring HTTP probe and its instance-local receipt map.
  *

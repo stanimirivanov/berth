@@ -15,6 +15,7 @@ interface TransportOptions {
   cleanupReserve?: number;
   prior?: TrialEvent[];
 }
+
 /** Restrict management access to the one trial Worker and account store metadata. */
 function allowed(method: string, path: string) {
   if (method === "GET")
@@ -32,6 +33,7 @@ function allowed(method: string, path: string) {
     );
   return false;
 }
+
 /**
  * Account-pinned, no-retry transport with intent-before-dispatch and reserved cleanup.
  * Rehydrate prior journal events on every process start; uncertain writes stay spent.
@@ -126,6 +128,7 @@ export function makeTrialTransport(options: TransportOptions) {
     count: () => used,
   };
 }
+
 /**
  * Metadata matching pinned Alchemy Deploy.ts, with SQLite and no credential values.
  * Bootstrap uploads the unmodified official Worker; no routes or paid services.

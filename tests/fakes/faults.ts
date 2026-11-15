@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { NoRetryConfigurationDetails } from "oci-common";
 import type { Client } from "pg";
 import { FakeObjects } from "./oci.js";
+
 /** Stable semantic SQL boundary; values, identities and provider bodies never become labels. */
 export function writeBoundary(sql: string, values: unknown[], action = "") {
   if (sql.includes("berth_executor.open")) return "executor.open";
@@ -30,6 +31,7 @@ export function writeBoundary(sql: string, values: unknown[], action = "") {
       : `ledger.${values[3]}${values[3] === "end" ? `:${action}` : ""}${values[5] ? `:${values[5]}` : ""}`;
   throw Error("Unclassified SQL boundary");
 }
+
 /** Explicit SDK surface; fixture HTTP cannot invoke arbitrary object methods. */
 export const sdkMethods = [
   "listBuckets",
@@ -53,6 +55,7 @@ export const mutations = new Set<string>([
   "deleteObject",
   "deleteBucket",
 ]);
+
 /** Independent loopback provider survives SIGKILL of its clients, including pending late responses. */
 export async function cloudService(
   owner: Client,

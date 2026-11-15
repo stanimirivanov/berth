@@ -9,6 +9,7 @@ export interface SyntheticCloud {
   bucket: boolean;
   object: boolean;
 }
+
 /** Database-backed fake service for hosted qualification only; never reaches an OCI endpoint. */
 export function syntheticSdk(
   intent: BucketIntent,

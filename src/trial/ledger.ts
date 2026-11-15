@@ -51,6 +51,7 @@ export interface Reservation {
   id: string;
   fresh: boolean;
 }
+
 /**
  * Thin ledger boundary. No cloud calls, DDL, retries, counter refunds or implicit
  * reacquisition. A failed response may have committed; reconcile stable IDs.
@@ -67,6 +68,7 @@ export function makeLedger(db: LedgerDatabase) {
       );
     }
   }
+
   /** Captured claim fields are passed with every guarded operation. */
   const identity = (c: LedgerClaim) => [c.operation, c.owner, c.generation];
   /** Fixed control commands share the authoritative SQL fence. */

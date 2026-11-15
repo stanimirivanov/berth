@@ -14,12 +14,14 @@ const plan = Object.freeze({
   shutdownMinutes: 15,
   totalCapacitySeconds: 6000,
 });
+
 /** Treat untrusted JSON as an object without coercing strings into usage numbers. */
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
+
 /** Capacity is finite and nonnegative; counts and bytes additionally require integers. */
 function amount(value: unknown, integer = false): value is number {
   return (
@@ -30,6 +32,7 @@ function amount(value: unknown, integer = false): value is number {
     (!integer || Number.isSafeInteger(value))
   );
 }
+
 /**
  * Review a normalized single cumulative provider snapshot and a measured probe.
  * This offline function authenticates no provider and grants no admission. The

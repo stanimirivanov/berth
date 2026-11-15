@@ -20,6 +20,7 @@ export interface ExecutionSnapshot {
 export type OpenExecution =
   | { kind: "claimed"; claim: LedgerClaim; snapshot: ExecutionSnapshot }
   | { kind: "terminal" | "duplicate" | "busy" | "expired" };
+
 /** Restricted owner-installed SQL functions; all writes capture the immutable ledger claim. */
 export function executorStore(db: LedgerDatabase) {
   /** Never expose SQL details or infer rejection after a lost commit response. */
@@ -30,6 +31,7 @@ export function executorStore(db: LedgerDatabase) {
       throw Error("Executor state unavailable; reconcile without retry");
     }
   }
+
   return {
     /** Atomic claim and durable delivery deduplication under the operation row lock. */
     open: (operation: string, owner: string, delivery: string) =>
@@ -63,5 +65,6 @@ export function executorStore(db: LedgerDatabase) {
     },
   };
 }
+
 /** Public Alchemy payload accepted only by the closed SQL validator. */
 export type BucketState = PersistedState;

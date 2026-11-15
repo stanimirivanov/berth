@@ -32,6 +32,7 @@ const extension =
   "urn:ietf:params:scim:schemas:oracle:idcs:extension:capabilities:User";
 const description =
   "Berth disposable Object Storage trial; owner-managed IAM cleanup";
+
 async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), "berth-recover-"));
   const config = {
@@ -161,6 +162,7 @@ async function fixture() {
   ];
   return { dir, out, events, journal, calls, transport, args, config };
 }
+
 async function withFixture(
   run: (f: Awaited<ReturnType<typeof fixture>>) => Promise<void>,
 ) {
@@ -174,6 +176,7 @@ async function withFixture(
     await rm(f.dir, { recursive: true, force: true });
   }
 }
+
 test("recovery plan checks live state without writes; recovery reuses compartment and original key", () =>
   withFixture(async (f) => {
     await runOciAdmin(f.args(), f.transport);
@@ -509,6 +512,7 @@ async function groupCreatedJournal(f: Awaited<ReturnType<typeof fixture>>) {
   await writeFile(join(f.out, "journal.jsonl"), text);
   return text;
 }
+
 test("confirmed group recovery verifies members explicitly and writes only key and policy", async () => {
   for (const variant of [
     "success",

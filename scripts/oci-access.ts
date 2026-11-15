@@ -100,6 +100,7 @@ export async function verifyOciAccess(
   parseOciConfig(config);
   const signer = createOciSigner(config, pem, passphrase);
   let requestsDispatched = 0;
+
   async function request(
     operation: string,
     method: "GET" | "POST",
@@ -139,6 +140,7 @@ export async function verifyOciAccess(
     // Never print provider response bodies, signing headers, OCIDs or key paths.
     return { response, data: (await response.json()) as unknown };
   }
+
   const storage = `https://objectstorage.${config.region}.oraclecloud.com`;
   const namespace = await request("GetNamespace", "GET", `${storage}/n/`);
   if (namespace.data !== config.namespace)

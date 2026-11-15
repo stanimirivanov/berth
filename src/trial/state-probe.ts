@@ -21,6 +21,7 @@ const phases: readonly string[] = [
   "delete",
 ];
 const bootId = randomUUID();
+
 /**
  * Authenticated empty-body POST routes with a fixed expiry and redacted errors.
  * Responses expose only synthetic evidence. A partial body is refused immediately;
@@ -72,6 +73,7 @@ export function makeStateProbe(options: ProbeOptions) {
     }
   };
 }
+
 /** Credential-free state fixture; deliberately constant identifiers and payload. */
 function value(marker: string): ResourceState {
   return {
@@ -88,6 +90,7 @@ function value(marker: string): ResourceState {
     attr: { marker },
   };
 }
+
 /**
  * Calls the actual pinned HTTP StateService with a dedicated store bearer token.
  * No management credentials, DDL, OCI calls, or retries. A two-second stale phase
@@ -194,6 +197,7 @@ export async function runStatePhase(phase: StatePhase) {
     ),
   );
 }
+
 /** Hosted entrypoint configures admission lazily; invalid deployment fails closed. */
 export default async function handler(request: Request): Promise<Response> {
   try {

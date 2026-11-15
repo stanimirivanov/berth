@@ -59,6 +59,7 @@ const results: unknown[] = [
   { id: "key-scim-id", fingerprint },
   { id: ocid("policy") },
 ];
+
 function fixture(
   overrides: Map<number, unknown> = new Map(),
   failJournal = false,
@@ -94,6 +95,7 @@ function fixture(
     },
   };
 }
+
 test("admin config rejects endpoint injection, unknown fields and malformed identities", () => {
   assert.deepEqual(parseAdminConfig(config), config);
   for (const change of [

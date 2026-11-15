@@ -20,6 +20,7 @@ let fixtureFailure = false;
 let occurrence = 0,
   clockOffset = 0;
 const occurrences = new Map<string, number>();
+
 /** SIGKILL deliberately bypasses finally; trace is flushed before the process dies. */
 function point(label: string) {
   const n = (occurrences.get(label) ?? 0) + 1;
@@ -29,6 +30,7 @@ function point(label: string) {
   if (config.fault?.label === label && config.fault?.occurrence === n)
     process.kill(process.pid, "SIGKILL");
 }
+
 const db = new Client({
   host: "127.0.0.1",
   port: config.port,

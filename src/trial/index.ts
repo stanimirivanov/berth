@@ -11,6 +11,7 @@ import { runSyntheticLifecycle } from "./synthetic-lifecycle.js";
 
 const bootId = randomUUID();
 let invocations = 0;
+
 /**
  * Checks the hosted credential boundary, reads the actual SQL identity, executes
  * the synthetic Alchemy lifecycle and verifies OCI signing without sending it.
@@ -128,6 +129,7 @@ async function run() {
     throw new ProbeFailure(stage);
   }
 }
+
 /** Hosted entry with deployment-time admission settings; importing it performs no cloud work. */
 export default makeProbe({
   token: process.env.BERTH_TRIAL_TOKEN ?? "",

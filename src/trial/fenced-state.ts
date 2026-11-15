@@ -17,6 +17,7 @@ export interface StateClaim {
 }
 const stack = "berth-fenced-trial";
 const stage = "probe";
+
 /**
  * Explicit acquisition, never invoked by state operations or on their failure.
  * A fresh process must use a fresh UUID. Repeating its own uncertain acquisition
@@ -57,6 +58,7 @@ export async function claimState(
     throw Error("State claim unavailable; reconcile before a new execution");
   }
 }
+
 /** Reject unsupported stack/stage/FQN before dispatch; this adapter is trial-only. */
 function target(request: { stack: string; stage?: string; fqn?: string }) {
   if (
@@ -66,6 +68,7 @@ function target(request: { stack: string; stage?: string; fqn?: string }) {
   )
     throw Error("Unsupported trial state target");
 }
+
 /**
  * Bind every read/write to a captured generation. No DDL, retries, lock session,
  * credential persistence or reacquisition. SQL performs the authoritative payload

@@ -10,6 +10,7 @@ const target = {
   compartment: "ocid1.compartment.oc1..fixture",
   uploadedAt,
 };
+
 function stream(name = "StoredBytes", value = 1048576, at = now - 600000) {
   return [
     {
@@ -25,6 +26,7 @@ function stream(name = "StoredBytes", value = 1048576, at = now - 600000) {
     },
   ];
 }
+
 test("bucket metric queries select only the owned resource and fixed statistics", () => {
   assert.match(
     usageQuery("StoredBytes", target, now).query,

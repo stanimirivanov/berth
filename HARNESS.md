@@ -52,6 +52,20 @@ factories or assertion semantics. Keep that limitation visible when extending te
 | Pre-PR / CI | `pnpm check` | Full suites, bundle, secret scan and live advisory audit must pass |
 | DB boundary | `BERTH_TEST_POSTGRES_PORT=<loopback-port> pnpm test:setup-db` | Use a fresh disposable DB; never substitute a remote URL |
 
+`pnpm lint:spacing` adds ESLint Stylistic's
+[`padding-line-between-statements`](https://eslint.style/rules/padding-line-between-statements)
+to the existing Biome checks. Require a blank line before and after function
+declarations (plain, async, named exports and default exports), including before
+the next declaration's leading JSDoc. Arrow expressions, class methods and overload
+signatures are outside this declaration-spacing rule. Biome remains the formatter.
+The pinned Babel parser reads TypeScript syntax without depending on the native
+TypeScript build compiler's AST API. No Babel transforms or emitted code are used.
+The gate covers `src`, `scripts`, `tests`, `tools`, `neon.ts` and its own config;
+`pnpm lint` includes it, so the existing hook and CI enforce it automatically.
+To fix violations, run `pnpm lint:spacing --fix`, then `pnpm check:fast`.
+Synthetic controls in `tests/spacing.test.mjs` exercise rejection, correct spacing,
+comment attachment, exported declarations and preservation of fixture strings.
+
 Install dependencies with `pnpm install --frozen-lockfile` and the package.json Node/
 pnpm pins. `pnpm check` needs **Gitleaks 8.30.1** on PATH. Use the checksum-verified
 Linux x64 installation commands in .github/workflows/ci.yml; do not use an unverified

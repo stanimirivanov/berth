@@ -22,6 +22,7 @@ export interface MetricObservation {
   sourceAt: string | null;
   observedAt: string;
 }
+
 /** Fixed one-hour windows; gauges use maxima, request counts use interval sums. */
 export function usageQuery(
   metric: MetricName,
@@ -45,6 +46,7 @@ export function usageQuery(
     resolution: "1h",
   };
 }
+
 /** Validate provider data before persistence; never sum tiers or adopt a similarly named bucket. */
 export function readMetric(
   metric: MetricName,
@@ -99,11 +101,13 @@ export function readMetric(
     sourceAt: new Date(latest.at).toISOString(),
   };
 }
+
 /** One underlying request per invocation; caller must reserve Monitoring allowance before calling. */
 export type UsageTransport = (
   query: ReturnType<typeof usageQuery>,
   signal: AbortSignal,
 ) => Promise<unknown>;
+
 /** Signed bounded REST transport avoids SDK retries; target and credentials are injected server-side. */
 export function monitoringTransport(
   region: string,

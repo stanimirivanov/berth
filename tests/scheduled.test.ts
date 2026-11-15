@@ -3,6 +3,7 @@ import test from "node:test";
 import { scheduledHandler } from "../src/trial/scheduled.js";
 
 const start = Date.parse("2026-11-13T10:00:00Z");
+
 function delivery(at = start, id = "delivery-1") {
   return new Request("https://trial.invalid/scheduled", {
     method: "POST",
@@ -15,6 +16,7 @@ function delivery(at = start, id = "delivery-1") {
     }),
   });
 }
+
 test("expired scheduled deliveries never open database or cloud connections", async () => {
   let calls = 0;
   const handler = scheduledHandler({

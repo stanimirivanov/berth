@@ -2,6 +2,7 @@ import { makeTrialApi, type TrialApiOptions } from "./api.js";
 import { executorStore } from "./executor-store.js";
 import { type LedgerDatabase, makeLedger } from "./ledger.js";
 import { usageStore } from "./warnings.js";
+
 /** Compose admission with the same durable ledger and owned cleanup flag consumed by schedules. */
 export function executorApi(
   db: LedgerDatabase,

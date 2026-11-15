@@ -6,6 +6,7 @@ export interface ScheduledOptions {
   now?: () => number;
   run: (delivery: string, scheduledAt: number) => Promise<unknown>;
 }
+
 /** Neon must strip caller-supplied invocation headers at its authenticated trigger gateway. */
 export function scheduledHandler(options: ScheduledOptions) {
   const clock = options.now ?? Date.now;
