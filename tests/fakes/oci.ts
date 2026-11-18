@@ -64,7 +64,10 @@ export class FakeOci implements BucketSdk {
   async getBucket(r: requests.GetBucketRequest) {
     this.record("get", r);
     if (!this.value) throw { statusCode: 404 };
-    return { bucket: structuredClone(this.value), eTag: this.value.etag };
+    const bucket = structuredClone(this.value);
+    if (!r.fields?.some((field) => field === "autoTiering"))
+      delete bucket.autoTiering;
+    return { bucket, eTag: this.value.etag };
   }
   async createBucket(r: requests.CreateBucketRequest) {
     this.record("create", r);

@@ -6,7 +6,7 @@ import {
 import {
   models as model,
   ObjectStorageClient,
-  type requests,
+  requests,
   type responses,
 } from "oci-objectstorage";
 
@@ -141,12 +141,13 @@ export function bucketClient(
           retryConfiguration,
         }),
       ),
-    /** Fetch one revision in the pinned namespace. */
+    /** Request opt-in tiering metadata so ownership validation also works on read and final pre-delete inspection. */
     get: (i: BucketIntent, cleanup = false) =>
       send(cleanup ? "inspect_cleanup" : "inspect", () =>
         sdk.getBucket({
           namespaceName: i.namespace,
           bucketName: i.bucket,
+          fields: [requests.GetBucketRequest.Fields.AutoTiering],
           retryConfiguration,
         }),
       ),
