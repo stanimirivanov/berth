@@ -32,14 +32,9 @@ headroom gate and requires a partial verdict. Resource/request/time limits and a
 verification controls remain. The owner closes it under #14; authorization expires
 with that four-hour window and cannot be reset after success or failure.
 
-The owner explicitly requested implementation of the picomatch 4.0.7 exception in
-PR #63 on 2026-11-18. Until **2026-11-25 00:00 UTC**, the separate
-`check:temporary-audit` verification path may qualify only GHSA-fc5q-39xc-vjpf,
-with the exact lockfile and all known paths, while retaining native audit failure
-and report artifacts. This supersedes the earlier documentation-only proposal's
-scope: it covers offline local/CI verification, including this enforcement PR.
-It never authorizes deployment, publication, a new cloud trial or grant changes.
-The original `pnpm check`/`security` and all recovery gates remain unchanged.
-Other high/critical findings, collection errors, new package versions or expiry
-reject qualification. Owner/removal issue: #59; interim review November 20.
-See docs/security/audit-exception-evaluator.md for the implemented limitations.
+The picomatch verification exception from PR #63 was retired under #59 on
+2026-11-18 after the unchanged native high-severity gate returned clean results.
+There is no active dependency exception. CI runs unconditional `pnpm check`;
+legacy diagnostic commands retain their names but supply no approval and reject
+any remaining high/critical finding, including stale withdrawn advisory entries.
+No withdrawal flag is an audit suppression. See docs/security/picomatch-withdrawal.md.

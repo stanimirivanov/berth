@@ -1,5 +1,10 @@
 # Temporary verification exception — #62 / PR #63
 
+**Retired under #59 on 2026-11-18.** CI again runs unconditional `pnpm check`.
+The runner supplies no exception approval; old commands are diagnostic only.
+See [withdrawal reconciliation and removal evidence](picomatch-withdrawal.md).
+The active-policy description below is retained as dated implementation history.
+
 The owner explicitly requested implementation in PR #63 on **2026-11-18**. This
 supersedes the inactive documentation-only proposal for **local and CI verification**.
 Expiry is **2026-11-25 00:00 UTC / November 25 02:00 Sofia**. Owner: Stanimir.

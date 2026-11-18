@@ -203,3 +203,12 @@ inventories, revoked trial key, retained failed/partial SQL evidence and no reco
 post-expiry work. Dedicated policy/group/user deletion succeeded; the empty OCI
 compartment entered asynchronous DELETING. Residual provider-billed invocation usage
 remains unknown. PR #50 stays draft and the consumed exception is preserved.
+
+## Picomatch exception retired — #59, 2026-11-18
+
+[Reconciliation](../docs/security/picomatch-withdrawal.md) records the upstream
+withdrawal, the initially differing native reports and fresh high-threshold exit 0.
+CI returns to unconditional canonical verification; no dependency waiver remains.
+Stale high findings still fail, and seven moderate / one low finding remain visible.
+This closes dependency triage without changing the failed/partial trial verdict
+or authorizing another live run. Earlier active-exception entries are historical.

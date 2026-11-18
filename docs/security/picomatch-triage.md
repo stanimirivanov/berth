@@ -1,5 +1,10 @@
 # Picomatch advisory assessment — issue #59
 
+**Latest disposition, 2026-11-18:** upstream withdrew the advisory, the native
+high-severity gate now passes, and the temporary exception is retired. See
+[dated reconciliation](picomatch-withdrawal.md). Earlier blocked assessments
+below are historical; no matcher repair or live feasibility pass is claimed.
+
 **2026-11-18: unresolved, release blocked.** The authoritative native audit gate
 remains `pnpm audit --audit-level high` inside `pnpm check`. This investigation
 provides no waiver, suppression, fork, override, dependency downgrade or cloud
