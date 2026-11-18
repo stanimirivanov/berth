@@ -95,3 +95,9 @@ bundle and secret scan, then qualified the still-failing native audit. Original
 security verification still fails with one high / seven moderate / one low advisory.
 No dependency or lockfile changes and no cloud trial were made. These checks prove
 the exception mechanism; they do not prove the vulnerable matcher is repaired.
+
+GitHub check statuses do not expire automatically. The timestamp guard applies
+when verification runs; it cannot revoke a previously successful run or block an
+administrator bypass. The owner must rerun verification before merge and must not
+rely on a pre-expiry result after the deadline. No external status-revocation
+service, branch-protection change or automatic merge is installed by this PR.
