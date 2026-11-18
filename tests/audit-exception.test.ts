@@ -250,3 +250,26 @@ test("truncated path inventory cannot qualify despite a complete flag", () => {
   x.advisories["1247710"].findings[0]?.paths.pop();
   assert.equal(evaluateException(JSON.stringify(x), context()), "rejected");
 });
+
+test("approved verification scope qualifies code checks without claiming an audit clean", () => {
+  const c = { ...context(), scope: "verification" as const, changes: [] };
+  assert.equal(
+    evaluateException(JSON.stringify(report()), c),
+    "temporary-exception",
+  );
+  assert.equal(
+    evaluateException(JSON.stringify(report()), {
+      ...c,
+      now: expiry,
+      observedAt: expiry,
+    }),
+    "rejected",
+  );
+  assert.equal(
+    evaluateException(JSON.stringify(report()), {
+      ...c,
+      lockfileHash: "wrong",
+    }),
+    "rejected",
+  );
+});

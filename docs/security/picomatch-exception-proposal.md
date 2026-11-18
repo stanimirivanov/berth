@@ -1,6 +1,10 @@
 # Proposed temporary picomatch exception — #59
 
-**Status: proposed, inactive.** Preparing or merging this document does not bypass
+**Historical proposal: superseded by owner-requested verification implementation in PR #63.**
+See [implemented scope, commands and expiry](audit-exception-evaluator.md). The
+original proposal below is retained as history; it does not describe current activation.
+
+**Original status: proposed, inactive.** Preparing or merging this document does not bypass
 an audit check. The owner must explicitly approve the policy below before a
 separate, tested enforcement change can activate it. Existing `pnpm check` remains
 red on the high advisory. PRs #50 and #60 remain drafts.

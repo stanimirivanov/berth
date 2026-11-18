@@ -1,5 +1,6 @@
-/** Explicit context supplied by a future trusted collector; this module authenticates none of it. */
+/** Explicit context supplied by the caller; this module authenticates none of it. */
 export interface ExceptionContext {
+  scope?: "verification";
   now: number;
   observedAt: number;
   exitCode: number;
@@ -158,7 +159,7 @@ function auditReport(text: string) {
 }
 
 /**
- * Inactive offline classification only. The future caller must authenticate approval,
+ * Offline classification only. The caller must authenticate approval,
  * clock, complete diff and fresh audit acquisition; this function cannot attest their origin.
  * No CLI, process, filesystem, CI or deployment action is performed here.
  */
@@ -194,9 +195,10 @@ export function evaluateException(
         "44204ec7857c2de9744a9e807f31a51eda502e9fc8041b6e1529ae374ac282a8" ||
       c.supportedFixAvailable !== false ||
       c.assumptionsUnchanged !== true ||
-      !Array.isArray(c.changes) ||
-      !c.changes.length ||
-      !c.changes.every(eligibleChange)
+      (c.scope !== "verification" &&
+        (!Array.isArray(c.changes) ||
+          !c.changes.length ||
+          !c.changes.every(eligibleChange)))
     )
       return "rejected";
     return "temporary-exception";

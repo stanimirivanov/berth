@@ -115,3 +115,12 @@ It is inactive and limited to documentation review/merge, with a fixed November 
 UTC expiry and a November 20 upstream review. It specifies required enforcement,
 negative tests and removal criteria. No audit suppression or policy activation is
 implemented by this document; the unresolved finding and #59 remain open.
+
+
+## Owner-requested verification exception — PR #63
+
+The owner requested implementation on November 18. The [active verification path](audit-exception-evaluator.md)
+qualifies the exact bound finding until November 25 00:00 UTC, with full native
+report retention, and leaves ordinary audit/check behavior unchanged. The earlier
+statement that all verification is blocked is superseded for this narrowly named
+path only. This is a temporary risk decision, not remediation; #59 remains open.
