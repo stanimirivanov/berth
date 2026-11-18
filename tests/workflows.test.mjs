@@ -102,3 +102,39 @@ test("CI requires all four isolated recovery shards and propagates unsuccessful 
         result === "success" && other === "success",
       );
 });
+
+test("temporary audit path retains canonical gates and has no continue-on-error bypass", () => {
+  const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8"));
+  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+  /** @type {{run?:string,uses?:string,if?:string,id?:string,"continue-on-error"?:boolean}[]} */
+  const steps = workflow.jobs.verify.steps;
+  const normal = steps.find((s) => s.run === "pnpm check");
+  const temporary = steps.find(
+    (s) => s.run === "pnpm run check:temporary-audit",
+  );
+  assert.ok(normal);
+  assert.ok(temporary);
+  assert.equal(normal.if, "steps.audit_policy.outputs.active != 'true'");
+  assert.equal(temporary.if, "steps.audit_policy.outputs.active == 'true'");
+  assert.equal(
+    pkg.scripts["check:temporary-audit"],
+    pkg.scripts.check.replace(
+      "pnpm run security",
+      "pnpm run security:temporary-audit",
+    ),
+  );
+  assert.equal(
+    pkg.scripts["security:temporary-audit"],
+    "pnpm run secrets && node dist/scripts/temporary-audit.js",
+  );
+  for (const step of steps) assert.equal(step["continue-on-error"], undefined);
+  const policy = steps.find((s) => s.id === "audit_policy");
+  assert.ok(policy);
+  assert.ok(policy.run);
+  assert.match(policy.run, /2026-11-25T00:00:00Z/);
+  const artifact = steps.find((s) =>
+    s.uses?.startsWith("actions/upload-artifact@"),
+  );
+  assert.ok(artifact);
+  assert.equal(artifact.if, "always()");
+});

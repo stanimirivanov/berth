@@ -65,7 +65,22 @@ jobs:
             echo 'verification-floor: trusted baseline missing; inspect history.' >&2
             exit 1
           fi
+      - name: Select approved time-limited audit policy
+        id: audit_policy
+        run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, 'active=' + (Date.now() < Date.parse('2026-11-25T00:00:00Z')) + '\n')"
       - run: pnpm check
+        if: steps.audit_policy.outputs.active != 'true'
+      - name: Verify with explicitly qualified temporary audit
+        run: pnpm run check:temporary-audit
+        if: steps.audit_policy.outputs.active == 'true'
+      - name: Retain native audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/berth-audit/evidence.json
+          if-no-files-found: ignore
+          retention-days: 14
       - run: pnpm run build:state-probe
       - run: pnpm run test:setup-db
         env:

@@ -146,3 +146,18 @@ reviewed preparation and the actual trial establish the remaining evidence.
 supported patched release is established on November 18. Preserve the failing
 native audit gate; next maintainer review is November 20. #59 stays open for actual
 remediation. PRs #50/#60 stay draft; no live activation or exception reset.
+
+## Offline exception qualification — #62
+
+Implement the pure [audit evaluator](../docs/security/audit-exception-evaluator.md)
+with failing-first controls. Approval acquisition, trusted CI evidence, content
+review and activation remain a separate PR-sized task. No audit/CI bypass is
+installed; #59 remains open and PRs #50/#60 remain draft.
+
+## Owner-requested activation in PR #63
+
+The owner requested the time-limited verification exception on November 18.
+The implemented separate check path qualifies only the bound picomatch finding
+until November 25 00:00 UTC and retains native audit failure/report evidence.
+This supersedes #62's earlier inactive scope; canonical audit and recovery gates
+remain unchanged. #59 remains open; no deployment or new trial is authorized.
