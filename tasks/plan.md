@@ -138,3 +138,11 @@ Implement the explicitly accepted Neon Free Functions exception from #52, using 
 durable one-use owner preparation and mandatory partial evidence. Preserve all
 budgets and recovery coverage. No live activation; #14 / PR #50 remains draft until
 reviewed preparation and the actual trial establish the remaining evidence.
+
+## Dependency security hold — #59
+
+[Picomatch assessment](../docs/security/picomatch-triage.md) records the affected
+4.0.7 graph, bounded local reproduction and current input-boundary review. No
+supported patched release is established on November 18. Preserve the failing
+native audit gate; next maintainer review is November 20. #59 stays open for actual
+remediation. PRs #50/#60 stay draft; no live activation or exception reset.
