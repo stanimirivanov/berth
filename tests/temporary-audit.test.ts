@@ -34,7 +34,7 @@ test("temporary audit runner records native failure and rejects registry or repo
   git(["update-ref", "refs/remotes/origin/main", commit]);
   await writeFile(
     join(dir, ".git", "info", "exclude"),
-    "bin/\nclean/\nnetwork/\nmalformed/\nexit-code/\nregistry-error/\ndrift/\ndirty/\n",
+    "bin/\nclean/\nnetwork/\nmalformed/\nexit-code/\nregistry-error/\ndrift/\ndirty/\nevent/\nbad-event/\n",
   );
 
   const fake = `#!${process.execPath}\nif(process.argv[2]==='view'){console.log(process.env.FIXTURE_LATEST ?? JSON.stringify('4.0.7'));process.exit(Number(process.env.FIXTURE_REGISTRY_STATUS ?? 0));}console.log(!process.argv.includes('--audit-level') ? (process.env.FIXTURE_FULL_REPORT ?? process.env.FIXTURE_REPORT) : process.env.FIXTURE_REPORT);process.exit(Number(process.env.FIXTURE_STATUS));\n`;
@@ -133,6 +133,37 @@ test("temporary audit runner records native failure and rejects registry or repo
       timeout: 10000,
     });
     assert.equal(drift.status, 1);
+
+    const eventPath = join(dir, ".git", "event.json");
+    await writeFile(
+      eventPath,
+      JSON.stringify({
+        repository: { full_name: "fixture/audit" },
+        pull_request: { base: { sha: commit } },
+      }),
+    );
+    for (const [label, repository, expected] of [
+      ["event", "fixture/audit", 0],
+      ["bad-event", "other/repo", 1],
+    ] as const) {
+      const r = spawnSync(process.execPath, [cli], {
+        cwd: dir,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          GITHUB_SHA: commit,
+          GITHUB_EVENT_NAME: "pull_request",
+          GITHUB_EVENT_PATH: eventPath,
+          GITHUB_REPOSITORY: repository,
+          PATH: `${bin}:${process.env.PATH}`,
+          RUNNER_TEMP: join(dir, label),
+          FIXTURE_REPORT: clean,
+          FIXTURE_STATUS: "0",
+        },
+        timeout: 10000,
+      });
+      assert.equal(r.status, expected, r.stderr);
+    }
     await writeFile(
       join(dir, "unreviewed.ts"),
       "export const changed = true;\n",
