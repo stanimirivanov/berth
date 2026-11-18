@@ -1,5 +1,8 @@
 # Owner-managed closeout — issue #15
 
+Latest follow-up: the compartment returned **DELETED** on November 18 at
+15:44:14 UTC. Earlier DELETING entries below are dated snapshots.
+
 Owner administrative closeout was performed on **2026-11-18**, after the failed
 November 15 trial. No new trial, deployment, schedule, bucket or object was created.
 The live feasibility verdict remains **partial / no-go**, and the lifecycle remains
@@ -114,3 +117,17 @@ No new behavior was implemented, so no new behavioral test or live run is needed
 Existing recovery coverage remains unchanged. Raw administrative results and journal
 remain private under the owner-only closeout directory; published evidence contains
 no credential values or private resource identifiers.
+
+## Rebase follow-up — 2026-11-18 15:44 UTC
+
+After rebasing onto merged PR #63, one administrator-authenticated, no-retry
+GetCompartment read returned **DELETED** at 15:44:14 UTC / 17:44:14 Sofia. This
+supersedes the earlier DELETING snapshot; no deletion request was replayed. The
+read is separate administrative account activity outside the finalized ledger.
+The dedicated compartment now has a confirmed deleted lifecycle state. Retained
+private evidence, unknown billed residual usage and the failed/partial trial
+verdict remain as recorded. No new live trial or slot reset occurred.
+
+The earlier dependency-gate failure is historical evidence. Current main includes
+the owner-approved exception from PR #63; rebased verification uses its separate
+qualified path, retaining native audit failure and fixed November 25 UTC expiry.
