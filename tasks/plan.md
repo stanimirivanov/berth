@@ -196,3 +196,10 @@ or controlled-interruption pass is claimed.
 
 PR #50 remains draft. The one-use exception stays consumed; a corrected adapter
 alone cannot authorize another trial or change this partial verdict.
+## Owner closeout — #15, 2026-11-18
+
+[Owner closeout](../docs/trial/owner-closeout.md) records fresh empty hosting/resource
+inventories, revoked trial key, retained failed/partial SQL evidence and no recorded
+post-expiry work. Dedicated policy/group/user deletion succeeded; the empty OCI
+compartment entered asynchronous DELETING. Residual provider-billed invocation usage
+remains unknown. PR #50 stays draft and the consumed exception is preserved.
