@@ -161,3 +161,11 @@ The implemented separate check path qualifies only the bound picomatch finding
 until November 25 00:00 UTC and retains native audit failure/report evidence.
 This supersedes #62's earlier inactive scope; canonical audit and recovery gates
 remain unchanged. #59 remains open; no deployment or new trial is authorized.
+
+## Offline SDK lifecycle follow-up — #64
+
+[Offline SDK proof](../docs/trial/offline-sdk-lifecycle.md) covers the complete
+bucket/object helper journey through the real pinned SDK and an independent HTTP
+model, with unsafe-response controls and original 160/40 ceilings. It changes no
+production code and cannot replace the partial live verdict. PRs #50/#60 were
+rebased, evidence preserved and kept draft; no new live run is authorized.
