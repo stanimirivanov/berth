@@ -46,8 +46,8 @@ The historical `check:temporary-audit` and `security:temporary-audit` names are
 retained for command compatibility and the existing verification floor. Their
 runner supplies **no approval**, labels evidence `exceptionStatus: retired`, and
 rejects high/critical findings even if the exact former advisory includes a
-withdrawal marker. The pure policy evaluator remains only as historical regression
-coverage; no CI/CLI entry point grants its former approval.
+withdrawal marker. The pure evaluator retains its former policy branches for historical regression
+coverage; no CI/CLI entry point grants their former approval.
 
 The diagnostic evidence also records `nativeRemovalPrerequisiteMet`: true only
 when a fresh complete valid native result is clean under the high-severity gate.
