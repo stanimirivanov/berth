@@ -107,3 +107,11 @@ picomatch advisory above. `pnpm run build:live-executor` passed locally. No sour
 dependency, lockfile, install policy, CI gate or recovery test was changed.
 The final documentation passed diff and commit-time fast checks. No cloud
 credentials were read and no cloud request/deployment/trial was made by this task.
+
+## Proposed temporary exception
+
+The owner requested preparation of a [time-limited exception proposal](picomatch-exception-proposal.md).
+It is inactive and limited to documentation review/merge, with a fixed November 25
+UTC expiry and a November 20 upstream review. It specifies required enforcement,
+negative tests and removal criteria. No audit suppression or policy activation is
+implemented by this document; the unresolved finding and #59 remain open.
