@@ -146,3 +146,10 @@ reviewed preparation and the actual trial establish the remaining evidence.
 supported patched release is established on November 18. Preserve the failing
 native audit gate; next maintainer review is November 20. #59 stays open for actual
 remediation. PRs #50/#60 stay draft; no live activation or exception reset.
+
+## Offline exception qualification — #62
+
+Implement the pure [audit evaluator](../docs/security/audit-exception-evaluator.md)
+with failing-first controls. Approval acquisition, trusted CI evidence, content
+review and activation remain a separate PR-sized task. No audit/CI bypass is
+installed; #59 remains open and PRs #50/#60 remain draft.
