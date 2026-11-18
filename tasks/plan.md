@@ -1,5 +1,103 @@
 # OCI Object Storage trial implementation plan
 
+## Current milestone: Free-plan validation readiness — 2026-11-18
+
+The original trial is closed with a **failed lifecycle / partial-no-go feasibility
+verdict**. PRs #50 and #60 are merged; dedicated owner cleanup is complete, including
+the compartment's confirmed DELETED state. The dated sections below are historical
+planning records, not current activation instructions. Preserve their evidence and
+the consumed one-trial exception.
+
+The owner now accepts unavailable Neon Functions usage and quota-induced execution
+failure while remaining on Free, including independent owner OCI cleanup if hosted
+execution stops. This is agreement to prepare a revised policy, **not authorization
+for another live trial**. Existing admission still follows the old contract until
+the dedicated policy and implementation changes are reviewed.
+
+### Outcome and scope
+
+Prepare the existing Neon/Alchemy/OCI stack for a separately reviewed future
+validation decision. This milestone ends with a readiness report and offline
+recovery evidence. It cannot resolve the remaining live upload/checksum,
+metrics/warning, missed-delivery or autonomous-teardown acceptance rows.
+
+No deployments, schedules, account upgrades, credential recreation or live cloud
+resource mutations are included. No Angular UI, backend replacement or general
+workflow engine is included. Implementation issues use TDD; this planning PR
+changes no executable behavior.
+
+### Decisions and evidence
+
+- Neon documents Functions usage as absent from its Console usage summary;
+  consumption API access excludes Free. The earlier correctly parameterized call
+  returned 403. Do not request the same unavailable counter again or upgrade for it.
+- The official Free-plan policy states no overage billing. Absence of a payment
+  method alone does not establish provider behavior. Exact Functions behavior at
+  monthly exhaustion remains unverified; do not promise a specific response code,
+  delivery guarantee or provider hard spending cap.
+- Missing Functions usage remains explicitly unknown. Application accounting and
+  forward estimates do not become provider billing totals. Known OCI, Postgres
+  and shared network allowances still require defensible fresh evidence.
+- Stop new creation if Free status or acceptable billing behavior cannot be
+  substantiated, required known allowances are insufficient, or independent
+  cleanup cannot be qualified. Missing Functions totals alone is no longer the
+  proposed stop condition. Publish a no-go with reasons when a gate fails.
+- Preserve 160 normal / 40 cleanup Object Storage requests, attempt limits,
+  ownership checks and the original time window. Owner recovery cannot silently
+  extend expiry or recreate spent capacity. Retain old SQL evidence and the
+  consumed exception; future authorization must be separate.
+
+Sources checked November 18, 2026:
+[Console metrics](https://neon.com/docs/introduction/plans#usage-metrics),
+[consumption API](https://neon.com/docs/guides/consumption-metrics),
+[Free-plan limits](https://github.com/neondatabase/website/blob/main/content/faqs/free-plan-limits-and-quotas.md).
+
+### Ordered issue index
+
+GitHub Issues are authoritative; there is no duplicate todo checklist.
+Milestone: [Free-plan validation readiness](https://github.com/stanimirivanov/berth/milestone/2).
+
+| Issue | Bounded deliverable | Dependency |
+| --- | --- | --- |
+| [#67](https://github.com/stanimirivanov/berth/issues/67) | Publish this plan and dependent tasks | None |
+| [#68](https://github.com/stanimirivanov/berth/issues/68) | Define the revised Functions evidence policy in the specification and quality contract | #67 |
+| [#69](https://github.com/stanimirivanov/berth/issues/69) | Enforce the reviewed policy through hosted and SQL admission, using TDD | #68 |
+| [#70](https://github.com/stanimirivanov/berth/issues/70) | Qualify independent owner cleanup offline and publish the readiness report | #69 |
+
+Each implementation issue specifies acceptance criteria, focused verification and
+likely files, targeting one session and at most five files. Split expanded scope
+before implementation. Work is sequential because the evidence contract determines
+admission semantics, which determine the final recovery qualification.
+
+### Checkpoints and completion
+
+After #68/#69, review the contract and negative admission/SQL tests together:
+unknown Functions usage must not become fake headroom, stale/paid/unverified
+status must not authorize creation, and cleanup must retain its reserved path.
+No live activation follows this checkpoint.
+
+After #70, review the offline owner-recovery results, original reserve/expiry
+accounting and exact recovery instructions. Run the affected disposable PostgreSQL
+suites and canonical repository gates without removing crash coverage. Record
+unverified provider behavior and remaining live acceptance rows separately.
+
+Milestone success means a reviewed readiness decision, not a successful resource
+lifecycle or a billing measurement. A blocked readiness result is reported as
+no-go. Any later live validation requires a separate explicit owner decision,
+fresh account/IAM/allowance checks and a new operation authorization; merging these
+tasks grants none of those permissions.
+
+### Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| Hosted quota exhaustion prevents cleanup | Qualify independent owner recovery; keep reserved capacity and disclose manual intervention |
+| Functions usage or exhaustion semantics remain unavailable | Record unknown; retain owner-accepted interruption risk and dated Free-policy evidence |
+| Old evidence or consumed exception is reused | Negative admission/SQL tests; separate future operation authorization |
+| Offline success is mistaken for live acceptance | Preserve failed/partial historical verdict and explicit unresolved live rows |
+
+## Original trial plan and dated follow-ups
+
 Specification approved by the owner on 2026-11-12. This plan implements only the OCI Object Storage feasibility slice in berth. The toolchain and Neon setup tooling are merged; the owner reports successful Neon database apply/verify. The authenticated hosted synthetic runtime experiment is recorded in docs/trial/runtime-evidence.md. The native Postgres state candidate failed local qualification; see [the blocked decision](../docs/trial/state-decision.md). The [Cloudflare Free follow-up](../docs/trial/cloudflare-state-evidence.md) proved hosted persistence but failed deployment ownership under overlapping writers. The narrow fenced Postgres adapter and hosted #6 feasibility gate subsequently passed; see [the feasibility decision](../docs/trial/feasibility-decision.md). The gated live OCI resource lifecycle remains pending.
 
 ## Task tracker
