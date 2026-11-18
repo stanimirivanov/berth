@@ -481,3 +481,19 @@ credentials and resource identifiers remain outside Git. The worktree/index/hist
 secret scan and `git diff --check` passed. No production behavior or recovery tests
 were changed in this evidence PR; the earlier full canonical check applies to the
 exact deployed source, with commit-time fast gates checking the final documents.
+
+## Rebase and closeout follow-up — 2026-11-18
+
+This evidence branch was rebased onto current main after merged PR #63. All dated
+trial evidence and the failed lifecycle / partial feasibility decision are retained;
+no runtime or recovery test was changed by this evidence branch. Merged #58 fixes
+the bucket metadata request but does not establish the remaining live acceptance rows.
+
+[Draft owner closeout PR #60](https://github.com/stanimirivanov/berth/pull/60) now
+records an administrator-authenticated GetCompartment read at 15:44:14 UTC returning
+DELETED. This resolves the earlier asynchronous compartment tombstone. The read is
+outside the finalized trial ledger. No mutation or new trial was dispatched.
+
+Current verification uses PR #63's separate expiring audit qualification. Native
+picomatch audit failure remains visible; the November 25 UTC expiry and all trial
+bounds remain in force. PR #50 remains draft and its verdict remains partial/no-go.
