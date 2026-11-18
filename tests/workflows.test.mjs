@@ -113,9 +113,8 @@ test("temporary audit path retains canonical gates and has no continue-on-error 
     (s) => s.run === "pnpm run check:temporary-audit",
   );
   assert.ok(normal);
-  assert.ok(temporary);
-  assert.equal(normal.if, "steps.audit_policy.outputs.active != 'true'");
-  assert.equal(temporary.if, "steps.audit_policy.outputs.active == 'true'");
+  assert.equal(temporary, undefined);
+  assert.equal(normal.if, undefined);
   assert.equal(
     pkg.scripts["check:temporary-audit"],
     pkg.scripts.check.replace(
@@ -128,13 +127,29 @@ test("temporary audit path retains canonical gates and has no continue-on-error 
     "pnpm run secrets && node dist/scripts/temporary-audit.js",
   );
   for (const step of steps) assert.equal(step["continue-on-error"], undefined);
-  const policy = steps.find((s) => s.id === "audit_policy");
-  assert.ok(policy);
-  assert.ok(policy.run);
-  assert.match(policy.run, /2026-11-25T00:00:00Z/);
-  const artifact = steps.find((s) =>
-    s.uses?.startsWith("actions/upload-artifact@"),
+  assert.equal(
+    steps.some((s) => s.id === "audit_policy"),
+    false,
   );
-  assert.ok(artifact);
-  assert.equal(artifact.if, "always()");
+  assert.equal(
+    steps.some((s) => s.uses?.startsWith("actions/upload-artifact@")),
+    false,
+  );
+});
+
+test("advisory retirement restores unconditional canonical verification", () => {
+  const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8"));
+  /** @type {{run?:string,uses?:string,if?:string,id?:string,"continue-on-error"?:boolean}[]} */
+  const steps = workflow.jobs.verify.steps;
+  const canonical = steps.filter((s) => s.run === "pnpm check");
+  assert.equal(canonical.length, 1);
+  assert.equal(canonical[0]?.if, undefined);
+  assert.equal(
+    steps.some(
+      (s) =>
+        s.id === "audit_policy" || s.run?.includes("check:temporary-audit"),
+    ),
+    false,
+  );
+  for (const step of steps) assert.equal(step["continue-on-error"], undefined);
 });

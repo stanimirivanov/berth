@@ -11,9 +11,8 @@ import { join } from "node:path";
 import { collectAuditDiff } from "./audit-diff.js";
 import { evaluateException } from "./audit-exception.js";
 
-// Owner explicitly requested activation in PR #63 on 2026-11-18. No CLI time/approval overrides.
-const approvedAt = Date.parse("2026-11-18T00:00:00Z");
-const expiresAt = Date.parse("2026-11-25T00:00:00Z");
+// Historical command retained for diagnostics; #59 retired its approval after the native gate cleared.
+const formerExpiresAt = Date.parse("2026-11-25T00:00:00Z");
 const directory = join(process.env.RUNNER_TEMP ?? tmpdir(), "berth-audit");
 mkdirSync(directory, { recursive: true, mode: 0o700 });
 
@@ -116,7 +115,7 @@ try {
     diffComplete: diff?.complete === true,
     supportedFixAvailable: latest !== "4.0.7",
     assumptionsUnchanged: true,
-    approval: { owner: "Stanimir", issue: 59, approvedAt, expiresAt },
+    approval: undefined,
     changes: [],
   });
 } catch {
@@ -128,20 +127,22 @@ const evidence = {
   commit,
   run: process.env.GITHUB_RUN_ID ?? "local",
   result,
+  exceptionStatus: "retired",
+  nativeRemovalPrerequisiteMet: result === "clean",
   diff,
   audit,
   fullAudit,
   registry,
   owner: "Stanimir",
   issue: 59,
-  expiresAt,
+  formerExpiresAt,
 };
 writeFileSync(
   join(directory, "evidence.json"),
   JSON.stringify(evidence, null, 2),
   { mode: 0o600 },
 );
-const summary = `Audit result: ${result}. Native audit exit: ${audit.status}. Owner: Stanimir; #59; expiry: 2026-11-25T00:00:00Z. Advisory: GHSA-fc5q-39xc-vjpf. Temporary qualification is NOT audit-clean or deployment authorization. Raw evidence: ${directory}/evidence.json`;
+const summary = `Audit result: ${result}. Native audit exit: ${audit.status}. Exception: retired (#59); no advisory is waived. Native removal prerequisite: ${result === "clean" ? "met" : "not met"}. This does not authorize deployment or a live trial. Raw evidence: ${directory}/evidence.json`;
 console.log(summary);
 if (process.env.GITHUB_STEP_SUMMARY)
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);

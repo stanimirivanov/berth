@@ -1,5 +1,9 @@
 # Proposed temporary picomatch exception — #59
 
+**Retired 2026-11-18:** the implemented exception was removed after the native
+audit cleared. See [reconciliation](picomatch-withdrawal.md); the proposal below
+is historical and cannot activate or renew an exception.
+
 **Historical proposal: superseded by owner-requested verification implementation in PR #63.**
 See [implemented scope, commands and expiry](audit-exception-evaluator.md). The
 original proposal below is retained as history; it does not describe current activation.
