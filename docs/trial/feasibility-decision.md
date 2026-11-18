@@ -199,3 +199,79 @@ owner review, requiring a partial outcome when Functions allowances remain unkno
 That exception is not applied by this change; merging the qualification alone does
 not unblock #14 or authorize deployment. PR #50 remains draft. No paid option or
 provider hard-cap claim is introduced.
+
+## Live OCI activation checkpoint — 2026-11-14, issue #14
+
+PR #49 completes the hosted admission prerequisite, including protection of cleanup
+capacity and evidence freshness through the creation window. The earlier synthetic
+result above still does not establish real OCI lifecycle feasibility.
+
+Current read-only checks pass for OCI access and restricted Neon SQL permissions;
+the project has no functions/triggers or installed trial schemas. Fresh owner Free
+eligibility, aggregate allowance headroom and effective-IAM review remain missing.
+**Decision: no-go for activation until those inputs are supplied; live feasibility
+is unproven.** No paid fallback or relaxation of resource/request/time limits is
+approved. The bounded next step is to complete those inputs and execute the existing
+runbook under issue #14, not to introduce another execution backend.
+
+See [the dated live evidence ledger](live-results.md) for observations, build
+identity, each unresolved acceptance row and the conditions for resuming. No live
+OCI resource lifecycle was started in this checkpoint.
+
+
+### Read-only follow-up — 2026-11-14 18:06 UTC
+
+Existing credentials now verify Neon Free status, OCI home region, the restricted
+trial group/policy inventory and approximate current storage. The activation
+blocker is narrower: current OCI post-promotion account status, fresh aggregate
+request/transfer headroom and Neon Functions consumption/compute evidence. The
+Neon consumption API explicitly rejects Free-plan access (403); do not upgrade or
+infer zero usage. The live-results follow-up provides exact remaining Console
+steps. Activation remains blocked; no resource lifecycle has begun.
+
+
+### Owner evidence received — 2026-11-14
+
+The owner confirms OCI Free Tier and Neon Free, reporting 0.33 CU-hours, 32.1 MB
+Postgres storage, 118.7 kB history and 600 kB network transfer since November 12.
+Functions usage is not displayed. This resolves the account-status ambiguity but
+not the separate Functions headroom/measurement gap or recent OCI activity.
+Activation remains blocked on those specific inputs; do not request the same
+unavailable Functions counter repeatedly. The reported recovery CI cancellation
+was a confirmed 15-minute job timeout, tracked independently in #51. See the live
+results for the passing comparison run and precise limits of this diagnosis.
+
+
+### Owner scope confirmation and engineering handoff — 2026-11-14
+
+Owner questions are resolved: exclusive Berth use of the Neon project, no external
+OCI workloads, and Console observations immediately before the owner's message in
+Sofia time. The remaining blockers are engineering tasks #51 and #52, not another
+request to find unavailable Functions meters. The forward 64-call/60-second plan
+is 1.0667 capacity-hours, but cannot establish remaining historical allowance.
+Keep the live verdict blocked until the complete recovery gate and an explicitly
+reviewed headroom evidence method are satisfied. The existing application limits,
+free-only requirement and unknown-headroom rejection remain unchanged.
+## Approved live attempt — 2026-11-15: partial / no-go
+
+The owner-approved one-trial exception was consumed once. The hosted Node 24
+executor created a real private OCI bucket through Alchemy after the initiating
+client exited, but bucket inspection failed before object upload: GetBucket did
+not request the optional `autoTiering` field required by the strict validator.
+[#57](https://github.com/stanimirivanov/berth/issues/57) tracks the bounded fix and
+SDK contract regression coverage; missing fields must not be accepted as safe.
+
+The schedule was stopped. Local owner recovery requested the field explicitly and
+used the existing cleanup executor, ownership/revision checks and ledger to remove
+the bucket. Cleanup consumed 16 ledger requests plus two separately journaled
+post-terminal absence checks, **18 of the unchanged 40-request ceiling**. There
+are no unresolved requests or open attempts. Hosted function/trigger inventories
+are empty and the dedicated trial key is revoked. The immutable SQL verdict is
+partial and resource lifecycle outcome is failed.
+
+Full object checksum, metrics/warning, controlled interruption and autonomous
+hosted teardown remain unproven. Functions headroom and contemporaneous billed
+deltas remain unknown. See [timestamped live results](live-results.md#approved-one-trial-exception--2026-11-15).
+No production rollout or new live run is supported by this evidence. Review the
+partial PR #50, fix #57 and complete #15 closeout. The consumed exception must not
+be reset; any future live authorization requires a separate explicit decision.
