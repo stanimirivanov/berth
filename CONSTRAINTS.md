@@ -26,11 +26,39 @@ Exceptions must identify scope, reason, owner, removal issue and expiry. A prose
 exception does not bypass a check: a deliberate policy revision and owner review
 are required. External branch protection is necessary to make CI merge-blocking.
 
-The owner-approved #55 Functions-evidence exception is limited to the single
+The historical owner-approved #55 Functions-evidence exception is limited to the single
 operation/window defined in SPEC.md. It changes only the unknown Functions
 headroom gate and requires a partial verdict. Resource/request/time limits and all
 verification controls remain. The owner closes it under #14; authorization expires
 with that four-hour window and cannot be reset after success or failure.
+It was consumed by the failed November 15 trial; keep its authorization and evidence.
+
+## Revised Functions evidence contract — #68, 2026-11-19
+
+SPEC.md defines the owner-accepted future policy: missing Functions totals may
+remain unknown on verified Neon Free, with explicit acceptance of interruption
+and independent owner cleanup. This documentation changes no admission behavior.
+Issue #69 must enforce it in both hosted and SQL admission; #70 must qualify owner
+recovery offline. A separate explicit owner decision is required for any future
+deployment/trial. The current milestone grants no such authorization.
+
+- Free status and dated provider billing policy are evidence, not inferred from
+  absent payment details. Unknown/paid/stale status or unsupported acceptable billing
+  behavior blocks creation. Known OCI, Postgres and shared-transfer allowance checks
+  remain mandatory; missing Functions totals alone is the only relaxed evidence gate.
+- Preserve unknown values, source/coverage labels and `hardSpendingCap=false`.
+  No fabricated quota, request-ledger billing proxy or automatic feasibility pass.
+  Known exhausted Functions allowance still blocks creation.
+- Bind future authorization to a distinct operation/window, policy and reviewed
+  evidence. Preserve the consumed #55 record; reject replay and client/SQL bypass.
+- Preserve every resource/request/attempt/time/ownership control, including the
+  160/40 split, reserved cleanup and independently executable owner recovery.
+  Creation evidence failure must not remove owned cleanup; cleanup cannot bypass
+  its own reserve or expiry. Retain leftovers for explicit owner reconciliation.
+- Report capability evidence separately; unknown Functions allowance requires an
+  overall partial verdict. Preserve the historical failed/partial-no-go evidence.
+
+This policy does not relax tests, audit, secret scanning or other quality gates.
 
 The picomatch verification exception from PR #63 was retired under #59 on
 2026-11-18 after the unchanged native high-severity gate returned clean results.
