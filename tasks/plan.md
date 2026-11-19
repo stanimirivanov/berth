@@ -321,3 +321,18 @@ unchanged reserve; unsafe, uncertain, exhausted, expired or unreadable work stop
 The failed/partial live verdict and consumed authorization remain intact. A future
 live validation proposal needs a separate explicit owner decision and fresh account
 checks; no deployment or new trial is authorized by this milestone.
+
+## Read-only live readiness — #75, 2026-11-19
+
+[#75](https://github.com/stanimirivanov/berth/issues/75) records the
+[authenticated readiness assessment](../docs/trial/live-readiness-75.md): Neon Free
+and empty hosting are verified; old failed/partial evidence and deleted OCI
+compartment remain unchanged. Migration 006 is not installed. Current OCI account
+type, complete known allowance evidence, replacement restricted access and a new
+owner-authorized operation/window remain prerequisites.
+
+[#76](https://github.com/stanimirivanov/berth/issues/76) is the separately blocked
+bounded live-validation task, dependent on #75's missing prerequisites and explicit
+owner authorization. Closing the assessment or merging its PR authorizes no
+provisioning, deployment, migration installation or live trial. All cleanup/time
+bounds and historical evidence are preserved.
