@@ -1,5 +1,9 @@
 # Neon Free Functions headroom qualification — issue #52
 
+Current policy: see the [November 19 revision](#revised-policy--issue-68-2026-11-19).
+The original qualification and calculator below retain their original semantics;
+they are historical evidence, not current live authorization.
+
 ## Decision, 2026-11-15
 
 **No-go for live activation under the current evidence contract.** This completes
@@ -163,3 +167,66 @@ and immutable cleanup planning. An API test confirms the report cannot replace
 configured admission evidence. Passing controls use synthetic provider totals only.
 Existing stale/unknown creation rejection and owned cleanup admission remain intact.
 No live billing or OCI acceptance is claimed by these local tests.
+
+## Revised policy — issue #68, 2026-11-19
+
+**Decision:** retain Neon/Alchemy/OCI initially and permit unknown Functions usage
+under the future policy in [SPEC.md](../../SPEC.md#revised-functions-evidence-policy--issue-68-2026-11-19).
+The owner accepts execution failure and possible manual OCI recovery, with the
+cleanup reserve and independent owner procedure preserved. This replaces the
+requirement to find unavailable Functions totals for a future authorized operation;
+it does not replace the consumed #55 authorization or alter the failed November 15
+trial. Historical feasibility remains partial/no-go; closeout is complete.
+
+### Public provider evidence checked November 19
+
+| Question | Evidence and limitation |
+| --- | --- |
+| Console totals | [Plans: usage metrics](https://neon.com/docs/introduction/plans#usage-metrics) explicitly omits Functions active/waiting compute and invocations from the usage summary. Database compute is a different meter. |
+| API totals | [Consumption metrics](https://neon.com/docs/guides/consumption-metrics) includes Functions in the v2 project/branch endpoints, available on Launch, Scale, Agent and Enterprise, excluding Free. The recorded Free 403 remains historical; no account request was repeated for #68. |
+| Billing basis | [Official Free-plan FAQ](https://github.com/neondatabase/website/blob/main/content/faqs/free-plan-limits-and-quotas.md) states no overage billing on Free; [plans](https://neon.com/docs/introduction/plans#price) describes $0/month. This is the policy basis for the products used, not a conclusion from missing card details. No paid add-on or upgrade is included. |
+| Exhaustion | The FAQ describes database compute suspension and storage write failures. It does not establish exact monthly Functions exhaustion behavior. Do not infer a Functions response code, shutdown deadline or guaranteed completion from database rules. |
+
+Public documentation establishes available evidence surfaces and billing policy,
+not this account's current plan or remaining allowance. Future preparation must
+bind authenticated API or dated owner Console plan evidence to the actual project,
+period and observation time. Label owner attestation separately from API verification.
+Neither an empty display nor exclusive project use establishes consumption totals.
+
+### Future evidence and verdict rules
+
+- Require fresh account/IAM/known allowance evidence through the creation window,
+  plus a current substantiated Free billing basis. Stop with a documented no-go for
+  missing/stale/unverified plan status, insufficient known allowances or incompatible
+  billing behavior. Shared project transfer and Postgres usage remain separate checks.
+- If the supported Free interfaces still omit Functions totals, record both usage
+  and remaining allowance as unknown. Do not repeatedly search the same unavailable
+  counters or upgrade. Available exhausted/insufficient totals block creation.
+- Preserve measured scheduling evidence and the forward scenario as estimates;
+  retain application metering/warnings without claiming they cover platform retries,
+  rejected calls or all billed work. Keep `hardSpendingCap=false`.
+- A future run requires a new explicit owner decision and durable operation-bound
+  authorization. Preserve old SQL history and the consumed singleton. Independent
+  cleanup must be qualified first and cannot spend beyond the original reserve or
+  expiry. Unavailable ownership/ledger evidence requires safe reconciliation.
+- Report each live capability separately. Successful object lifecycle would not
+  prove complete Functions allowance evidence; unknown allowance keeps the overall
+  result partial. Offline success cannot pass any remaining live acceptance row.
+
+### Implementation boundary and review
+
+`src/trial/preflight.ts` currently accepts only verified evidence or the historical
+`free-functions-one-trial` shape. `src/trial/live-admission.ts` checks the prepared
+authorization/version and persisted partial qualification. The SQL gates in
+`migrations/004_admission.sql` and `migrations/005_functions_exception.sql` bind
+admission and the one-use exception. None implements a new policy mode in #68.
+The offline calculator above remains review-only and continues returning no-go
+for unsupported historical evidence. Its output must not become an admission input.
+
+[#69](https://github.com/stanimirivanov/berth/issues/69) owns failing-first enforcement
+tests across hosted admission, preview replay and direct SQL, including unchanged
+cleanup access when creation evidence fails. [#70](https://github.com/stanimirivanov/berth/issues/70)
+owns offline independent recovery qualification and exact owner instructions.
+Until those reviews and a separate owner authorization, retain no-go for activation.
+This documentation-only issue reads no private credentials, performs no live
+account checks, changes no schema/code/tests and authorizes no deployment or trial.

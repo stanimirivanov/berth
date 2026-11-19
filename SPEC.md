@@ -1,6 +1,10 @@
 # OCI Object Storage on Neon feasibility trial
 
-Approved for implementation planning, 2026-11-12. No implementation or live validation completed.
+Originally approved for implementation planning, 2026-11-12. Current status:
+the November 15 live lifecycle failed and feasibility remains **partial / no-go**;
+owner closeout is complete. Dated proposal/setup text below describes the original
+trial. The November 19 evidence policy defines future requirements only; no new
+live trial is authorized.
 
 ## Objective
 
@@ -35,10 +39,94 @@ Use a create-only precondition for the object. Inspect marker and content agains
 - One active trial, one bucket, one 1 MiB object. No automatic adoption of pre-existing names.
 - Maximum three attempts per action with bounded backoff and a 200-request Object Storage budget: 160 for setup/probes/permission tests/lifecycle and 40 exclusively for cleanup/reconciliation/absence verification. Atomically reserve both attempt and request allowance in Postgres before every dispatch; uncertain dispatches remain spent. Disable automatic SDK/transport retries or reserve every underlying request, including pagination. No dispatch if reservation fails. Monitoring calls and Neon invocations need separate measured budgets; the 200-request count does not cover those services. Exhaustion produces an explicit recovery report, not an infinite loop.
 - Four-hour cloud-work window from persisted start time. Proposed scheduler cadence: 15 minutes; metrics are due hourly. Stop starting create/upload operations after minute 30. Start cleanup by hour three, or earlier on failure, leaving one hour for bounded reconciliation and deletion. The metric window ends at cleanup start even if fewer than three observations arrived; missing data is inconclusive. Before enabling mutations, show that measured invocation duration, bounded backoff and trigger delay fit this schedule with margin. No provider delivery deadline is assumed; excessive delay or unresolved calls produce needs-reconciliation at hour four, not success. Do not restart cloud work on late or duplicate triggers.
-- Owner-provided eligibility/headroom check at most 24 hours old: account status, home region, aggregate storage, month-to-date requests, applicable transfer allowance, and Neon usage. Reserve at least 10 MiB storage and 200 OCI requests. Estimate Neon consumption from a measured no-cloud-write probe before mutation. Unknown headroom blocks creation, not owned-resource cleanup, except for the explicit one-trial Functions exception below.
+- Owner-provided eligibility/headroom check at most 24 hours old: account status, home region, aggregate storage, month-to-date requests, applicable transfer allowance, and Neon usage. Reserve at least 10 MiB storage and 200 OCI requests. Estimate Neon consumption from a measured no-cloud-write probe before mutation. Unknown headroom blocks creation, not owned-resource cleanup. The future Functions-only policy below defines a reviewed alternative; the historical one-trial exception remains consumed.
 - Compartment metrics provide partial coverage. The dated owner check is not a guarantee against concurrent consumption elsewhere in the account. No provider-enforced spending cap is claimed.
 
-## Approved one-trial Functions exception (issue #55)
+## Revised Functions evidence policy — issue #68, 2026-11-19
+
+Scope: retain Neon Free / Alchemy / OCI initially. The owner accepts unknown
+Functions consumption and quota-induced interruption, including loss of hosted
+cleanup. This policy is a specification for #69 enforcement and #70 offline owner
+recovery qualification. Merging it changes no executable gate, grants no deployment
+permission and authorizes no live trial. Until those prerequisites and a separate
+owner decision are complete, activation remains no-go.
+
+### Evidence required for a separately authorized future operation
+
+- Record the actual organization/project, branch, billing period, observation time,
+  source and reviewer for each evidence item; redact identifiers in published
+  reports. Plan status must be verified from an authenticated provider API or dated
+  owner Console evidence. Record API-verified and owner-attested status separately.
+  No-card status or an empty usage display is not Free-plan verification.
+- Require Neon Free and OCI free eligibility/home region, current effective IAM
+  review and aggregate allowance evidence. Account/IAM/usage observations must be
+  no more than 24 hours old, never future-dated, and remain valid through the
+  start-plus-30-minute creation window. Recheck if account activity or plan changes;
+  missing, stale, paid, conflicting or unknown required evidence blocks creation.
+- Known remaining allowances must cover the operation and its reserves: at least
+  10 MiB OCI storage, all 200 Object Storage requests including the protected 40,
+  applicable transfer and configured Monitoring limits. Separately qualify Neon
+  Postgres storage/compute and aggregate shared network transfer against the full
+  preparation, execution and shutdown envelope. Postgres CU-hours cannot stand in
+  for Functions capacity-hours; an application invocation budget is not a provider
+  usage total. Insufficient or unverified known allowances block creation.
+- Review dated official evidence of Neon Free billing behavior for the products
+  used. The current basis is $0/month and the provider's no-Free-overage statement,
+  not the absence of payment details. If that basis cannot be substantiated or
+  changes incompatibly, stop creation and record no-go. No paid upgrade, promotional
+  credit dependency or paid add-on may satisfy this policy. No provider hard
+  spending cap is claimed; retain `hardSpendingCap=false`.
+- Record Functions active/waiting capacity and invocations as provider-reported
+  totals with units, period and coverage when available. Otherwise record usage
+  and remaining allowance as **unknown**, with the unavailable Console/API surface
+  and dated source. Unknown Functions totals alone do not block the future policy.
+  Provider-reported exhausted/insufficient Functions allowance does block creation.
+  Logs, request ledgers and forward scenarios never populate missing provider totals.
+- Retain measured runtime and the separately labeled forward Functions scenario
+  for scheduling and risk review. It is not historical headroom or a provider cap.
+  No specific Functions quota-exhaustion status code, suspension timing or delivery
+  guarantee has been established; accept interruption rather than promise behavior.
+
+### Authorization, cleanup and outcome
+
+A separate explicit owner decision must authorize one new operation and its fixed
+four-hour window after readiness review. An owner-prepared durable record must bind
+the operation, target, credential identity, policy version and reviewed evidence,
+including acceptance of unknown Functions usage and manual-recovery risk. Clients
+cannot supply or broaden that authorization. Submission/replay and direct SQL must
+enforce the same record. Terminal/expired authorization cannot be renewed or reused;
+the #55 singleton and historical ledger must never be reset, deleted or repurposed.
+
+Preserve one bucket/one 1 MiB object, three attempts/action, 160 normal/40 cleanup
+Object Storage requests, separate Monitoring/application-invocation budgets and all
+ownership/fencing controls. Creation ends at minute 30, cleanup starts by hour three,
+and cloud work expires at hour four. Unknown/stale creation evidence must not remove
+the owned-cleanup path, but cleanup still requires its own budget, credentials,
+ownership and expiry checks. Owner recovery cannot mint requests or extend the
+window. After exhaustion/expiry, retain needs-reconciliation and exact leftovers
+for separately reviewed owner action, never silently restart the executor.
+
+Before future activation, qualify an independent owner cleanup procedure that can
+run without Neon Functions, using retained durable ownership and request evidence.
+If Neon SQL is unavailable too, stop safely and report the missing evidence rather
+than delete by name. The owner must be available for independent recovery and
+administrative shutdown by expiry + 15 minutes; no hosted availability is guaranteed.
+
+Record runtime, lifecycle/checksum, metrics/warning, interruption recovery and
+autonomous teardown verdicts separately from Free-allowance evidence. A future
+capability may pass only with its own live evidence. Unknown Functions allowance
+keeps the overall feasibility verdict **partial**, even if lifecycle succeeds;
+missing metrics/recovery evidence also remains partial. Gate failure is no-go for
+activation. None of these future results rewrites the November 15 failed lifecycle,
+partial/no-go verdict or completed owner closeout.
+
+The dated source assessment and current code/SQL gap are in
+[Functions headroom qualification](docs/trial/functions-headroom.md#revised-policy--issue-68-2026-11-19).
+
+## Historical approved one-trial Functions exception (issue #55)
+
+This authorization was consumed by the November 15 attempt and is closed. The
+following records its original terms, not instructions to activate another run.
 
 The owner accepted this exception on 2026-11-15: one four-hour OCI trial on the
 existing Neon Free project may proceed with unknown remaining Functions allowance.
