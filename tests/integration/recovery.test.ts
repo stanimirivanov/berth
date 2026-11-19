@@ -465,3 +465,369 @@ test("interrupted object deletion completes owned teardown within the unchanged 
     );
   }
 });
+
+/** Real executor/SDK recovery fixture with local SQL and an in-memory HTTP boundary only. */
+async function ownerRecoveryFixture(
+  work: (f: Awaited<ReturnType<typeof ownerRecoverySetup>>) => Promise<void>,
+) {
+  const f = await ownerRecoverySetup();
+  try {
+    await work(f);
+  } finally {
+    await f.close();
+  }
+}
+
+/** No Functions service participates; a fresh SDK and SQL connection represent each owner invocation. */
+async function ownerRecoverySetup() {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { safeBucketSdk } = await import("../../src/providers/oci/client.js");
+  const { executeLive } = await import("../../src/trial/live-runtime.js");
+  const { OciWire } = await import("../fakes/oci-wire.js");
+  const owner = new Client({
+    host: "127.0.0.1",
+    port,
+    database: "neondb",
+    user: "neondb_owner",
+    password: "berth-test-only",
+  });
+  await owner.connect();
+  const id = "00000000-0000-4000-8000-000000000001",
+    start = Date.now() - 1000;
+  const wire = new OciWire();
+  const env = {
+    compartment: "ocid1.compartment.oc1..fixture",
+    namespace: "fixture",
+    region: "eu-frankfurt-1",
+    tenancy: "ocid1.tenancy.oc1..fixture",
+    user: "ocid1.user.oc1..fixture",
+    fingerprint: "fixture",
+    monitoringLimit: 20,
+    neonLimit: 64,
+    operation: id,
+    startedAt: start,
+    expiresAt: start + 14400000,
+    token: "a".repeat(40),
+    previewKey: "b".repeat(40),
+    connection: "unused",
+    privateKey: generateKeyPairSync("rsa", { modulusLength: 2048 })
+      .privateKey.export({ type: "pkcs8", format: "pem" })
+      .toString(),
+  };
+  const binding = {
+    compartment: env.compartment,
+    namespace: env.namespace,
+    region: env.region,
+    tenancy: env.tenancy,
+    user: env.user,
+    fingerprint: env.fingerprint,
+    monitoringLimit: 20,
+    neonLimit: 64,
+  };
+  for (const file of [
+    "001_trial",
+    "002_executor",
+    "003_usage",
+    "004_admission",
+    "005_functions_exception",
+    "006_free_functions_policy",
+  ])
+    await owner.query(await readFile(`migrations/${file}.sql`, "utf8"));
+  await owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+    id,
+    new Date(start),
+    JSON.stringify(binding),
+    JSON.stringify({
+      checkedAt: start,
+      iamCheckedAt: start,
+      iamReviewed: true,
+      accountType: "always-free",
+      homeRegion: env.region,
+      neonFree: true,
+      storageBytes: 10485760,
+      objectRequests: 200,
+      transferBytes: 1048576,
+      monitoringRequests: 20,
+      functionsMode: "free-plan-unknown-v1",
+      functionsUsage: "unknown",
+      functionsAllowance: "unknown",
+      functionsPolicy: {
+        operation: id,
+        startedAt: start,
+        expiresAt: env.expiresAt,
+        shutdownBy: env.expiresAt + 900000,
+        policyVersion: "free-plan-v1",
+        reviewer: "offline-owner",
+        otherServicesEvidence: "offline-envelope",
+        unknownAllowanceAccepted: true,
+        partialVerdictAccepted: true,
+        exclusiveProjectUse: true,
+        manualRecoveryReady: true,
+        probeClientMs: 2252,
+        scenario: "64x60-plus36x60-v1",
+        plan: {
+          status: "free",
+          source: "owner-console",
+          checkedAt: start,
+          project: "offline-project",
+          branch: "offline-branch",
+          period: "offline-period",
+          evidence: "offline-plan",
+        },
+        billing: {
+          reviewedAt: start,
+          source: "neon-free-no-overage-2026-11-19",
+          evidence: "offline-billing",
+        },
+        allowances: {
+          postgresStorageBytes: 10485760,
+          requiredPostgresStorageBytes: 1048576,
+          postgresComputeCuSeconds: 36000,
+          requiredPostgresComputeCuSeconds: 28800,
+          sharedTransferBytes: 10485760,
+          requiredSharedTransferBytes: 1048576,
+        },
+      },
+    }),
+  ]);
+  // Synthetic owner receipt only; real IAM verification remains a live acceptance gap.
+  await owner.query(
+    "UPDATE berth_executor.admission SET verified_at=clock_timestamp() WHERE operation=$1",
+    [id],
+  );
+  await owner.query("SELECT berth_executor.admit($1,$2)", [
+    id,
+    JSON.stringify(binding),
+  ]);
+  const wireReservations = new Set<string>();
+  let uncertainUpload = false,
+    extraObject = false,
+    sqlUnavailable = false;
+  const ports = {
+    database: () => {
+      const db = new Client({
+        host: "127.0.0.1",
+        port,
+        database: "neondb",
+        user: "berth_runtime",
+        password: "test-runtime-only",
+      });
+      return {
+        connect: async () => {
+          if (sqlUnavailable) throw Error("SQL unavailable");
+          await db.connect();
+        },
+        query: (text: string, values?: readonly unknown[]) =>
+          db.query(text, values ? [...values] : []),
+        end: () => db.end(),
+      };
+    },
+    fetch: async () => {
+      throw Error("Network is forbidden in owner recovery drill");
+    },
+    sdk: () =>
+      safeBucketSdk({
+        send: async (request) => {
+          const reserved = (
+            await owner.query(
+              "SELECT id FROM berth_ledger.requests WHERE operation=$1 AND outcome='unresolved' AND meter IN ('normal','cleanup') ORDER BY reserved_at DESC LIMIT 1",
+              [id],
+            )
+          ).rows[0]?.id;
+          assert.equal(
+            typeof reserved,
+            "string",
+            "Every SDK send requires a durable SQL reservation",
+          );
+          assert.equal(
+            wireReservations.has(reserved),
+            false,
+            "No SDK retry may reuse a reservation",
+          );
+          wireReservations.add(reserved);
+          if (uncertainUpload && request.method === "PUT")
+            throw Error("Upload response uncertain before model observation");
+          const response = await wire.send(request);
+          if (
+            extraObject &&
+            request.method === "GET" &&
+            new URL(request.uri).pathname.endsWith("/o")
+          ) {
+            const body = await response.json();
+            return Response.json({
+              ...body,
+              objects: [
+                ...body.objects,
+                { name: "foreign.bin", size: 1, etag: "foreign" },
+              ],
+            });
+          }
+          return response;
+        },
+      }),
+  };
+  let serial = 0;
+  return {
+    owner,
+    wire,
+    wireReservations,
+    env,
+    faults: (v: {
+      uncertainUpload?: boolean;
+      extraObject?: boolean;
+      sqlUnavailable?: boolean;
+    }) => {
+      uncertainUpload = v.uncertainUpload ?? false;
+      extraObject = v.extraObject ?? false;
+      sqlUnavailable = v.sqlUnavailable ?? false;
+    },
+    invoke: () =>
+      executeLive(
+        env,
+        "scheduled",
+        `offline-owner-${++serial}`,
+        ports,
+      ) as Promise<{ phase: string }>,
+    cancel: () => executeLive(env, "cleanup", undefined, ports),
+    report: async () =>
+      (await owner.query("SELECT berth_executor.report($1) AS value", [id]))
+        .rows[0].value,
+    unresolved: async () =>
+      Number(
+        (
+          await owner.query(
+            "SELECT count(*) FROM berth_ledger.requests WHERE operation=$1 AND outcome='unresolved'",
+            [id],
+          )
+        ).rows[0].count,
+      ),
+    close: async () => {
+      for (const schema of ["berth_usage", "berth_executor", "berth_ledger"])
+        await owner.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      await owner.end();
+    },
+  };
+}
+
+test("independent owner cleanup survives hosted loss and accepted DELETE response loss with the real SDK and unchanged reserve", async (t) => {
+  for (const lost of [false, true])
+    await t.test(lost ? "lost-delete-response" : "hosting-unavailable", () =>
+      ownerRecoveryFixture(async (f) => {
+        assert.equal((await f.invoke()).phase, "observe");
+        assert.ok(f.wire.object);
+        Object.assign(f.wire, { loseDeleteResponse: lost });
+        await f.cancel();
+        const first = await f.invoke();
+        const spent = (await f.report()).trial.cleanup_used;
+        let uncertainId: string | undefined;
+        if (lost) {
+          assert.equal(
+            (await f.report()).trial.outcome,
+            "needs-reconciliation",
+          );
+          const uncertain = (
+            await f.owner.query(
+              "SELECT id FROM berth_ledger.requests WHERE operation=$1 AND mutation AND outcome='unresolved'",
+              [f.env.operation],
+            )
+          ).rows;
+          assert.equal(uncertain.length, 1);
+          uncertainId = uncertain[0].id;
+        } else assert.equal(first.phase, "terminal");
+        if (lost) await f.invoke();
+        const report = await f.report();
+        assert.ok(["succeeded", "failed"].includes(report.trial.outcome));
+        assert.equal(report.feasibility.verdict, "partial");
+        assert.equal(report.feasibility.functionsAllowance, "unknown");
+        assert.equal(f.wire.object, undefined);
+        assert.equal(f.wire.bucket, undefined);
+        assert.equal(await f.unresolved(), 0);
+        assert.ok(report.trial.cleanup_used >= spent);
+        assert.equal(
+          report.trial.normal_used + report.trial.cleanup_used,
+          f.wireReservations.size,
+        );
+        if (uncertainId)
+          assert.deepEqual(
+            (
+              await f.owner.query(
+                "SELECT meter,outcome,basis FROM berth_ledger.requests WHERE id=$1",
+                [uncertainId],
+              )
+            ).rows[0],
+            {
+              meter: "cleanup",
+              outcome: "succeeded",
+              basis: "reconciled-provider",
+            },
+          );
+        assert.ok(report.trial.cleanup_used <= 40);
+        assert.ok(report.trial.normal_used <= 160);
+        assert.equal(
+          f.wire.requests.filter((r) => r.method === "DELETE").length,
+          2,
+        );
+        assert.ok(
+          f.wire.requests
+            .filter((r) => r.method === "DELETE")
+            .every((r) => r.headers.has("if-match")),
+        );
+        t.diagnostic(
+          `${lost ? "lost DELETE" : "clean"}: normal=${report.trial.normal_used}/160 cleanup=${report.trial.cleanup_used}/40`,
+        );
+      }),
+    );
+});
+
+test("owner recovery refuses unknown contents uncertain uploads exhausted reserves expiry and missing SQL evidence", async (t) => {
+  for (const fault of [
+    "contents",
+    "upload",
+    "reserve",
+    "expiry",
+    "sql",
+  ] as const)
+    await t.test(fault, () =>
+      ownerRecoveryFixture(async (f) => {
+        if (fault === "upload") f.faults({ uncertainUpload: true });
+        await f.invoke();
+        const before = f.wire.requests.length;
+        if (fault === "contents") f.faults({ extraObject: true });
+        if (fault === "reserve")
+          await f.owner.query(
+            "UPDATE berth_ledger.trials SET cleanup_used=40 WHERE operation=$1",
+            [f.env.operation],
+          );
+        if (fault === "expiry") {
+          f.env.expiresAt = Date.now() - 1000;
+          f.env.startedAt = f.env.expiresAt - 14400000;
+          await f.owner.query(
+            "UPDATE berth_ledger.trials SET started_at=$2,expires_at=$3 WHERE operation=$1",
+            [
+              f.env.operation,
+              new Date(f.env.startedAt),
+              new Date(f.env.expiresAt),
+            ],
+          );
+        }
+        if (fault === "sql") {
+          f.faults({ sqlUnavailable: true });
+          await assert.rejects(f.cancel());
+        } else {
+          await f.cancel();
+          await f.invoke();
+        }
+        const report = await f.report();
+        assert.ok(f.wire.bucket);
+        assert.equal(
+          f.wire.requests.filter((r) => r.method === "DELETE").length,
+          0,
+        );
+        assert.ok(report.trial.cleanup_used <= 40);
+        assert.equal(report.feasibility.verdict, "partial");
+        if (["sql", "expiry", "reserve"].includes(fault))
+          assert.equal(f.wire.requests.length, before);
+        if (fault === "upload") assert.ok((await f.unresolved()) > 0);
+      }),
+    );
+});

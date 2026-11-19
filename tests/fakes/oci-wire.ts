@@ -12,6 +12,8 @@ export class OciWire {
   foreignMetadata = false;
   partialInventory = false;
   rejectDelete = false;
+  /** One accepted object deletion loses its response; state survives a new SDK/executor. */
+  loseDeleteResponse = false;
   beforePut: () => void = () => {};
   /** Model only the trial's HTTP routes, revisions and opt-in metadata; unknown sends fail without network fallback. */
   async send(request: HttpRequest): Promise<Response> {
@@ -89,6 +91,10 @@ export class OciWire {
       if (request.method === "DELETE") {
         if (this.rejectDelete) return new Response(null, { status: 412 });
         this.object = undefined;
+        if (this.loseDeleteResponse) {
+          this.loseDeleteResponse = false;
+          throw Error("Offline accepted DELETE response lost");
+        }
         return new Response(null, { status: 204 });
       }
       assert.ok(["HEAD", "GET"].includes(request.method));
