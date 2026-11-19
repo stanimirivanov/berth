@@ -46,9 +46,46 @@ export interface FunctionsPolicy extends FunctionsException {
     requiredPostgresStorageBytes: number;
     postgresComputeCuSeconds: number;
     requiredPostgresComputeCuSeconds: number;
-    sharedTransferBytes: number;
+    sharedTransferBytes?: number;
     requiredSharedTransferBytes: number;
   };
+}
+/** Explicit normalized capacity with original observation retained; no automatic unit conversion. */
+export interface AllowanceMeter {
+  observed: number | "not-exposed";
+  unit: string;
+  remaining: number | "unknown";
+  required: number;
+  knownInsufficient: false;
+  coverage: "complete" | "partial" | "unavailable";
+  sourceRef: string;
+  periodRef: string;
+  checkedAt: number;
+  normalizationRef?: string;
+}
+/** Closed exception scope; storage, Postgres and eligibility cannot be waived. */
+export interface AllowanceException {
+  version: "issue76-once-v1";
+  issue: 76;
+  approvalRef: string;
+  unknownActivityAccepted: true;
+  quotaFailureAccepted: true;
+  ociFree: {
+    status: "free-tier";
+    source: "owner-console" | "provider-api";
+    checkedAt: number;
+    evidence: string;
+    billingEvidence: string;
+    billingReviewedAt: number;
+  };
+  meters: Record<
+    | "neonSharedTransfer"
+    | "ociObjectRequests"
+    | "ociOutboundTransfer"
+    | "ociMonitoringIngestion"
+    | "ociMonitoringRetrieval",
+    AllowanceMeter
+  >;
 }
 /** Owner aggregate attestation, not a provider billing API or hard spending guarantee. */
 export interface Headroom {
@@ -56,9 +93,9 @@ export interface Headroom {
   accountType: string;
   homeRegion: string;
   storageBytes: number;
-  objectRequests: number;
-  transferBytes: number;
-  monitoringRequests: number;
+  objectRequests?: number;
+  transferBytes?: number;
+  monitoringRequests?: number;
   neonFree: boolean;
   /** Required only by verified mode; unknown-allowance modes reject these keys. */
   neonInvocations?: number;
@@ -72,6 +109,7 @@ export interface Headroom {
   functionsPolicy?: FunctionsPolicy;
   functionsUsage?: "unknown";
   functionsAllowance?: "unknown";
+  allowanceException?: AllowanceException;
 }
 
 /** Fail closed on unsupported target/configuration before admission can be constructed. */
@@ -115,6 +153,10 @@ export function preflight(
     e.neonFree !== true
   )
     return ["eligibility-unverified"];
+  if (e.allowanceException !== undefined)
+    return validBoundedAllowance(c, e, now, prepared)
+      ? []
+      : ["bounded-allowance-invalid"];
   const sufficient = (value: unknown, minimum: number) =>
     typeof value === "number" && Number.isFinite(value) && value >= minimum;
   if (
@@ -155,6 +197,7 @@ function validFunctionsPolicy(
   e: Partial<Headroom>,
   now: number,
   p?: PreparedTrial,
+  unknownShared = false,
 ) {
   const x = e.functionsPolicy;
   if (
@@ -191,7 +234,6 @@ function validFunctionsPolicy(
       a.requiredPostgresStorageBytes,
       a.postgresComputeCuSeconds,
       a.requiredPostgresComputeCuSeconds,
-      a.sharedTransferBytes,
       a.requiredSharedTransferBytes,
     ].every((v) => Number.isSafeInteger(v) && v > 0) &&
     a.requiredPostgresStorageBytes >= 1048576 &&
@@ -199,8 +241,135 @@ function validFunctionsPolicy(
     a.requiredPostgresComputeCuSeconds >= 28800 &&
     a.postgresComputeCuSeconds >= a.requiredPostgresComputeCuSeconds &&
     a.requiredSharedTransferBytes >= 1048576 &&
-    a.sharedTransferBytes >= a.requiredSharedTransferBytes
+    (unknownShared
+      ? !("sharedTransferBytes" in a)
+      : Number.isSafeInteger(a.sharedTransferBytes) &&
+        (a.sharedTransferBytes ?? -1) >= a.requiredSharedTransferBytes)
   );
+}
+
+/** A waiver is explicit and narrow; unknown data never passes through the strict validator as fake quota. */
+function validBoundedAllowance(
+  c: TrialConfiguration,
+  e: Partial<Headroom>,
+  now: number,
+  p?: PreparedTrial,
+) {
+  const x = e.allowanceException;
+  const ref = (v: unknown) =>
+    typeof v === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(v);
+  const fresh = (v: unknown) =>
+    typeof v === "number" &&
+    Number.isSafeInteger(v) &&
+    v <= now &&
+    v + 86400000 >= (p?.startedAt ?? Infinity) + 1800000;
+  if (
+    !x ||
+    e.functionsMode !== "free-plan-unknown-v1" ||
+    e.accountType !== "always-free" ||
+    c.monitoringLimit !== 20 ||
+    !Number.isSafeInteger(e.checkedAt) ||
+    !Number.isSafeInteger(e.storageBytes) ||
+    (e.storageBytes ?? 0) < 10485760 ||
+    ["objectRequests", "transferBytes", "monitoringRequests"].some(
+      (k) => k in e,
+    ) ||
+    !validFunctionsPolicy(c, e, now, p, true) ||
+    x.version !== "issue76-once-v1" ||
+    x.issue !== 76 ||
+    !ref(x.approvalRef) ||
+    x.unknownActivityAccepted !== true ||
+    x.quotaFailureAccepted !== true ||
+    x.ociFree?.status !== "free-tier" ||
+    !["owner-console", "provider-api"].includes(x.ociFree.source) ||
+    !fresh(x.ociFree.checkedAt) ||
+    !fresh(x.ociFree.billingReviewedAt) ||
+    !ref(x.ociFree.evidence) ||
+    !ref(x.ociFree.billingEvidence)
+  )
+    return false;
+  const floors = {
+    neonSharedTransfer:
+      e.functionsPolicy?.allowances.requiredSharedTransferBytes ?? Infinity,
+    ociObjectRequests: 200,
+    ociOutboundTransfer: 1048576,
+    ociMonitoringIngestion: 1,
+    ociMonitoringRetrieval: 100,
+  };
+  if (
+    !x.meters ||
+    Object.keys(x.meters).sort().join(",") !==
+      Object.keys(floors).sort().join(",")
+  )
+    return false;
+  return Object.entries(floors).every(([key, minimum]) => {
+    const m = x.meters[key as keyof typeof floors];
+    const units: Record<string, Record<string, number>> = {
+      neonSharedTransfer: { bytes: 1 },
+      ociObjectRequests: { requests: 1, "10K Requests": 10000 },
+      ociOutboundTransfer: { bytes: 1, GB: 1000000000, "GB Months": 0 },
+      ociMonitoringIngestion: { datapoints: 1, "Million Datapoints": 1000000 },
+      ociMonitoringRetrieval: { datapoints: 1, "Million Datapoints": 1000000 },
+    };
+    const caps: Record<string, number> = {
+      neonSharedTransfer: 5000000000,
+      ociObjectRequests: 50000,
+      ociOutboundTransfer: 10000000000000,
+      ociMonitoringIngestion: 500000000,
+      ociMonitoringRetrieval: 1000000000,
+    };
+    if (
+      !m ||
+      !Number.isSafeInteger(m.required) ||
+      m.required < minimum ||
+      m.required > (caps[key] ?? 0) ||
+      m.knownInsufficient !== false ||
+      !ref(m.sourceRef) ||
+      !ref(m.periodRef) ||
+      !fresh(m.checkedAt)
+    )
+      return false;
+    if (m.observed === "not-exposed")
+      return (
+        m.unit === "not-exposed" &&
+        m.remaining === "unknown" &&
+        m.coverage === "unavailable"
+      );
+    const factor = units[key]?.[m.unit];
+    if (
+      typeof m.observed !== "number" ||
+      !Number.isFinite(m.observed) ||
+      m.observed < 0 ||
+      m.observed > Number.MAX_SAFE_INTEGER ||
+      factor === undefined
+    )
+      return false;
+    const consumed =
+      factor > 0
+        ? normalizedConsumption(m.observed, factor, caps[key] ?? 0)
+        : 0;
+    if (factor > 0 && consumed + m.required > (caps[key] ?? 0)) return false;
+    if (m.remaining === "unknown") return m.coverage === "partial";
+    return (
+      factor > 0 &&
+      m.coverage === "complete" &&
+      ref(m.normalizationRef) &&
+      Number.isSafeInteger(m.remaining) &&
+      m.remaining >= m.required &&
+      m.remaining <= (caps[key] ?? 0) - consumed
+    );
+  });
+}
+
+/** Match SQL numeric/ceil exactly; binary float rounding must not change a quota boundary. */
+function normalizedConsumption(value: number, factor: number, cap: number) {
+  const [mantissa = "0", exponent = "0"] = String(value).split("e");
+  const scale = (mantissa.split(".")[1]?.length ?? 0) - Number(exponent);
+  let numerator = BigInt(mantissa.replace(".", "")) * BigInt(factor);
+  const denominator = 10n ** BigInt(Math.max(scale, 0));
+  if (scale < 0) numerator *= 10n ** BigInt(-scale);
+  const rounded = (numerator + denominator - 1n) / denominator;
+  return rounded > BigInt(cap) ? Infinity : Number(rounded);
 }
 
 /** Shared runtime/deployment projection of the authoritative ledger's four-hour window. */
@@ -312,6 +481,9 @@ export function functionsAssessment(evidence: unknown) {
       functionsAllowance: "unknown",
       hardSpendingCap: false,
       policyVersion: "free-plan-v1",
+      ...(e.allowanceException
+        ? { allowanceException: e.allowanceException }
+        : {}),
       scenario: "64x60-plus36x60-v1",
       scenarioCapacitySeconds: 6000,
       scenarioInvocations: 100,

@@ -22,6 +22,16 @@ export interface ExecutionSnapshot {
     functionsUsage?: "unknown";
     unknownAllowanceAccepted?: true;
     manualRecoveryReady?: true;
+    /** Immutable owner-reviewed exception evidence, projected verbatim by SQL. */
+    allowanceException?: {
+      version: "issue76-once-v1";
+      issue: 76;
+      approvalRef: string;
+      unknownActivityAccepted: true;
+      quotaFailureAccepted: true;
+      meters: Record<string, unknown>;
+      ociFree: Record<string, unknown>;
+    };
     verdict: "partial";
     functionsAllowance: "unknown";
     hardSpendingCap: false;
