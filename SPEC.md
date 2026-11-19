@@ -39,7 +39,7 @@ Use a create-only precondition for the object. Inspect marker and content agains
 - One active trial, one bucket, one 1 MiB object. No automatic adoption of pre-existing names.
 - Maximum three attempts per action with bounded backoff and a 200-request Object Storage budget: 160 for setup/probes/permission tests/lifecycle and 40 exclusively for cleanup/reconciliation/absence verification. Atomically reserve both attempt and request allowance in Postgres before every dispatch; uncertain dispatches remain spent. Disable automatic SDK/transport retries or reserve every underlying request, including pagination. No dispatch if reservation fails. Monitoring calls and Neon invocations need separate measured budgets; the 200-request count does not cover those services. Exhaustion produces an explicit recovery report, not an infinite loop.
 - Four-hour cloud-work window from persisted start time. Proposed scheduler cadence: 15 minutes; metrics are due hourly. Stop starting create/upload operations after minute 30. Start cleanup by hour three, or earlier on failure, leaving one hour for bounded reconciliation and deletion. The metric window ends at cleanup start even if fewer than three observations arrived; missing data is inconclusive. Before enabling mutations, show that measured invocation duration, bounded backoff and trigger delay fit this schedule with margin. No provider delivery deadline is assumed; excessive delay or unresolved calls produce needs-reconciliation at hour four, not success. Do not restart cloud work on late or duplicate triggers.
-- Owner-provided eligibility/headroom check at most 24 hours old: account status, home region, aggregate storage, month-to-date requests, applicable transfer allowance, and Neon usage. Reserve at least 10 MiB storage and 200 OCI requests. Estimate Neon consumption from a measured no-cloud-write probe before mutation. Unknown headroom blocks creation, not owned-resource cleanup. The future Functions-only policy below defines a reviewed alternative; the historical one-trial exception remains consumed.
+- Owner-provided eligibility/headroom check at most 24 hours old: account status, home region, aggregate storage, month-to-date requests, applicable transfer allowance, and Neon usage. Reserve at least 10 MiB storage and 200 OCI requests. Estimate Neon consumption from a measured no-cloud-write probe before mutation. Unknown headroom blocks creation, not owned-resource cleanup, except for the explicit Functions policy and separately bound issue-76 exception below. The historical one-trial exception remains consumed.
 - Compartment metrics provide partial coverage. The dated owner check is not a guarantee against concurrent consumption elsewhere in the account. No provider-enforced spending cap is claimed.
 
 ## Revised Functions evidence policy — issue #68, 2026-11-19
@@ -122,6 +122,49 @@ partial/no-go verdict or completed owner closeout.
 
 The dated source assessment and current code/SQL gap are in
 [Functions headroom qualification](docs/trial/functions-headroom.md#revised-policy--issue-68-2026-11-19).
+
+## Bounded allowance exception for issue #76 — #78, 2026-11-19
+
+The owner accepted a single-operation extension of allowance uncertainty. Default
+admission remains strict. One owner-prepared authorization may additionally accept
+unknown remaining Neon shared transfer, OCI Object Storage requests, OCI outbound
+transfer, and OCI Monitoring ingestion/retrieval capacity. This acknowledges unknown
+concurrent account activity, quota interruption and possible manual recovery.
+It grants no permission to provision, migrate Neon, deploy or run a trial now.
+
+Keep fresh Neon Free and OCI non-upgraded Free Tier evidence/billing basis, home
+region, effective IAM, measurable OCI storage and known Postgres storage/compute.
+Known insufficient capacity still blocks creation. Each waived meter records its
+source, period, actual observation time, raw quantity/unit, coverage, required
+envelope and remaining amount as either an explicitly reviewed number or unknown.
+Do not fill old numeric headroom fields with estimates or convert ambiguous units.
+
+`allowanceException.version=issue76-once-v1` on the existing `free-plan-unknown-v1`
+mode is optional, closed to those five meters and bound to issue 76, an explicit
+approval reference and the exact operation/identity/window/evidence. A separate
+durable singleton enforces one use, atomically with preparation; it remains consumed
+after success, failure or expiry. The #55 singleton and existing policy records
+are neither reused nor reset. Unknown activity is accepted, never asserted absent.
+
+The exception replaces only the old aggregate request/transfer/Monitoring evidence
+requirements. The configured **20 Monitoring calls** remain an enforced local
+budget; they are not datapoint billing units. Preserve **160 normal / 40 cleanup**
+Object Storage requests, **64 application units including 12 protected cleanup**,
+three attempts/action, all ownership/fencing/conditional-delete guards and original
+creation/cleanup/expiry/shutdown deadlines. No cleanup capacity is borrowed.
+
+Runtime clients cannot mint approval or waive evidence. Hosted preflight and SQL
+submission/creation/reservation recheck the same bound evidence. Invalid or expired
+creation evidence leaves owned cleanup/evidence accessible under their own guards.
+Known exhaustion, unsupported settings, eligibility failure, missing required known
+capacity, budget exhaustion and expiry still stop relevant work.
+
+The immutable report retains all exception evidence, unknown values,
+`hardSpendingCap=false` and an overall partial verdict even if lifecycle succeeds
+or mutable evidence changes. Historical failed/partial-no-go results remain intact.
+Before any future activation, complete the remaining issue-76 preparation and
+obtain separate explicit owner authorization. Implementation and normalized units
+are specified in [the exception contract](docs/trial/bounded-allowance-exception.md).
 
 ## Historical approved one-trial Functions exception (issue #55)
 

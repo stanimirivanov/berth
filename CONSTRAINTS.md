@@ -60,6 +60,25 @@ deployment/trial. The current milestone grants no such authorization.
 
 This policy does not relax tests, audit, secret scanning or other quality gates.
 
+## Single-operation allowance exception — #78, 2026-11-19
+
+The owner-approved issue-76 extension permits only the five incomplete meters named
+in SPEC.md. Its optional `issue76-once-v1` evidence record must be explicit and
+durably bound once to the owner-approved operation/window/identity and snapshot.
+Unknown concurrent activity/quota interruption must be accepted; no invented
+remaining capacity or silent unit conversion is permitted. Known insufficiency
+still rejects, including where partial observed consumption already exceeds the
+reviewed Free allowance after the required envelope is reserved.
+
+Fresh eligibility/IAM/billing evidence and known storage/Postgres capacity remain
+mandatory. Preserve all local budgets, protected cleanup, recovery coverage and
+expiry rules. Monitoring HTTP calls and billing datapoints remain separate units.
+Default strict admission and prior authorization records are unchanged; the new
+singleton is immutable and cannot be reused after any outcome. Runtime SQL/HTTP
+cannot prepare it or bypass its binding. Reports remain partial independently of
+lifecycle success and mutable evidence. No cloud writes or live authority are
+granted by merging this policy. Canonical verification and audit gates remain.
+
 The picomatch verification exception from PR #63 was retired under #59 on
 2026-11-18 after the unchanged native high-severity gate returned clean results.
 There is no active dependency exception. CI runs unconditional `pnpm check`;

@@ -1731,3 +1731,485 @@ test("Free policy binds owner SQL authorization, rejects replay and preserves sp
     );
   });
 });
+
+/** Explicit synthetic issue-76 approval; raw observations are never substituted for remaining quota. */
+function boundedAllowanceFixture(
+  operation: string,
+  start: number,
+  region: unknown,
+) {
+  const {
+    objectRequests: _r,
+    transferBytes: _t,
+    monitoringRequests: _m,
+    ...base
+  } = freePolicyFixture(operation, start, region);
+  const { sharedTransferBytes: _s, ...known } = base.functionsPolicy.allowances;
+  const descriptors = [
+    ["neonSharedTransfer", 1234567, "bytes", 1048576, "partial"],
+    ["ociObjectRequests", 0.01, "10K Requests", 200, "partial"],
+    ["ociOutboundTransfer", 0.00002, "GB Months", 1048576, "partial"],
+    ["ociMonitoringIngestion", "not-exposed", "not-exposed", 1, "unavailable"],
+    ["ociMonitoringRetrieval", 0.1, "Million Datapoints", 100, "partial"],
+  ];
+  return {
+    ...base,
+    functionsPolicy: { ...base.functionsPolicy, allowances: known },
+    allowanceException: {
+      version: "issue76-once-v1",
+      issue: 76,
+      approvalRef: "offline-explicit-operation-approval",
+      unknownActivityAccepted: true,
+      quotaFailureAccepted: true,
+      ociFree: {
+        status: "free-tier",
+        source: "owner-console",
+        checkedAt: start,
+        evidence: "offline-free-status",
+        billingEvidence: "offline-free-policy",
+        billingReviewedAt: start,
+      },
+      meters: Object.fromEntries(
+        descriptors.map(([key, observed, unit, required, coverage]) => [
+          key,
+          {
+            observed,
+            unit,
+            required,
+            coverage,
+            remaining: "unknown",
+            knownInsufficient: false,
+            sourceRef: "offline-provider-artifact",
+            periodRef: "nov-2026",
+            checkedAt: start,
+          },
+        ]),
+      ),
+    },
+  };
+}
+
+test("bounded allowance exception accepts only listed unknowns and rejects known insufficient raw or normalized observations", async () => {
+  const { preflight, functionsAssessment } = await import(
+    "../../src/trial/preflight.js"
+  );
+  const operation = randomUUID(),
+    startedAt = Date.now() - 1000;
+  const c = {
+    compartment: "ocid1.compartment.oc1..fixture",
+    namespace: "fixture",
+    region: "eu-frankfurt-1",
+    monitoringLimit: 20,
+    neonLimit: 64,
+  };
+  const p = { operation, startedAt, expiresAt: startedAt + 14400000 };
+  const e = boundedAllowanceFixture(operation, startedAt, c.region);
+  assert.deepEqual(preflight(c, e, Date.now(), p), []);
+  assert.equal(functionsAssessment(e)?.verdict, "partial");
+  for (const key of Object.keys(e.allowanceException.meters)) {
+    for (const change of [
+      { remaining: 0 },
+      { required: 0 },
+      { required: 100000000000000 },
+      {
+        remaining: 100000000000000,
+        coverage: "complete",
+        normalizationRef: "fake",
+      },
+      { knownInsufficient: true },
+      { checkedAt: startedAt - 86400000 },
+      { remaining: "0" },
+      { coverage: "invented" },
+    ]) {
+      const v = structuredClone(e);
+      Object.assign(v.allowanceException.meters[key], change);
+      assert.ok(
+        preflight(c, v, Date.now(), p).length,
+        `${key}: ${JSON.stringify(change)}`,
+      );
+    }
+  }
+  for (const change of [
+    { storageBytes: 0 },
+    { objectRequests: 199 },
+    { transferBytes: 0 },
+    { monitoringRequests: 0 },
+    { allowanceException: null },
+    {
+      allowanceException: {
+        ...e.allowanceException,
+        unknownActivityAccepted: false,
+      },
+    },
+    { allowanceException: { ...e.allowanceException, issue: 75 } },
+    {
+      allowanceException: {
+        ...e.allowanceException,
+        meters: {
+          ...e.allowanceException.meters,
+          extra: e.allowanceException.meters.neonSharedTransfer,
+        },
+      },
+    },
+    {
+      allowanceException: {
+        ...e.allowanceException,
+        ociFree: { ...e.allowanceException.ociFree, status: "paid" },
+      },
+    },
+    {
+      functionsPolicy: {
+        ...e.functionsPolicy,
+        allowances: {
+          ...e.functionsPolicy.allowances,
+          postgresComputeCuSeconds: 1,
+        },
+      },
+    },
+  ])
+    assert.ok(preflight(c, { ...e, ...change }, Date.now(), p).length);
+  for (const [key, observed] of [
+    ["neonSharedTransfer", 5000000000],
+    ["ociObjectRequests", 5],
+    ["ociMonitoringRetrieval", 1000],
+  ] as const) {
+    const v = structuredClone(e);
+    v.allowanceException.meters[key].observed = observed;
+    assert.ok(
+      preflight(c, v, Date.now(), p).length,
+      "partial coverage cannot hide already exhausted usage",
+    );
+  }
+  const complete = structuredClone(e);
+  Object.assign(complete.allowanceException.meters.ociObjectRequests, {
+    remaining: 49900,
+    coverage: "complete",
+    normalizationRef: "reviewed-request-conversion",
+  });
+  assert.deepEqual(preflight(c, complete, Date.now(), p), []);
+  complete.allowanceException.meters.ociObjectRequests.remaining = 50000;
+  assert.ok(
+    preflight(c, complete, Date.now(), p).length,
+    "known remaining cannot exceed cap minus observed usage",
+  );
+  const ambiguous = structuredClone(e);
+  Object.assign(ambiguous.allowanceException.meters.ociOutboundTransfer, {
+    remaining: 2000000,
+    coverage: "complete",
+    normalizationRef: "invented",
+  });
+  assert.ok(
+    preflight(c, ambiguous, Date.now(), p).length,
+    "ambiguous GB Months never silently becomes bytes",
+  );
+  const boundary = structuredClone(e);
+  Object.assign(boundary.allowanceException.meters.ociObjectRequests, {
+    observed: 4.98,
+    remaining: 200,
+    coverage: "complete",
+    normalizationRef: "exact-decimal-conversion",
+  });
+  assert.deepEqual(
+    preflight(c, boundary, Date.now(), p),
+    [],
+    "decimal 4.98 x 10000 leaves exactly 200 requests",
+  );
+  const fractionalTime = { ...e, checkedAt: startedAt + 0.5 };
+  assert.ok(
+    preflight(c, fractionalTime, Date.now(), p).length,
+    "exception timestamps agree with integer SQL contract",
+  );
+  const { allowanceException: _x, ...without } = e;
+  assert.ok(
+    preflight(c, without, Date.now(), p).length,
+    "strict default still requires known allowance",
+  );
+});
+
+test("issue76 singleton binds exact owner preparation while malformed evidence leaves protected cleanup and historical qualification intact", async () => {
+  await reviewedAdmission(async (owner, db, prior, original) => {
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='failed' WHERE operation=$1",
+      [prior],
+    );
+    await owner.query(
+      `INSERT INTO berth_executor.functions_exception(operation,started_at,expires_at,binding,evidence)
+      SELECT operation,started_at,expires_at,binding,evidence FROM berth_executor.admission JOIN berth_ledger.trials USING(operation) WHERE operation=$1`,
+      [prior],
+    );
+    const historical = (
+      await owner.query(
+        "SELECT to_jsonb(x) AS value FROM berth_executor.functions_exception x",
+      )
+    ).rows[0].value;
+    await owner.query(
+      await readFile("migrations/006_free_functions_policy.sql", "utf8"),
+    );
+    await owner.query(
+      await readFile("migrations/007_bounded_allowance_exception.sql", "utf8"),
+    );
+    const operation = randomUUID(),
+      startedAt = Date.now() - 1000;
+    const binding = { ...original, neonLimit: 64 };
+    const evidence = boundedAllowanceFixture(
+      operation,
+      startedAt,
+      original.region,
+    );
+    const args = [
+      operation,
+      new Date(startedAt),
+      JSON.stringify(binding),
+      JSON.stringify(evidence),
+    ];
+    await assert.rejects(
+      db.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+    );
+    for (const key of Object.keys(evidence.allowanceException.meters)) {
+      for (const patch of [
+        { remaining: 0 },
+        { required: 0 },
+        { required: 100000000000000 },
+        { knownInsufficient: true },
+        { checkedAt: startedAt - 86400000 },
+      ]) {
+        const invalid = structuredClone(evidence);
+        Object.assign(invalid.allowanceException.meters[key], patch);
+        await assert.rejects(
+          owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+            ...args.slice(0, 3),
+            JSON.stringify(invalid),
+          ]),
+        );
+      }
+    }
+    for (const invalid of [
+      { ...evidence, storageBytes: 0 },
+      { ...evidence, neonFree: false },
+      {
+        ...evidence,
+        allowanceException: { ...evidence.allowanceException, approvalRef: "" },
+      },
+      {
+        ...evidence,
+        allowanceException: {
+          ...evidence.allowanceException,
+          unknownActivityAccepted: false,
+        },
+      },
+      {
+        ...evidence,
+        allowanceException: {
+          ...evidence.allowanceException,
+          quotaFailureAccepted: false,
+        },
+      },
+      {
+        ...evidence,
+        allowanceException: {
+          ...evidence.allowanceException,
+          ociFree: { ...evidence.allowanceException.ociFree, status: "paid" },
+        },
+      },
+    ])
+      await assert.rejects(
+        owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+          ...args.slice(0, 3),
+          JSON.stringify(invalid),
+        ]),
+      );
+    await owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args);
+    await owner.query(
+      "UPDATE berth_executor.admission SET verified_at=clock_timestamp() WHERE operation=$1",
+      [operation],
+    );
+    const { liveAdmissionApi } = await import(
+      "../../src/trial/live-admission.js"
+    );
+    const env = {
+      compartment: String(original.compartment),
+      namespace: String(original.namespace),
+      region: String(original.region),
+      tenancy: String(original.tenancy),
+      user: String(original.user),
+      fingerprint: String(original.fingerprint),
+      monitoringLimit: 20,
+      neonLimit: 64,
+      operation,
+      startedAt,
+      expiresAt: startedAt + 14400000,
+      token: "a".repeat(40),
+      previewKey: "b".repeat(40),
+      connection: "unused",
+      privateKey: "unused",
+    };
+    const api = liveAdmissionApi(db, env, async () => {
+      throw Error("Cached receipt only");
+    });
+    const call = (route: string, body: unknown) =>
+      api.fetch(
+        new Request(`https://fixture/${route}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${env.token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    assert.equal((await call("preview", { evidence })).status, 400);
+    const preview = await call("preview", {});
+    assert.equal(preview.status, 200);
+    const proposal = await preview.json();
+    for (const invalid of [
+      null,
+      [],
+      "bad",
+      {
+        ...evidence.allowanceException,
+        meters: { neonSharedTransfer: { remaining: "bad" } },
+      },
+    ]) {
+      await owner.query(
+        "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+        [
+          operation,
+          JSON.stringify({ ...evidence, allowanceException: invalid }),
+        ],
+      );
+      assert.equal(
+        (await call("submit", { preview: proposal.preview })).status,
+        409,
+      );
+      await assert.rejects(
+        db.query("SELECT berth_executor.admit($1,$2)", [operation, args[2]]),
+      );
+      const status = (
+        await db.query(
+          "SELECT berth_executor.admission_status($1,$2) AS value",
+          [operation, args[2]],
+        )
+      ).rows[0].value;
+      assert.equal(status.evidenceBound, false);
+    }
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [operation, args[3]],
+    );
+    assert.equal(
+      (await call("submit", { preview: proposal.preview })).status,
+      202,
+    );
+    assert.equal(
+      (await call("submit", { preview: proposal.preview })).status,
+      202,
+    );
+    const ledger = makeLedger(db),
+      claim = await ledger.claim(operation, randomUUID());
+    const create = await ledger.begin(claim, randomUUID(), "create_bucket");
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=evidence || '{\"allowanceException\":null}'::jsonb WHERE operation=$1",
+      [operation],
+    );
+    await assert.rejects(ledger.reserve(claim, create, randomUUID()));
+    assert.equal((await call("cleanup", { operation })).status, 202);
+    await owner.query(
+      "UPDATE berth_ledger.trials SET normal_used=160,cleanup_used=39 WHERE operation=$1",
+      [operation],
+    );
+    const cleanup = await ledger.begin(claim, randomUUID(), "inspect_cleanup");
+    await ledger.reserve(claim, cleanup, randomUUID());
+    await assert.rejects(ledger.reserve(claim, cleanup, randomUUID()));
+    await ledger.release(claim);
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='failed' WHERE operation=$1",
+      [operation],
+    );
+    const report = (
+      await db.query("SELECT berth_executor.report($1) AS value", [operation])
+    ).rows[0].value;
+    assert.equal(report.feasibility.verdict, "partial");
+    assert.deepEqual(
+      report.feasibility.allowanceException,
+      evidence.allowanceException,
+    );
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='succeeded' WHERE operation=$1",
+      [operation],
+    );
+    assert.equal(
+      (await db.query("SELECT berth_executor.report($1) AS value", [operation]))
+        .rows[0].value.feasibility.verdict,
+      "partial",
+    );
+    assert.deepEqual(
+      (
+        await owner.query(
+          "SELECT to_jsonb(x) AS value FROM berth_executor.functions_exception x",
+        )
+      ).rows[0].value,
+      historical,
+    );
+
+    for (const command of [
+      "DELETE FROM berth_executor.bounded_allowance_exception",
+      "UPDATE berth_executor.bounded_allowance_exception SET evidence='{}'",
+    ])
+      await assert.rejects(owner.query(command));
+    const second = randomUUID();
+    const secondEvidence = boundedAllowanceFixture(
+      second,
+      startedAt,
+      original.region,
+    );
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+        second,
+        args[1],
+        args[2],
+        JSON.stringify(secondEvidence),
+      ]),
+    );
+    assert.equal(
+      (
+        await owner.query(
+          "SELECT count(*) FROM berth_ledger.trials WHERE operation=$1",
+          [second],
+        )
+      ).rows[0].count,
+      "0",
+      "second preparation rolls back atomically",
+    );
+    await assert.rejects(
+      db.query(
+        "SELECT berth_executor.prepare_without_allowance_exception($1,$2,$3,$4)",
+        args,
+      ),
+    );
+    const strict = freePolicyFixture(second, startedAt, original.region);
+    await owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+      second,
+      args[1],
+      args[2],
+      JSON.stringify(strict),
+    ]);
+    assert.equal(
+      (
+        await db.query(
+          "SELECT berth_executor.admission_status($1,$2) AS value",
+          [second, args[2]],
+        )
+      ).rows[0].value.evidenceBound,
+      true,
+      "strict complete evidence remains supported after consuming the exception",
+    );
+    assert.equal(
+      (
+        await owner.query(
+          "SELECT count(*) FROM berth_executor.bounded_allowance_exception",
+        )
+      ).rows[0].count,
+      "1",
+    );
+  });
+});
