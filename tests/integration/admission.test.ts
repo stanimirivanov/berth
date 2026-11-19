@@ -728,7 +728,10 @@ test("Free exception is owner-prepared once, preserves gates and durably reports
     const operation = randomUUID(),
       startedAt = Date.now() - 1000,
       expiresAt = startedAt + 14400000;
-    const binding = { ...original, neonLimit: 64 };
+    const binding: Record<string, unknown> & { neonLimit: number } = {
+      ...original,
+      neonLimit: 64,
+    };
     const evidence = {
       checkedAt: Date.now(),
       iamCheckedAt: Date.now(),
@@ -1263,4 +1266,468 @@ test("legacy direct SQL admission cannot create via schedule but retains owned c
       );
     }, true);
   }
+});
+
+/** Synthetic owner-reviewed evidence; values cover the fixed window, never a live account. */
+function freePolicyFixture(
+  operation: string,
+  startedAt: number,
+  region: unknown,
+) {
+  return {
+    checkedAt: startedAt,
+    iamCheckedAt: startedAt,
+    iamReviewed: true,
+    accountType: "always-free",
+    homeRegion: region,
+    neonFree: true,
+    storageBytes: 10485760,
+    objectRequests: 200,
+    transferBytes: 1048576,
+    monitoringRequests: 20,
+    functionsMode: "free-plan-unknown-v1",
+    functionsUsage: "unknown",
+    functionsAllowance: "unknown",
+    functionsPolicy: {
+      operation,
+      startedAt,
+      expiresAt: startedAt + 14400000,
+      shutdownBy: startedAt + 15300000,
+      policyVersion: "free-plan-v1",
+      unknownAllowanceAccepted: true,
+      partialVerdictAccepted: true,
+      exclusiveProjectUse: true,
+      manualRecoveryReady: true,
+      otherServicesEvidence: "offline-reviewed-envelope",
+      reviewer: "fixture-owner",
+      probeClientMs: 2252,
+      scenario: "64x60-plus36x60-v1",
+      plan: {
+        status: "free",
+        source: "owner-console",
+        checkedAt: startedAt,
+        project: "fixture-project",
+        branch: "fixture-branch",
+        period: "fixture-period",
+        evidence: "offline-plan-record",
+      },
+      billing: {
+        reviewedAt: startedAt,
+        source: "neon-free-no-overage-2026-11-19",
+        evidence: "offline-billing-review",
+      },
+      allowances: {
+        postgresStorageBytes: 10485760,
+        requiredPostgresStorageBytes: 1048576,
+        postgresComputeCuSeconds: 36000,
+        requiredPostgresComputeCuSeconds: 28800,
+        sharedTransferBytes: 10485760,
+        requiredSharedTransferBytes: 1048576,
+      },
+    },
+  };
+}
+
+test("Free policy rejects fabricated quotas and stale plan evidence without blocking unknown Functions totals", async () => {
+  const { preflight, functionsAssessment } = await import(
+    "../../src/trial/preflight.js"
+  );
+  const operation = randomUUID(),
+    startedAt = Date.now() - 1000;
+  const configuration = {
+    compartment: "ocid1.compartment.oc1..fixture",
+    namespace: "fixture",
+    region: "eu-frankfurt-1",
+    monitoringLimit: 20,
+    neonLimit: 64,
+  };
+  const prepared = { operation, startedAt, expiresAt: startedAt + 14400000 };
+  const evidence = freePolicyFixture(
+    operation,
+    startedAt,
+    configuration.region,
+  );
+  assert.deepEqual(
+    preflight(configuration, evidence, Date.now(), prepared),
+    [],
+  );
+  assert.equal(functionsAssessment(evidence)?.verdict, "partial");
+  assert.deepEqual(
+    preflight(
+      configuration,
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          plan: { ...evidence.functionsPolicy.plan, source: "provider-api" },
+        },
+      },
+      Date.now(),
+      prepared,
+    ),
+    [],
+  );
+  for (const patch of [
+    { functionsPolicy: { ...evidence.functionsPolicy, plan: null } },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        plan: { ...evidence.functionsPolicy.plan, status: "unknown" },
+      },
+    },
+    { functionsUsage: 0 },
+    { functionsAllowance: 100 },
+    { neonInvocations: 64 },
+    { functionsException: {} },
+    { functionsMode: "invented" },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        manualRecoveryReady: false,
+      },
+    },
+    {
+      functionsPolicy: { ...evidence.functionsPolicy, operation: randomUUID() },
+    },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        plan: { ...evidence.functionsPolicy.plan, status: "paid" },
+      },
+    },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        plan: { ...evidence.functionsPolicy.plan, source: "client" },
+      },
+    },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        plan: {
+          ...evidence.functionsPolicy.plan,
+          checkedAt: startedAt - 86400000,
+        },
+      },
+    },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        billing: {
+          ...evidence.functionsPolicy.billing,
+          reviewedAt: Date.now() + 60000,
+        },
+      },
+    },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        allowances: {
+          ...evidence.functionsPolicy.allowances,
+          sharedTransferBytes: 0,
+        },
+      },
+    },
+    {
+      functionsPolicy: {
+        ...evidence.functionsPolicy,
+        allowances: {
+          ...evidence.functionsPolicy.allowances,
+          requiredPostgresComputeCuSeconds: 1,
+        },
+      },
+    },
+  ])
+    assert.ok(
+      preflight(configuration, { ...evidence, ...patch }, Date.now(), prepared)
+        .length,
+    );
+});
+
+test("Free policy binds owner SQL authorization, rejects replay and preserves spent cleanup and historical evidence", async () => {
+  await reviewedAdmission(async (owner, db, prior, original) => {
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='failed' WHERE operation=$1",
+      [prior],
+    );
+    // Retain a consumed historical slot; the new operation must not reuse or rewrite it.
+    await owner.query(
+      `INSERT INTO berth_executor.functions_exception(operation,started_at,expires_at,binding,evidence)
+      SELECT operation,started_at,expires_at,binding,evidence FROM berth_executor.admission JOIN berth_ledger.trials USING(operation) WHERE operation=$1`,
+      [prior],
+    );
+    const historical = (
+      await owner.query(
+        "SELECT to_jsonb(x) AS value FROM berth_executor.functions_exception x",
+      )
+    ).rows[0].value;
+    await owner.query(
+      await readFile("migrations/006_free_functions_policy.sql", "utf8"),
+    );
+    const operation = randomUUID(),
+      startedAt = Date.now() - 1000;
+    const binding: Record<string, unknown> & { neonLimit: number } = {
+      ...original,
+      neonLimit: 64,
+    };
+    const evidence = freePolicyFixture(operation, startedAt, original.region);
+    const args = [
+      operation,
+      new Date(startedAt),
+      JSON.stringify(binding),
+      JSON.stringify(evidence),
+    ];
+    await assert.rejects(
+      db.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+    );
+    for (const changed of [
+      { ...evidence, functionsMode: "free-functions-one-trial" },
+      { ...evidence, neonComputeSeconds: 6000 },
+      { ...evidence, iamReviewed: false },
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          manualRecoveryReady: false,
+        },
+      },
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          plan: { ...evidence.functionsPolicy.plan, status: "paid" },
+        },
+      },
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          plan: {
+            ...evidence.functionsPolicy.plan,
+            checkedAt: startedAt - 86400000,
+          },
+        },
+      },
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          billing: { ...evidence.functionsPolicy.billing, source: "no-card" },
+        },
+      },
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          allowances: {
+            ...evidence.functionsPolicy.allowances,
+            postgresStorageBytes: 0,
+          },
+        },
+      },
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          allowances: {
+            ...evidence.functionsPolicy.allowances,
+            requiredPostgresComputeCuSeconds: 1,
+          },
+        },
+      },
+    ])
+      await assert.rejects(
+        owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
+          ...args.slice(0, 3),
+          JSON.stringify(changed),
+        ]),
+      );
+    await owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args);
+    await assert.rejects(
+      owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", args),
+    );
+    await owner.query(
+      "UPDATE berth_executor.admission SET verified_at=clock_timestamp() WHERE operation=$1",
+      [operation],
+    );
+    const environment = {
+      compartment: String(binding.compartment),
+      namespace: String(binding.namespace),
+      region: String(binding.region),
+      tenancy: String(binding.tenancy),
+      user: String(binding.user),
+      fingerprint: String(binding.fingerprint),
+      monitoringLimit: 20,
+      neonLimit: 64,
+      operation,
+      startedAt,
+      expiresAt: startedAt + 14400000,
+      token: "a".repeat(40),
+      previewKey: "b".repeat(40),
+      connection: "unused",
+      privateKey: "unused",
+    };
+    const { liveAdmissionApi } = await import(
+      "../../src/trial/live-admission.js"
+    );
+    const api = liveAdmissionApi(db, environment, async () => {
+      throw Error("Cached receipt only");
+    });
+    const call = (route: string, body: unknown) =>
+      api.fetch(
+        new Request(`https://fixture/${route}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${environment.token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    assert.equal((await call("preview", { evidence })).status, 400);
+    const preview = await call("preview", {});
+    assert.equal(preview.status, 200);
+    const proposal = await preview.json();
+    assert.equal(proposal.feasibility.functionsAllowance, "unknown");
+    for (const changed of [
+      { ...evidence, functionsUsage: 0 },
+      { ...evidence, storageBytes: 0 },
+      {
+        ...evidence,
+        functionsMode: "verified",
+        neonInvocations: 64,
+        neonComputeSeconds: 6000,
+        measuredComputeSeconds: 6000,
+      },
+      {
+        ...evidence,
+        functionsPolicy: {
+          ...evidence.functionsPolicy,
+          plan: { ...evidence.functionsPolicy.plan, status: "paid" },
+        },
+      },
+    ]) {
+      await owner.query(
+        "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+        [operation, JSON.stringify(changed)],
+      );
+      assert.equal(
+        (await call("submit", { preview: proposal.preview })).status,
+        409,
+      );
+      await assert.rejects(
+        db.query("SELECT berth_executor.admit($1,$2)", [operation, args[2]]),
+      );
+    }
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence=$2 WHERE operation=$1",
+      [operation, args[3]],
+    );
+    assert.equal(
+      (await call("submit", { preview: proposal.preview })).status,
+      202,
+    );
+    assert.equal(
+      (await call("submit", { preview: proposal.preview })).status,
+      202,
+    );
+    const ledger = makeLedger(db),
+      claim = await ledger.claim(operation, randomUUID());
+    const attempt = await ledger.begin(claim, randomUUID(), "create_bucket");
+    await owner.query(
+      "UPDATE berth_executor.admission SET evidence='{}' WHERE operation=$1",
+      [operation],
+    );
+    await assert.rejects(ledger.reserve(claim, attempt, randomUUID()));
+    await assert.rejects(ledger.begin(claim, randomUUID(), "put_object"));
+    await owner.query(
+      "UPDATE berth_ledger.trials SET neon_used=52 WHERE operation=$1",
+      [operation],
+    );
+    const { meterAdmission } = await import(
+      "../../src/trial/live-admission.js"
+    );
+    await assert.rejects(meterAdmission(db, environment));
+    await meterAdmission(db, environment, "cleanup");
+    await assert.rejects(meterAdmission(db, environment, "cleanup"));
+    assert.equal(
+      (
+        await owner.query(
+          "SELECT neon_used FROM berth_ledger.trials WHERE operation=$1",
+          [operation],
+        )
+      ).rows[0].neon_used,
+      53,
+    );
+    assert.equal((await call("cleanup", { operation })).status, 202);
+    const report = (
+      await db.query("SELECT berth_executor.report($1) AS value", [operation])
+    ).rows[0].value;
+    assert.equal(report.feasibility.verdict, "partial");
+    assert.equal(report.feasibility.functionsUsage, "unknown");
+    assert.equal(report.feasibility.manualRecoveryReady, true);
+    assert.equal(report.feasibility.unknownAllowanceAccepted, true);
+    assert.equal(report.feasibility.policyVersion, "free-plan-v1");
+    await assert.rejects(
+      owner.query(
+        "UPDATE berth_executor.functions_policy SET evidence='{}' WHERE operation=$1",
+        [operation],
+      ),
+    );
+    await assert.rejects(
+      owner.query(
+        "DELETE FROM berth_executor.functions_policy WHERE operation=$1",
+        [operation],
+      ),
+    );
+    assert.equal(report.feasibility.hardSpendingCap, false);
+    await assert.rejects(
+      db.query("UPDATE berth_executor.functions_policy SET evidence='{}'"),
+    );
+    await assert.rejects(
+      db.query(
+        "SELECT berth_executor.prepare_without_exception($1,$2,$3,$4)",
+        args,
+      ),
+    );
+    await owner.query(
+      "UPDATE berth_ledger.trials SET normal_used=160,cleanup_used=39 WHERE operation=$1",
+      [operation],
+    );
+    const cleanup = await ledger.begin(claim, randomUUID(), "inspect_cleanup");
+    const normal = await ledger.begin(claim, randomUUID(), "inspect");
+    await assert.rejects(ledger.reserve(claim, normal, randomUUID()));
+    await ledger.reserve(claim, cleanup, randomUUID());
+    await assert.rejects(ledger.reserve(claim, cleanup, randomUUID()));
+    const spent = (
+      await owner.query(
+        "SELECT normal_used,cleanup_used FROM berth_ledger.trials WHERE operation=$1",
+        [operation],
+      )
+    ).rows[0];
+    assert.deepEqual(spent, { normal_used: 160, cleanup_used: 40 });
+    await owner.query(
+      "UPDATE berth_ledger.trials SET started_at=clock_timestamp()-interval '4 hours 1 second',expires_at=clock_timestamp()-interval '1 second' WHERE operation=$1",
+      [operation],
+    );
+    await assert.rejects(ledger.begin(claim, randomUUID(), "inspect_cleanup"));
+    await ledger.release(claim);
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='succeeded' WHERE operation=$1",
+      [operation],
+    );
+    assert.equal(
+      (await db.query("SELECT berth_executor.report($1) AS value", [operation]))
+        .rows[0].value.feasibility.verdict,
+      "partial",
+    );
+    assert.deepEqual(
+      (
+        await owner.query(
+          "SELECT to_jsonb(x) AS value FROM berth_executor.functions_exception x",
+        )
+      ).rows[0].value,
+      historical,
+    );
+  });
 });

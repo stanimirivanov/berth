@@ -23,6 +23,33 @@ export interface FunctionsException extends PreparedTrial {
   probeClientMs: number;
   scenario: "64x60-plus36x60-v1";
 }
+/** Separately reviewed Free-plan operation; provider totals remain unknown, not zero. */
+export interface FunctionsPolicy extends FunctionsException {
+  policyVersion: "free-plan-v1";
+  reviewer: string;
+  plan: {
+    status: "free";
+    source: "owner-console" | "provider-api";
+    checkedAt: number;
+    project: string;
+    branch: string;
+    period: string;
+    evidence: string;
+  };
+  billing: {
+    reviewedAt: number;
+    source: "neon-free-no-overage-2026-11-19";
+    evidence: string;
+  };
+  allowances: {
+    postgresStorageBytes: number;
+    requiredPostgresStorageBytes: number;
+    postgresComputeCuSeconds: number;
+    requiredPostgresComputeCuSeconds: number;
+    sharedTransferBytes: number;
+    requiredSharedTransferBytes: number;
+  };
+}
 /** Owner aggregate attestation, not a provider billing API or hard spending guarantee. */
 export interface Headroom {
   checkedAt: number;
@@ -33,11 +60,18 @@ export interface Headroom {
   transferBytes: number;
   monitoringRequests: number;
   neonFree: boolean;
-  neonInvocations: number;
-  neonComputeSeconds: number;
-  measuredComputeSeconds: number;
-  functionsMode?: "verified" | "free-functions-one-trial";
+  /** Required only by verified mode; unknown-allowance modes reject these keys. */
+  neonInvocations?: number;
+  neonComputeSeconds?: number;
+  measuredComputeSeconds?: number;
+  functionsMode?:
+    | "verified"
+    | "free-functions-one-trial"
+    | "free-plan-unknown-v1";
   functionsException?: FunctionsException;
+  functionsPolicy?: FunctionsPolicy;
+  functionsUsage?: "unknown";
+  functionsAllowance?: "unknown";
 }
 
 /** Fail closed on unsupported target/configuration before admission can be constructed. */
@@ -94,9 +128,16 @@ export function preflight(
     return validFunctionsException(c, e, now, prepared)
       ? []
       : ["functions-exception-invalid"];
+  if (e.functionsMode === "free-plan-unknown-v1")
+    return validFunctionsPolicy(c, e, now, prepared)
+      ? []
+      : ["functions-policy-invalid"];
   if (
     (e.functionsMode !== undefined && e.functionsMode !== "verified") ||
-    e.functionsException !== undefined
+    e.functionsException !== undefined ||
+    e.functionsPolicy !== undefined ||
+    e.functionsUsage !== undefined ||
+    e.functionsAllowance !== undefined
   )
     return ["functions-mode-invalid"];
   if (
@@ -106,6 +147,60 @@ export function preflight(
   )
     return ["headroom-insufficient-or-unmeasured"];
   return [];
+}
+
+/** Validate the new evidence contract; reusing commitment checks never reuses the old SQL slot. */
+function validFunctionsPolicy(
+  c: TrialConfiguration,
+  e: Partial<Headroom>,
+  now: number,
+  p?: PreparedTrial,
+) {
+  const x = e.functionsPolicy;
+  if (
+    !x ||
+    e.functionsException !== undefined ||
+    e.functionsUsage !== "unknown" ||
+    e.functionsAllowance !== "unknown" ||
+    !validFunctionsException(c, { ...e, functionsException: x }, now, p)
+  )
+    return false;
+  const ref = (v: unknown) =>
+    typeof v === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(v);
+  const fresh = (v: unknown) =>
+    Number.isSafeInteger(v) &&
+    typeof v === "number" &&
+    v <= now &&
+    v + 86400000 >= (p?.startedAt ?? Infinity) + 1800000;
+  const a = x.allowances;
+  return (
+    x.policyVersion === "free-plan-v1" &&
+    ref(x.reviewer) &&
+    x.plan?.status === "free" &&
+    ["owner-console", "provider-api"].includes(x.plan.source) &&
+    fresh(x.plan.checkedAt) &&
+    [x.plan.project, x.plan.branch, x.plan.period, x.plan.evidence].every(
+      ref,
+    ) &&
+    x.billing?.source === "neon-free-no-overage-2026-11-19" &&
+    fresh(x.billing.reviewedAt) &&
+    ref(x.billing.evidence) &&
+    !!a &&
+    [
+      a.postgresStorageBytes,
+      a.requiredPostgresStorageBytes,
+      a.postgresComputeCuSeconds,
+      a.requiredPostgresComputeCuSeconds,
+      a.sharedTransferBytes,
+      a.requiredSharedTransferBytes,
+    ].every((v) => Number.isSafeInteger(v) && v > 0) &&
+    a.requiredPostgresStorageBytes >= 1048576 &&
+    a.postgresStorageBytes >= a.requiredPostgresStorageBytes &&
+    a.requiredPostgresComputeCuSeconds >= 28800 &&
+    a.postgresComputeCuSeconds >= a.requiredPostgresComputeCuSeconds &&
+    a.requiredSharedTransferBytes >= 1048576 &&
+    a.sharedTransferBytes >= a.requiredSharedTransferBytes
+  );
 }
 
 /** Shared runtime/deployment projection of the authoritative ledger's four-hour window. */
@@ -207,6 +302,21 @@ function validFunctionsException(
 /** Separate lifecycle success from the exception's mandatory partial feasibility ceiling. */
 export function functionsAssessment(evidence: unknown) {
   const e = evidence as Partial<Headroom> | null;
+  if (e?.functionsMode === "free-plan-unknown-v1")
+    return {
+      unknownAllowanceAccepted: true,
+      manualRecoveryReady: true,
+      mode: e.functionsMode,
+      verdict: "partial",
+      functionsUsage: "unknown",
+      functionsAllowance: "unknown",
+      hardSpendingCap: false,
+      policyVersion: "free-plan-v1",
+      scenario: "64x60-plus36x60-v1",
+      scenarioCapacitySeconds: 6000,
+      scenarioInvocations: 100,
+      shutdownBy: e.functionsPolicy?.shutdownBy,
+    };
   return e?.functionsMode === "free-functions-one-trial"
     ? {
         mode: "free-functions-one-trial",

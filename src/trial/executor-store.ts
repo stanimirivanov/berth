@@ -17,7 +17,11 @@ export interface ExecutionSnapshot {
   reason: string | null;
   /** Owner-installed SQL qualification survives lifecycle success; absent for legacy trials. */
   feasibility?: {
-    mode: "free-functions-one-trial";
+    mode: "free-functions-one-trial" | "free-plan-unknown-v1";
+    policyVersion?: "free-plan-v1";
+    functionsUsage?: "unknown";
+    unknownAllowanceAccepted?: true;
+    manualRecoveryReady?: true;
     verdict: "partial";
     functionsAllowance: "unknown";
     hardSpendingCap: false;

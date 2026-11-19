@@ -1,5 +1,89 @@
 # Hosted admission and activation — issue #47
 
+## Current implementation — issue #69, 2026-11-19
+
+**No new deployment or live trial is authorized.** The historical lifecycle remains
+failed and feasibility partial/no-go. Issue #70 must qualify independent owner
+cleanup offline, followed by a separate explicit owner decision before activation.
+The earlier activation instructions below are historical reference, not permission
+to recreate the deleted identity, hosting or resources.
+
+Migration `006_free_functions_policy.sql` is an owner-only, one-time addition after
+001–005. It preserves all existing evidence, including the consumed #55 singleton;
+never reinstall migrations or delete state to start a new operation. This issue
+tests installation only on disposable loopback PostgreSQL. It installs nothing on
+Neon. No runtime migration or Neon management credential is introduced.
+
+After 006, `berth_executor.prepare(operation,start,binding,evidence)` accepts only
+the new `free-plan-unknown-v1` evidence mode. It is invoker-only and unavailable to
+`berth_runtime`. The owner must separately authorize the exact new operation, target,
+identity, fixed four-hour window and evidence; merely possessing owner SQL access
+does not replace that human decision. The preparation creates an immutable
+`functions_policy` row; UPDATE/DELETE are refused, including after a terminal result.
+Existing admitted operations without this new record lose creation eligibility
+after migration. Their reports and existing owned-cleanup path remain available.
+Do not apply 006 in the middle of active work; reconcile and close it first.
+
+### New evidence contract
+
+Keep the common account/IAM/OCI fields from the preparation reference below.
+`neonFree=true` is required, but is not sufficient evidence on its own. Set
+`functionsMode="free-plan-unknown-v1"`, `functionsUsage="unknown"` and
+`functionsAllowance="unknown"`. Omit `neonInvocations`, `neonComputeSeconds`,
+`measuredComputeSeconds` and `functionsException`; invented numeric Functions
+headroom is rejected. Configure the existing application invocation limit to 64;
+this is a local budget with twelve protected cleanup units, not a provider counter.
+
+Supply `functionsPolicy` with these fields:
+
+| Fields | Required value or meaning |
+| --- | --- |
+| `operation`, `startedAt`, `expiresAt`, `shutdownBy` | Match the owner-prepared UUID and epoch milliseconds exactly; expiry is start + 14,400,000 ms and shutdown is expiry + 900,000 ms |
+| `policyVersion`, `reviewer`, `otherServicesEvidence` | `free-plan-v1`, owner reviewer reference and private evidence-artifact reference |
+| `unknownAllowanceAccepted`, `partialVerdictAccepted`, `exclusiveProjectUse`, `manualRecoveryReady` | All literal `true`, only after actual owner review/acceptance; never fixture assertions used as evidence |
+| `probeClientMs`, `scenario` | Positive measured probe duration at most 3,000 ms; `64x60-plus36x60-v1` is the existing forward scenario, never historical usage |
+| `plan.status`, `plan.source` | `free`; either `provider-api` or `owner-console`, preserving the difference between verified and attested evidence |
+| `plan.project`, `plan.branch`, `plan.period`, `plan.evidence`, `plan.checkedAt` | Actual target/period references, private source-artifact reference and observation time; the reviewer checks the artifact against this operation's SQL/hosting target |
+| `billing.source`, `billing.evidence`, `billing.reviewedAt` | `neon-free-no-overage-2026-11-19`, private source-review reference and review time; this policy revision fixes the reviewed public billing basis, rather than inferring it from no card |
+| `allowances.postgresStorageBytes`, `allowances.requiredPostgresStorageBytes` | Remaining and reviewed required Postgres storage bytes; required at least 1,048,576 bytes |
+| `allowances.postgresComputeCuSeconds`, `allowances.requiredPostgresComputeCuSeconds` | Remaining and reviewed required Postgres CU-seconds; required at least 28,800 (2 CU × four hours), not Functions seconds |
+| `allowances.sharedTransferBytes`, `allowances.requiredSharedTransferBytes` | Remaining and reviewed required project-wide transfer bytes; required at least 1,048,576 bytes |
+
+Reference strings use 1–80 letters, digits, underscores or hyphens; use an artifact
+reference for detailed source/period records. Do not include credentials or personal
+contact details. Numeric allowances are positive safe integers; each remaining
+value must cover its reviewed requirement. The minimums are floors, not sufficient
+whole-window estimates: include preparation, runtime, SQL state/history and shutdown
+overhead in the reviewed requirements and use the applicable provider quota units.
+Common `checkedAt`, `iamCheckedAt`, `plan.checkedAt` and `billing.reviewedAt` must be
+nonfuture observations fresh through start + 30 minutes (24-hour maximum age).
+Account or plan changes require stopping creation and a new reviewed decision,
+not editing the immutable record or refreshing timestamps on old evidence.
+
+The API accepts no caller evidence/configuration fields. It reads the prepared
+record through SQL, then runs pure preflight; SQL independently validates the same
+policy at admission, attempt creation and request reservation. A changed target,
+key, window, snapshot, mode or stale required evidence blocks new creation.
+Replaying the same valid preview is idempotent, not a new authorization. A terminal
+or expired operation cannot be renewed. The old #55 mode and helper functions cannot
+mint another runtime authorization.
+
+Invalid creation evidence does not block reads or owned cleanup admission. Existing
+reserve/expiry/ownership guards remain authoritative: 160 normal / 40 cleanup
+Object Storage requests and the protected application invocation slice. No new
+budget is minted by recovery. Expired or exhausted work needs explicit owner
+reconciliation; absence of SQL/ownership evidence never permits deletion by name.
+The durable report retains the policy version, accepted interruption/manual-recovery
+risk, unknown Functions usage/allowance and `hardSpendingCap=false`; lifecycle success
+cannot lift its partial feasibility ceiling. No complete Functions billing meter is
+claimed. See [the reviewed policy](../../SPEC.md#revised-functions-evidence-policy--issue-68-2026-11-19).
+
+Verification: `BERTH_TEST_POSTGRES_PORT=your_loopback_port pnpm test:admission-db`
+uses a fresh disposable database and tests both migrations 001–005 regression behavior
+and the 006 upgrade with retained historical evidence. It does not contact Neon/OCI.
+
+## Historical activation reference — migrations 004/005
+
 This runbook prepares **one** dedicated OCI trial. It does not authorize paid plans
 or establish the live verdict in #14. Complete the current account, IAM and allowance
 checks in [the setup guide](../oci-neon-setup.md) before activation. Use the pinned
