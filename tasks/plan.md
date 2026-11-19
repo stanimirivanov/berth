@@ -310,3 +310,14 @@ CI returns to unconditional canonical verification; no dependency waiver remains
 Stale high findings still fail, and seven moderate / one low finding remain visible.
 This closes dependency triage without changing the failed/partial trial verdict
 or authorizing another live run. Earlier active-exception entries are historical.
+
+## Free-plan readiness qualification — #70, 2026-11-19
+
+[Readiness report](../docs/trial/free-plan-readiness.md) and
+[independent owner procedure](../docs/trial/owner-recovery.md) complete the bounded
+offline preparation milestone after #68/#69. The existing executor with real SDK
+wire behavior and local SQL qualifies clean/lost-DELETE owner recovery within the
+unchanged reserve; unsafe, uncertain, exhausted, expired or unreadable work stops.
+The failed/partial live verdict and consumed authorization remain intact. A future
+live validation proposal needs a separate explicit owner decision and fresh account
+checks; no deployment or new trial is authorized by this milestone.
