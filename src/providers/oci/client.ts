@@ -100,6 +100,20 @@ export class BucketFailure extends Error {
   }
 }
 
+/** Closed diagnostics only; never retain raw exception text, requests, credentials or causes. */
+const transportFailures = {
+  prepare: "OCI request preparation failed",
+  sign: "OCI request signing failed",
+  send: "OCI transport send failed",
+} as const;
+
+/** SDK wrapping preserves this fixed message; it is diagnostic evidence, never a settlement receipt. */
+class TransportFailure extends Error {
+  constructor(stage: keyof typeof transportFailures) {
+    super(transportFailures[stage]);
+  }
+}
+
 /** Exact private Standard proposal; absence of a KMS key selects Oracle-managed encryption. */
 export function createProposal(i: BucketIntent): requests.CreateBucketRequest {
   return {
@@ -241,8 +255,10 @@ export function safeBucketSdk(transport: HttpClient): ObjectStorageClient {
                 headers: { "content-type": "application/json" },
               },
             );
-          } catch {
-            throw new Error("OCI transport failed");
+          } catch (error) {
+            throw error instanceof TransportFailure
+              ? error
+              : new Error("OCI transport failed");
           }
         },
       },
@@ -277,6 +293,15 @@ function requestSender(
       });
     } catch (error) {
       if (error instanceof BucketFailure) throw error;
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? error.message
+          : undefined;
+      const stage =
+        Object.entries(transportFailures).find(
+          ([, value]) => value === message,
+        )?.[0] ?? "unknown";
+      console.warn("berth.oci.request-failure", { action, stage });
       const status =
         error && typeof error === "object" && "statusCode" in error
           ? error.statusCode
@@ -464,54 +489,63 @@ export function boundedObjectSdk(
     throw new BucketFailure("invalid-intent");
   return safeBucketSdk({
     /** Refuse redirects/other services and abort both headers and streamed body on deadline. */
-    async send(request) {
-      const url = new URL(request.uri);
-      if (
-        url.protocol !== "https:" ||
-        url.username ||
-        url.password ||
-        !/^objectstorage[.][a-z]{2}-[a-z]+-[1-9][.]oraclecloud[.]com$/.test(
-          url.hostname,
-        ) ||
-        !url.pathname.startsWith("/n/")
-      )
-        throw Error("Target rejected");
-      const clock = creation.now ?? Date.now;
-      const write = request.method === "POST" || request.method === "PUT";
-      const remaining = creation.creationDeadline - clock();
-      if (write && (!Number.isFinite(remaining) || remaining <= 0))
-        throw Error("Creation deadline");
-      const signal = AbortSignal.any([
-        execution,
-        AbortSignal.timeout(
-          write ? Math.min(requestMs, Math.ceil(remaining)) : requestMs,
-        ),
-      ]);
-      signal.throwIfAborted();
-      await signer.signHttpRequest(request);
-      signal.throwIfAborted();
-      if (write && clock() >= creation.creationDeadline)
-        throw Error("Creation deadline");
-      const raw = request.body;
-      if (
-        raw !== undefined &&
-        typeof raw !== "string" &&
-        !(raw instanceof Uint8Array)
-      )
-        throw Error("Body rejected");
-      const body =
-        typeof raw === "string"
-          ? raw
-          : raw === undefined
-            ? undefined
-            : new Uint8Array(raw);
-      return fetcher(request.uri, {
-        method: request.method,
-        headers: request.headers,
-        signal,
-        redirect: "error",
-        ...(body === undefined ? {} : { body }),
-      });
+    async send(request, forceExcludeBody) {
+      let stage: keyof typeof transportFailures = "prepare";
+      try {
+        const url = new URL(request.uri);
+        if (
+          url.protocol !== "https:" ||
+          url.username ||
+          url.password ||
+          !/^objectstorage[.][a-z]{2}-[a-z]+-[1-9][.]oraclecloud[.]com$/.test(
+            url.hostname,
+          ) ||
+          !url.pathname.startsWith("/n/")
+        )
+          throw Error("Target rejected");
+        const clock = creation.now ?? Date.now;
+        const write = request.method === "POST" || request.method === "PUT";
+        const remaining = creation.creationDeadline - clock();
+        if (write && (!Number.isFinite(remaining) || remaining <= 0))
+          throw Error("Creation deadline");
+        const signal = AbortSignal.any([
+          execution,
+          AbortSignal.timeout(
+            write ? Math.min(requestMs, Math.ceil(remaining)) : requestMs,
+          ),
+        ]);
+        signal.throwIfAborted();
+        const raw = request.body;
+        if (
+          raw !== undefined &&
+          typeof raw !== "string" &&
+          !(raw instanceof Uint8Array)
+        )
+          throw Error("Body rejected");
+        const body =
+          typeof raw === "string"
+            ? raw
+            : raw === undefined
+              ? undefined
+              : new Uint8Array(raw);
+        stage = "sign";
+        // The SDK excludes binary Object Storage PUT bodies from its text-body signing path.
+        await signer.signHttpRequest(request, forceExcludeBody);
+        stage = "prepare";
+        signal.throwIfAborted();
+        if (write && clock() >= creation.creationDeadline)
+          throw Error("Creation deadline");
+        stage = "send";
+        return await fetcher(request.uri, {
+          method: request.method,
+          headers: request.headers,
+          signal,
+          redirect: "error",
+          ...(body === undefined ? {} : { body }),
+        });
+      } catch {
+        throw new TransportFailure(stage);
+      }
     },
   });
 }
