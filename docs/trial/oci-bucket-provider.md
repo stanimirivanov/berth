@@ -134,3 +134,83 @@ existing interrupted object-deletion cases passed at 35/40 cleanup requests;
 the full crash matrix was not rerun locally, and its CI coverage is unchanged.
 The live executor bundle also built locally; nothing was deployed. Existing seven
 moderate and one low dependency advisories remain, with no high/critical findings.
+
+## Signed binary transport correction — issue #81, 2026-11-20
+
+The November 20 PUT failure is reproducible offline at the **production signed
+transport**, before its fetch callback is reached. The previous SDK lifecycle
+proof injected HTTP directly into `safeBucketSdk`; it exercised serialization but
+omitted `boundedObjectSdk` and the actual signer. That omission concealed this bug.
+
+The pinned Object Storage SDK passes `forceExcludeBody=true` to `HttpClient.send`
+for PutObject. Our adapter dropped that second argument and called the signer with
+its default body mode. The pinned signer's text-body reader rejects the fixed
+`Uint8Array` before sending. Forwarding the SDK's flag fixes that path without
+converting binary bytes to text or changing SDK/retry versions. Other methods keep
+their normal signing mode; the JSON POST control verifies its body hash and required
+body headers, including non-ASCII data.
+
+This follows the pinned `oci-common` `HttpClient`/`RequestSigner` interface and the
+Object Storage client's PutObject call. Oracle describes the PUT signing exception
+in [Request Signatures](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/signingrequests.htm#ObjectStoragePut).
+The SDK still owns the signing algorithm/header selection; the adapter does not
+implement custom crypto or globally disable body signing. TLS, create-only PUT,
+fixed metadata/bytes and the subsequent SHA-256 read verification remain intact.
+
+### Failing-first proof and bundle coverage
+
+`tests/oci-signed-upload.test.ts` first failed with zero HTTP sends and the original
+client. A test through Neon's official bundler also failed on that exact baseline;
+restoring the flag forwarding made both pass. The archive test retains the real
+live root, adding named exports only in a **test-only entrypoint** to reach its
+production modules. It is not byte-identical to a deployed archive, a fake SDK,
+a new runtime route or a hosted probe. No credentials/environment are bundled.
+
+The test archive uses the real signer and SDK over the no-network HTTP model. It
+creates, uploads, verifies SHA-256, resumes from a copied receipt with a fresh SDK,
+then conditionally deletes object and bucket. Independent RSA verification checks
+request signatures; JSON body hashes are checked when signed. Every wire send has
+one dispatcher reservation. Observed normal **23/160**, cleanup **24/40**; exactly
+one PUT and two revision-bound DELETEs. Existing unsigned SDK/negative ownership
+controls remain, rather than being replaced by this success case.
+
+### Bounded diagnostics, unchanged settlement
+
+The adapter emits only fixed preparation/signing/send categories. The provider
+boundary logs `berth.oci.request-failure` with the fixed action and stage; errors
+outside those recognized categories report `unknown`. Original exception text,
+provider bodies, URLs, credentials, signing headers and causes are not copied.
+Tests cover deadline preparation, signer failure, attempted-send failure, an SDK
+construction failure, and a provider rejection containing a synthetic secret.
+
+These stages are **diagnostics, not durable proof of non-dispatch**. No SQL,
+settlement branch, reserve, attempt limit or deadline changes. Transport/signing
+failures still produce the existing `unknown-outcome`; a definite HTTP 403 retains
+`forbidden`. Budget reservations remain spent even when the injected send count is
+zero. Unknown/late writes remain subject to the original positive reconciliation
+rules; no old PUT is retroactively cleared from this offline reproduction.
+
+Focused reproduction/controls:
+
+```bash
+pnpm build
+node --test dist/tests/oci-signed-upload.test.js \
+  dist/tests/oci-sdk-lifecycle.test.js dist/tests/oci-bucket.test.js \
+  dist/tests/live-executor.test.js
+```
+
+Full recovery/security verification uses only the existing disposable loopback
+PostgreSQL fixture. Canonical gates and `pnpm build:live-executor` remain required.
+The [live partial result](live76-results.md) and
+[read-only owner reconciliation](reconciliation83.md) remain historical/live evidence,
+not successes supplied by these tests. Nothing is deployed, no live credential is
+read, no cloud API is called and no expired operation is resumed by this change.
+Issue #80's separate control-body defect and current owner closeout remain pending.
+
+Final local verification: all 27 focused SDK/provider/executor tests passed;
+`pnpm check` passed with 172 application and 30 harness tests, lint/types,
+architecture/docs sensors, runtime bundle, secret scan and the unchanged audit
+gate. The full disposable PostgreSQL recovery/security suite passed all 158 tests
+without skips, retaining the process-death matrix and interrupted teardown checks.
+`pnpm build:live-executor` also passed without deployment. The audit still reports
+seven moderate and one low advisory, with no high/critical findings.
