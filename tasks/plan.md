@@ -358,3 +358,16 @@ and completed old closeout remain unchanged.
 Further owner reconciliation must review the retained request/ownership evidence
 and existing reserve/window before any mutation. Metrics, checksum, missed-delivery
 recovery and complete teardown remain unproven; overall feasibility stays partial/no-go.
+
+## Expired-trial reconciliation — #83, 2026-11-20
+
+[Read-only owner reconciliation](../docs/trial/reconciliation83.md) confirms the
+saved bucket still exists with matching ownership/revision and empty complete
+inventories. The dedicated key remains registered; hosting remains absent. SQL
+requests, attempts, state, immutable authorizations and counters are unchanged;
+the original window has expired and **26/40 cleanup requests remain historical**.
+
+The report supplies a bounded, conditional after-expiry owner closeout proposal.
+It requires a separate explicit decision; this read-only issue does not authorize
+mutation, clear the unresolved PUT, restart the executor or start another trial.
+#76 remains unresolved/partial; #81 and #80 remain the implementation follow-ups.
