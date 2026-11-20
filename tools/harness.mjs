@@ -6,6 +6,9 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
+  "src/trial/history-api.ts": ["node:crypto"],
+  "src/trial/history-runtime.ts": ["pg"],
+  "src/trial/history-index.ts": [],
   "src/trial/live-admission.ts": ["node:crypto"],
   "src/providers/oci/readiness.ts": ["oci-common"],
   "src/trial/executor-security.ts": [],
@@ -154,6 +157,17 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
+            (file === "src/trial/history-index.ts" &&
+              [
+                "src/trial/history-api.ts",
+                "src/trial/history-runtime.ts",
+              ].includes(resolved)) ||
+            (file === "src/trial/history-runtime.ts" &&
+              [
+                "src/trial/executor-security.ts",
+                "src/trial/executor-store.ts",
+                "src/trial/history-api.ts",
+              ].includes(resolved)) ||
             (file === "src/trial/live-admission.ts" &&
               [
                 "src/trial/api.ts",
@@ -274,7 +288,12 @@ export function analyze(files) {
           !(
             resolved.startsWith("scripts/") ||
             resolved === "neon.ts" ||
-            resolved === "src/trial/deployment.ts"
+            resolved === "src/trial/deployment.ts" ||
+            (file === "scripts/history-server.ts" &&
+              [
+                "src/trial/history-api.ts",
+                "src/trial/history-runtime.ts",
+              ].includes(resolved))
           )
         )
           fail(

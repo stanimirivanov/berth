@@ -1,0 +1,61 @@
+import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { resolve } from "node:path";
+import { historyApi } from "../src/trial/history-api.js";
+import { historyReader } from "../src/trial/history-runtime.js";
+
+const api = historyApi(
+  process.env.BERTH_HISTORY_TOKEN ?? "",
+  historyReader(process.env),
+);
+const directory = resolve("ui/dist/history/browser");
+const types: Record<string, string> = {
+  html: "text/html; charset=utf-8",
+  js: "text/javascript; charset=utf-8",
+  css: "text/css; charset=utf-8",
+  ico: "image/x-icon",
+};
+
+/** Explicit loopback preview server; no credentials are read until an authenticated history request. */
+createServer(async (incoming, outgoing) => {
+  outgoing.setHeader("Cache-Control", "no-store");
+  outgoing.setHeader("X-Content-Type-Options", "nosniff");
+  outgoing.setHeader("Referrer-Policy", "no-referrer");
+  outgoing.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+  );
+  if (incoming.headers.host !== "127.0.0.1:4201" || incoming.method !== "GET") {
+    outgoing.writeHead(400).end();
+    return;
+  }
+  try {
+    const url = new URL(incoming.url ?? "/", "http://127.0.0.1:4201");
+    if (url.pathname.startsWith("/api/")) {
+      const headers = new Headers();
+      if (incoming.headers.authorization)
+        headers.set("authorization", incoming.headers.authorization);
+      const response = await api.fetch(new Request(url, { headers }));
+      outgoing.writeHead(response.status, Object.fromEntries(response.headers));
+      outgoing.end(await response.text());
+      return;
+    }
+    const name = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+    if (!/^[A-Za-z0-9._-]+$/.test(name) || name === "." || name === "..") {
+      outgoing.writeHead(404).end();
+      return;
+    }
+    const type = types[name.split(".").at(-1) ?? ""];
+    if (!type) {
+      outgoing.writeHead(404).end();
+      return;
+    }
+    const content = await readFile(resolve(directory, name));
+    outgoing.writeHead(200, { "Content-Type": type });
+    outgoing.end(content);
+  } catch {
+    outgoing.writeHead(503).end("History preview unavailable");
+  }
+}).listen(4201, "127.0.0.1", () => {
+  console.log("History preview: http://127.0.0.1:4201");
+});

@@ -37,6 +37,8 @@ jobs:
           node-version: 24.22.3
       - run: npm install --global pnpm@12.16.1 --ignore-scripts
       - run: pnpm install --frozen-lockfile
+      - run: pnpm ui:install
+      - run: pnpm --dir ui exec playwright install --with-deps chromium
       - name: Install checksum-pinned Gitleaks
         shell: bash
         run: |

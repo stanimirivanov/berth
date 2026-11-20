@@ -70,3 +70,10 @@ Local verification passed: the store regression, all 13 admission SQL tests, and
 checks, secret scan and unchanged dependency audit gate. The live executor archive
 built locally without deployment. Seven moderate and one low advisory remain;
 no high/critical findings were reported.
+
+## Angular follow-up — issue #89
+
+The owner requested an Angular history UI after this backend slice. The dependent
+[UI and read-service guide](../../ui/README.md) documents the first screen, private
+same-origin API and independent function bundle. Its browser tests use synthetic
+records only. No live migration or deployment follows automatically from either PR.

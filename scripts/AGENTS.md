@@ -15,3 +15,7 @@ Apply the comment standard to new/changed contracts. Legacy script documentation
 backfill is a recorded hardening step, not silently claimed as enforced today.
 Run the relevant existing setup/doctor tests; CI also runs the disposable loopback
 PostgreSQL integration suite without any Neon or OCI secrets.
+
+`history-server.ts` is the narrow loopback-only preview exception: it may compose
+`history-api.ts` and `history-runtime.ts`, never the live executor or an OCI port.
+It serves the built UI and private read API at one origin; no credential-file reads.

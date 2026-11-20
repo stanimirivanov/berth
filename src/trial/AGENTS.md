@@ -78,3 +78,9 @@ See docs/trial/live-executor.md and docs/trial/hosted-admission.md.
 persist reservations; never call it persistence-free in the live contract.
 Build with `build:live-executor` and run `test:admission-db` on disposable Postgres.
 #14 owns operational acceptance.
+
+`history-api.ts` owns a separate authenticated read-only history interface without
+execution-window admission. `history-runtime.ts` may reach only restricted SQL
+identity checks and the allowlisted history store, inside a read-only transaction.
+`history-index.ts` is its import-inert root; no OCI imports, execution routes or
+schedules. Never reuse the live trial token or inject provider credentials here.

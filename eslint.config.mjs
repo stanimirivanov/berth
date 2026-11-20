@@ -17,7 +17,7 @@ export default [
         babelOptions: {
           babelrc: false,
           configFile: false,
-          parserOpts: { plugins: ["typescript"] },
+          parserOpts: { plugins: ["typescript", "decorators"] },
         },
       },
     },

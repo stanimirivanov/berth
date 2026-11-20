@@ -15,3 +15,7 @@ coverage/
 *.tsbuildinfo
 npm-debug.log*
 pnpm-debug.log*
+
+ui/.angular/
+ui/test-results/
+ui/playwright-report/
