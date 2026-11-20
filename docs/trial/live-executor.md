@@ -83,6 +83,31 @@ Expired requests return before credentials/SQL work. Control responses use
 A cleanup receipt is not deletion evidence. Terminal success, authenticated
 absence and no unresolved requests must still be demonstrated in #14.
 
+For `/cleanup`, `/evidence` and `/usage`, an empty body means **zero bytes**:
+both a null body and an empty gateway stream are supported. After authentication,
+the handler inspects at most eight stream reads within one second and requires
+EOF. The first nonempty chunk, read/lock error, abort, read-count exhaustion or
+timeout returns HTTP 400 `body-not-allowed` before credential parsing or SQL work.
+Content-Length is not trusted. Rejected input is cancelled best-effort without
+waiting for the stream's cancellation hook, and expiry is checked again after
+inspection. `/preview` and `/submit` retain their separate bounded JSON contract.
+
+Issue #80 regression tests cover all three streamed controls, absent/misleading
+length headers, payload cancellation, stalled/unreadable/locked input, endless
+empty chunks, abort, authentication-before-reading and expiry during inspection.
+The existing SQL admission suite verifies that cleanup cancellation and its charge
+commit atomically and repeats cannot drain the protected execution reserve.
+These are offline checks only: the historical partial verdict, unresolved live
+requests and independent owner cleanup procedure remain unchanged. No deployed
+trial, reserve, SQL rule or provider lifecycle behavior is changed by this fix.
+
+Local verification for issue #80: 28 focused handler/API tests, all 12 admission
+SQL integration tests on fresh disposable loopback PostgreSQL, and `pnpm check`
+(178 application tests, 30 harness tests, lint/types, architecture/docs sensors,
+runtime bundle, secret scan and unchanged audit gate) passed. The live executor
+archive also built locally without deployment. Seven moderate and one low
+dependency advisory remain; no high/critical findings were reported.
+
 The real transports sign locally and send once, without automatic retries. The
 executor reserves each Object Storage and Monitoring request through existing
 meters. Limits remain 160 normal + 40 cleanup Object Storage requests, separately

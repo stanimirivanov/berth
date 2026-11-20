@@ -364,3 +364,256 @@ test("hosted preview reaches bounded API only after bearer authentication", asyn
   );
   assert.equal(calls, 1);
 });
+
+/** Model the gateway's non-null POST stream without relying on Content-Length. */
+function streamedControl(
+  path: string,
+  body: ReadableStream<Uint8Array>,
+  headers: Record<string, string> = {},
+) {
+  return new Request(`https://fixture/${path}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${env.BERTH_TRIAL_TOKEN}`, ...headers },
+    body,
+    duplex: "half",
+  } as RequestInit);
+}
+
+test("empty gateway streams reach all three fixed controls without trusting length headers", async () => {
+  const actions: string[] = [];
+  const handler = makeLiveHandler(
+    env,
+    async (_e, action) => {
+      actions.push(action);
+      return { action };
+    },
+    () => now,
+  );
+  for (const path of ["cleanup", "evidence", "usage"]) {
+    const response = await handler.fetch(
+      streamedControl(
+        path,
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array());
+            controller.close();
+          },
+        }),
+        { "content-length": "999" },
+      ),
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { action: path });
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+  assert.deepEqual(actions, ["cleanup", "evidence", "usage"]);
+});
+
+test("nonempty control streams reject and cancel before work even with absent or zero length", async () => {
+  let calls = 0;
+  const handler = makeLiveHandler(
+    env,
+    async () => {
+      calls++;
+    },
+    () => now,
+  );
+  for (const path of ["cleanup", "evidence", "usage"]) {
+    for (const headers of [{}, { "content-length": "0" }]) {
+      let cancelled = false;
+      const response = await handler.fetch(
+        streamedControl(
+          path,
+          new ReadableStream(
+            {
+              start(controller) {
+                controller.enqueue(new Uint8Array(1024 * 1024));
+              },
+              cancel() {
+                cancelled = true;
+              },
+            },
+            { highWaterMark: 0 },
+          ),
+          headers,
+        ),
+      );
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), { error: "body-not-allowed" });
+      assert.equal(cancelled, true);
+    }
+  }
+  assert.equal(calls, 0);
+});
+
+test("unreadable locked and endlessly empty control streams fail closed with bounded inspection", async () => {
+  let calls = 0;
+  const handler = makeLiveHandler(
+    env,
+    async () => {
+      calls++;
+    },
+    () => now,
+  );
+  const broken = new ReadableStream<Uint8Array>({
+    pull() {
+      throw Error("private-stream-detail");
+    },
+  });
+  const locked = streamedControl("usage", new ReadableStream());
+  const lock = locked.body?.getReader();
+  let reads = 0,
+    cancelled = false;
+  const endless = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        reads++;
+        controller.enqueue(new Uint8Array());
+      },
+      cancel() {
+        cancelled = true;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  for (const request of [
+    streamedControl("evidence", broken),
+    locked,
+    streamedControl("cleanup", endless),
+  ]) {
+    const response = await handler.fetch(request);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "body-not-allowed" });
+  }
+  lock?.releaseLock();
+  assert.ok(reads <= 8);
+  assert.equal(cancelled, true);
+  assert.equal(calls, 0);
+});
+
+test("stalled input and cancellation cannot hold a control open indefinitely", async () => {
+  let cancelled = false,
+    calls = 0;
+  const handler = makeLiveHandler(
+    env,
+    async () => {
+      calls++;
+    },
+    () => now,
+  );
+  const response = await handler.fetch(
+    streamedControl(
+      "cleanup",
+      new ReadableStream(
+        {
+          pull() {
+            return new Promise(() => {});
+          },
+          cancel() {
+            cancelled = true;
+            return new Promise(() => {});
+          },
+        },
+        { highWaterMark: 0 },
+      ),
+    ),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(cancelled, true);
+  assert.equal(calls, 0);
+});
+
+test("authentication and expiry precede control stream inspection and expiry is rechecked after reading", async () => {
+  let reads = 0,
+    calls = 0;
+  const stream = () =>
+    new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          reads++;
+          controller.close();
+        },
+      },
+      { highWaterMark: 0 },
+    );
+  const handler = makeLiveHandler(
+    env,
+    async () => {
+      calls++;
+    },
+    () => now,
+  );
+  const unauthorized = streamedControl("cleanup", stream(), {
+    authorization: "invalid",
+  });
+  assert.equal((await handler.fetch(unauthorized)).status, 401);
+  const expired = makeLiveHandler(
+    env,
+    async () => {
+      calls++;
+    },
+    () => Number(env.BERTH_EXECUTOR_EXPIRES_AT),
+  );
+  assert.deepEqual(
+    await (await expired.fetch(streamedControl("evidence", stream()))).json(),
+    { phase: "expired" },
+  );
+  assert.equal(reads, 0);
+  let clock = now;
+  const crossing = makeLiveHandler(
+    env,
+    async () => {
+      calls++;
+    },
+    () => clock,
+  );
+  const response = await crossing.fetch(
+    streamedControl(
+      "usage",
+      new ReadableStream(
+        {
+          pull(controller) {
+            clock = Number(env.BERTH_EXECUTOR_EXPIRES_AT);
+            controller.close();
+          },
+        },
+        { highWaterMark: 0 },
+      ),
+    ),
+  );
+  assert.deepEqual(await response.json(), { phase: "expired" });
+  assert.equal(calls, 0);
+});
+
+test("aborting a pending control read cancels input without invoking work", async () => {
+  const abort = new AbortController();
+  let cancelled = false,
+    calls = 0;
+  const request = streamedControl(
+    "cleanup",
+    new ReadableStream(
+      {
+        pull() {
+          abort.abort();
+        },
+        cancel() {
+          cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    ),
+  );
+  const handler = makeLiveHandler(
+    env,
+    async () => {
+      calls++;
+    },
+    () => now,
+  );
+  const response = await handler.fetch(
+    new Request(request, { signal: abort.signal }),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(cancelled, true);
+  assert.equal(calls, 0);
+});
