@@ -55,8 +55,9 @@
     "test:ui": "pnpm --dir ui test",
     "history:serve": "pnpm build && node dist/scripts/history-server.js",
     "build:history": "pnpm build && node dist/scripts/build-history.js",
-    "lint:ui": "biome check ui/src ui/tests ui/*.ts ui/*.json && eslint ui/src ui/tests ui/*.ts",
-    "check:ui": "pnpm build:ui && pnpm build:history && pnpm test:ui && pnpm --dir ui audit --audit-level high"
+    "lint:ui": "biome check ui/src ui/tests ui/*.ts ui/*.json && eslint ui/src ui/tests ui/*.ts && pnpm run lint:history-edge",
+    "check:ui": "pnpm build:ui && pnpm build:history && pnpm test:ui && pnpm --dir ui audit --audit-level high",
+    "lint:history-edge": "biome check ui/edge ui/functions ui/public/_routes.json && eslint ui/edge ui/functions"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
