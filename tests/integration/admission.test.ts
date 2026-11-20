@@ -2213,3 +2213,136 @@ test("issue76 singleton binds exact owner preparation while malformed evidence l
     );
   });
 });
+
+test("read-only operation history paginates retained evidence without exposing raw state or changing budgets", async () => {
+  await reviewedAdmission(async (owner, db, operation) => {
+    await owner.query(
+      await readFile("migrations/008_operation_history.sql", "utf8"),
+    );
+    const { executorStore } = await import("../../src/trial/executor-store.js");
+    const store = executorStore(db);
+    const empty = await store.history();
+    assert.equal(empty.items.length, 1);
+    assert.equal(
+      empty.items[0]?.phase,
+      null,
+      "no work row must not invent a phase",
+    );
+    const ids = [
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+      "33333333-3333-4333-8333-333333333333",
+    ];
+    await owner.query(
+      "UPDATE berth_ledger.trials SET outcome='failed',started_at='2020-01-01Z',expires_at='2020-01-01T04:00:00Z' WHERE operation=$1",
+      [operation],
+    );
+    for (const [i, id] of ids.entries()) {
+      await owner.query(
+        `INSERT INTO berth_ledger.trials(operation,compartment,region,namespace,digest,bucket,started_at,expires_at,outcome,normal_used,cleanup_used,monitoring_limit,neon_limit)
+        VALUES($1,'private-compartment','private-region','private-namespace',repeat('a',64),'private-bucket','2021-01-01Z','2021-01-01T04:00:00Z',$2,15,14,20,40)`,
+        [id, ["failed", "succeeded", "needs-reconciliation"][i]],
+      );
+    }
+    await owner.query(
+      `INSERT INTO berth_executor.work(operation,phase,pending_upload,cleanup_requested,reason,state,bucket,receipt)
+      VALUES($1,'cleanup',true,true,'private-reason','{"private":"state"}','{"private":"bucket"}','{"private":"receipt"}')`,
+      [ids[2]],
+    );
+    const attempt = randomUUID();
+    await owner.query(
+      "INSERT INTO berth_ledger.attempts(id,operation,action,generation,ordinal) VALUES($1,$2,'put_object',1,1)",
+      [attempt, ids[2]],
+    );
+    await owner.query(
+      "INSERT INTO berth_ledger.requests(id,attempt,operation,generation,meter,mutation) VALUES($1,$2,$3,1,'normal',true)",
+      [randomUUID(), attempt, ids[2]],
+    );
+    const snapshot = async () =>
+      (
+        await owner.query(`SELECT jsonb_build_object(
+      'trials',(SELECT jsonb_agg(to_jsonb(t) ORDER BY operation) FROM berth_ledger.trials t),
+      'work',(SELECT jsonb_agg(to_jsonb(t) ORDER BY operation) FROM berth_executor.work t),
+      'attempts',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM berth_ledger.attempts t),
+      'requests',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM berth_ledger.requests t),
+      'claims',(SELECT jsonb_agg(to_jsonb(t) ORDER BY owner) FROM berth_ledger.claims t),
+      'admission',(SELECT jsonb_agg(to_jsonb(t) ORDER BY operation) FROM berth_executor.admission t)
+    ) AS evidence`)
+      ).rows[0].evidence;
+    const before = await snapshot();
+    await db.query("BEGIN READ ONLY");
+    try {
+      const first = await store.history(null, 2);
+      assert.deepEqual(
+        first.items.map((item) => item.operation),
+        [ids[2], ids[1]],
+      );
+      assert.equal(first.next, ids[1]);
+      const second = await store.history(first.next, 2);
+      assert.deepEqual(
+        second.items.map((item) => item.operation),
+        [ids[0], operation],
+      );
+      assert.equal(second.next, null);
+      assert.deepEqual(await store.history(operation), {
+        items: [],
+        next: null,
+      });
+      const detail = await store.historyDetail(ids[2] as string);
+      assert.ok(detail);
+      assert.equal(detail.outcome, "needs-reconciliation");
+      assert.equal(detail.phase, "cleanup");
+      assert.equal(detail.pendingUpload, true);
+      assert.equal(detail.cleanupRequested, true);
+      assert.equal(detail.verdict, "partial");
+      assert.deepEqual(detail.budgets, {
+        normal: { used: 15, limit: 160 },
+        cleanup: { used: 14, limit: 40 },
+        monitoring: { used: 0, limit: 20 },
+        neon: { used: 0, limit: 40 },
+      });
+      assert.deepEqual(detail.unresolved, { requests: 1, mutations: 1 });
+      assert.equal(JSON.stringify(detail).includes("private"), false);
+      assert.deepEqual(
+        Object.keys(detail).sort(),
+        [
+          "operation",
+          "startedAt",
+          "expiresAt",
+          "outcome",
+          "phase",
+          "pendingUpload",
+          "cleanupRequested",
+          "objectRemoved",
+          "budgets",
+          "unresolved",
+          "verdict",
+        ].sort(),
+      );
+      assert.equal(await store.historyDetail(randomUUID()), null);
+    } finally {
+      await db.query("ROLLBACK");
+    }
+    for (const limit of [0, 51, null])
+      await assert.rejects(
+        db.query("SELECT berth_executor.history_page(null,$1)", [limit]),
+      );
+    await assert.rejects(store.history(randomUUID()));
+    await assert.rejects(store.history("bad-cursor"));
+    await assert.rejects(
+      db.query("SELECT berth_executor.history_record($1)", [ids[2]]),
+      /permission denied/,
+    );
+    await assert.rejects(
+      db.query("SELECT * FROM berth_ledger.trials"),
+      /permission denied/,
+    );
+    const grants = (
+      await owner.query(`SELECT p.proname, EXISTS(SELECT FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0 AND a.privilege_type='EXECUTE') AS public_execute
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='berth_executor' AND p.proname LIKE 'history_%'`)
+    ).rows;
+    assert.equal(grants.length, 3);
+    assert.ok(grants.every((row) => row.public_execute === false));
+    assert.deepEqual(await snapshot(), before);
+  });
+});
