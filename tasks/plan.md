@@ -336,3 +336,25 @@ bounded live-validation task, dependent on #75's missing prerequisites and expli
 owner authorization. Closing the assessment or merging its PR authorizes no
 provisioning, deployment, migration installation or live trial. All cleanup/time
 bounds and historical evidence are preserved.
+
+
+## One-hour partial live result — #76, 2026-11-20
+
+[Issue #76](https://github.com/stanimirivanov/berth/issues/76) was explicitly
+approved for a one-hour-supervised experiment under the merged #78 policy. The
+[separate live result](../docs/trial/live76-results.md) records hosted bucket creation,
+an unresolved PUT, stopped hosted/owner cleanup, verified hosting removal and a
+retained restricted key. The new operation remains **needs-reconciliation** with
+**26/40 cleanup requests left**, and its original **12:50 Sofia November 20**
+cloud-work expiry. It is not closed or renewed; historical failure/partial evidence
+and completed old closeout remain unchanged.
+
+- [#80](https://github.com/stanimirivanov/berth/issues/80): bounded TDD fix for empty
+  POST stream handling on hosted controls; no deployment/live work authorized.
+- [#81](https://github.com/stanimirivanov/berth/issues/81): reproduce/diagnose the
+  hosted PUT failure and add safe transport/bundle regression evidence; no guessed
+  settlement, live-state changes or new trial authorized.
+
+Further owner reconciliation must review the retained request/ownership evidence
+and existing reserve/window before any mutation. Metrics, checksum, missed-delivery
+recovery and complete teardown remain unproven; overall feasibility stays partial/no-go.
