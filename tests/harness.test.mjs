@@ -375,3 +375,27 @@ test("live admission owns metering and cannot import credentials from administra
     }).some((x) => x.rule === "architecture"),
   );
 });
+
+test("history boundaries permit only the read composition and reject provider or execution coupling", () => {
+  const sources = {
+    "src/trial/history-api.ts":
+      "/** Fixed private reads. */ export const api = {};",
+    "src/trial/history-runtime.ts":
+      "/** Restricted reader. */ export const read = {};",
+    "src/trial/history-index.ts":
+      'import "./history-api.js"; import "./history-runtime.js";',
+  };
+  assert.deepEqual(analyze(sources), []);
+  for (const name of [
+    "executor.ts",
+    "live-runtime.ts",
+    "../providers/oci/client.ts",
+  ]) {
+    assert.ok(
+      analyze({
+        ...sources,
+        "src/trial/history-index.ts": `import "./${name}";`,
+      }).some((error) => error.rule === "architecture"),
+    );
+  }
+});

@@ -58,3 +58,11 @@ export const liveSchedule = {
   function_slug: liveFunction.slug,
   enabled: false,
 };
+
+/** Independent read-only history root; no execution schedule, OCI key or live-trial activation. */
+export const historyFunction = {
+  ...probeFunction,
+  slug: "berthhistory89",
+  name: "Berth read-only operation history",
+  source: "./src/trial/history-index.ts",
+};

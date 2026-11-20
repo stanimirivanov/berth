@@ -1,0 +1,9 @@
+engineStrict: true
+saveExact: true
+ignoreScripts: true
+# Explicitly deny lifecycle scripts; platform binaries are optional prebuilt packages.
+allowBuilds:
+  '@parcel/watcher': false
+  esbuild: false
+  lmdb: false
+  msgpackr-extract: false

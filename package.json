@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit && pnpm run typecheck:harness",
-    "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json && pnpm run lint:harness && pnpm run lint:spacing",
+    "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json && pnpm run lint:harness && pnpm run lint:spacing && pnpm run lint:ui",
     "test": "pnpm run build && node --test dist/tests/*.test.js && pnpm run test:harness",
     "test:smoke": "pnpm run build && node --test dist/tests/runtime-smoke.test.js",
     "neon": "neon",
@@ -33,7 +33,7 @@
     "secrets": "node tools/secrets.mjs",
     "security": "pnpm run secrets && pnpm audit --audit-level high",
     "check:fast": "pnpm run floor && pnpm run lint && pnpm run typecheck && pnpm run harness",
-    "check": "pnpm run check:fast && pnpm test && pnpm run build:runtime-probe && pnpm run security",
+    "check": "pnpm run check:fast && pnpm test && pnpm run build:runtime-probe && pnpm run security && pnpm run check:ui",
     "test:state-db": "pnpm run build && node --test dist/tests/integration/state-contract.test.js",
     "test:cloudflare-trial": "pnpm run build && node --test dist/tests/cloudflare-trial.test.js dist/tests/cloudflare-state-probe.test.js",
     "build:state-probe": "pnpm run build && node dist/scripts/build-state-probe.js",
@@ -49,7 +49,14 @@
     "test:admission-db": "pnpm run build && node --test dist/tests/integration/admission.test.js",
     "lint:spacing": "eslint scripts tests src tools neon.ts eslint.config.mjs",
     "security:temporary-audit": "pnpm run secrets && node dist/scripts/temporary-audit.js",
-    "check:temporary-audit": "pnpm run check:fast && pnpm test && pnpm run build:runtime-probe && pnpm run security:temporary-audit"
+    "check:temporary-audit": "pnpm run check:fast && pnpm test && pnpm run build:runtime-probe && pnpm run security:temporary-audit && pnpm run check:ui",
+    "ui:install": "pnpm --dir ui install --frozen-lockfile",
+    "build:ui": "pnpm --dir ui build",
+    "test:ui": "pnpm --dir ui test",
+    "history:serve": "pnpm build && node dist/scripts/history-server.js",
+    "build:history": "pnpm build && node dist/scripts/build-history.js",
+    "lint:ui": "biome check ui/src ui/tests ui/*.ts ui/*.json && eslint ui/src ui/tests ui/*.ts",
+    "check:ui": "pnpm build:ui && pnpm build:history && pnpm test:ui && pnpm --dir ui audit --audit-level high"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
