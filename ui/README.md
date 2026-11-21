@@ -55,12 +55,10 @@ this is not permission to perform any expired cloud work.
 ## Hosted boundary and limitations
 
 `pnpm build:history` writes `dist/history.zip`, a separate Neon Function descriptor
-with no schedule or OCI dependency. Building does not deploy. Cloudflare can serve
-`ui/dist/history/browser`, but a reviewed same-origin `/api/history` proxy to the
-private read function, TLS, server secret injection and platform access/rate limits
-remain a separate owner deployment decision. Do not embed database URLs or tokens
-in a Cloudflare static build or open cross-origin access to work around this boundary.
-The loopback preview server is not an Internet-facing hosting server.
+with no schedule or OCI dependency. For an authorized hosted release, follow the
+[Cloudflare Pages history guide](cloudflare-history.md) for the same-origin proxy,
+separate tokens, Free-plan controls and rollback. The loopback preview server is
+for local use.
 
 Browser tests use synthetic HTTP responses and the real built Angular application,
 production static server and CSP, not live Neon records. They cover keyboard
