@@ -9,6 +9,10 @@ outcomes and follow-up indicators.
 
 ## Navigation and detail
 
+The landing route below was superseded by the [Infrastructure navigation
+decision](0006-land-on-infrastructure-and-link-to-the-review-inbox.md). The
+detail route and owner review workflow still apply.
+
 - Operation history is the landing screen at `/`. A selection opens
   `/operations/:operation`. Keep the list and detail side by side on desktop and
   give detail the full width on mobile, with a way back to the list.
