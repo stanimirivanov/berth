@@ -11,8 +11,6 @@ intent-before-write behavior. Never add an automatic retry to uncertain mutation
 Keep credentials outside the checkout and command-line arguments. Cloud verification
 requires the task's explicit scope; `pnpm check` must remain cloud-independent.
 
-Apply the comment standard to new/changed contracts. Legacy script documentation
-backfill is a recorded hardening step, not silently claimed as enforced today.
 Run the relevant existing setup/doctor tests; CI also runs the disposable loopback
 PostgreSQL integration suite without any Neon or OCI secrets.
 

@@ -11,12 +11,9 @@ The runtime import allowlists in tools/harness.mjs enforce these owners. Registe
 new modules and edges explicitly with positive/negative fixtures. Never import
 administrator scripts, private-file readers, shell tools or tests into hosted code.
 Preserve the Neon gateway prerequisite for scheduler attestation. Receipt maps are
-not durable deduplication; #5 owns the durable-backend proof.
+not durable deduplication.
 
-Document exported declarations, types, methods and substantial named helpers using
-[the comment standard](../../docs/comment-quality.md). Explain trust, state lifetime,
-bounds and safe failures; never put credentials in comments, errors or evidence.
-Run `pnpm run test:runtime-probe` for this slice, followed by canonical verification.
+For changes to the runtime probe, run `pnpm run test:runtime-probe`.
 
 `state-probe.ts` owns the ephemeral Cloudflare qualification handler and native
 Alchemy HTTP StateService adapter. Its fixed synthetic routes admit no caller
@@ -28,7 +25,7 @@ parameterized SQL port and immutable execution claim; it imports only Alchemy an
 Effect. Owner bootstrap is `sql/fenced-state.sql`; never run it from hosted code.
 See docs/trial/fenced-postgres.md for limits, uncertainty and ownership recovery.
 
-The issue #6 checkpoint adds a separate composition root `checkpoint-index.ts`.
+`checkpoint-index.ts` is the separate fenced-state checkpoint composition root.
 `checkpoint-handler.ts` owns fixed-route admission, `checkpoint-run.ts` the two-step
 qualification and `fenced-lifecycle.ts` its real synthetic Alchemy lifecycle. Only
 that orchestrator may reach the adapter/lifecycle; the handler has no DB/engine
@@ -37,8 +34,8 @@ not the later OCI workflow implementation. See docs/trial/feasibility-decision.m
 
 `ledger.ts` owns only the parameterized operation-ledger interface; it has no package
 or local imports. `migrations/001_trial.sql` owns atomic intent, lease, attempt and
-budget rules under the separate owner role. Provider dispatch/settlement wiring is
-later work; preserve unresolved intents independently of lease expiry. See
+budget rules under the separate owner role. Preserve unresolved intents
+independently of lease expiry. See
 `docs/trial/operation-ledger.md` before adding a consumer.
 
 `api.ts` owns fixed private admission routes, bounded bodies and signed previews;
@@ -77,7 +74,6 @@ See docs/trial/live-executor.md and docs/trial/hosted-admission.md.
 004 protects mutation admission, HTTP receipts and cleanup capacity. Preview may
 persist reservations; never call it persistence-free in the live contract.
 Build with `build:live-executor` and run `test:admission-db` on disposable Postgres.
-#14 owns operational acceptance.
 
 `history-api.ts` owns a separate authenticated read-only history interface without
 execution-window admission. `history-runtime.ts` may reach only restricted SQL

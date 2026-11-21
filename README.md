@@ -75,7 +75,7 @@ See [dependency audit notes](docs/toolchain-audit.md) for current CLI advisories
 - [Account setup and permissions](docs/oci-neon-setup.md)
 - [Restricted OCI identity setup](docs/oci-bootstrap.md)
 - [Implementation plan and GitHub issue index](tasks/plan.md)
-- [Issue and PR workflow](AGENTS.md)
+- [Agent workflow and repository contracts](AGENTS.md)
 
 Hosting must use free plans and operate without the owner's computer online.
 Cloudflare frontend hosting and Neon execution remain conditional on feasibility.
@@ -85,11 +85,10 @@ issues, PRs, command arguments, logs or test fixtures.
 
 OCI diagnostics: see [the read-only doctor guide](docs/oci-doctor.md) for `pnpm run doctor:oci`, optional OCI CLI comparison and agent-operated verification.
 
-## Coding harness
+## Verification
 
 Start at [AGENTS.md](AGENTS.md), then the scoped guide for the affected code.
-[HARNESS.md](HARNESS.md) maps ownership, checks, hook setup, CI and remaining
-hardening work; [CONSTRAINTS.md](CONSTRAINTS.md) defines the enforced floor.
+[HARNESS.md](HARNESS.md) maps ownership, checks, hook setup and CI; [CONSTRAINTS.md](CONSTRAINTS.md) defines the enforced floor.
 Use `pnpm check:fast` during implementation and `pnpm check` before a PR.
 The full gate requires pinned Gitleaks on PATH and registry access for the audit.
 See [comment quality](docs/comment-quality.md) for declaration documentation.
