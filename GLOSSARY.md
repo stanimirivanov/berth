@@ -3,6 +3,28 @@
 Berth evaluates whether a single owner can run and verify a bounded cloud
 resource lifecycle on free plans.
 
+## Infrastructure
+
+**Infrastructure offering**
+A kind of infrastructure Berth implements provisioning for, within its stated
+qualification and operating limits.
+
+**Infrastructure catalog**
+The list of Berth's infrastructure offerings, including offerings with no
+known managed resource instances.
+
+**Managed resource instance**
+One specific resource tracked under an offering through a Berth operation. Its
+identity distinguishes it from other instances of that offering.
+
+**Verified presence**
+Presence of a specific managed resource instance established by provider
+evidence at a recorded observation time.
+
+**Uncertain presence**
+A managed resource instance may exist, but its presence is unresolved. Earlier
+verified observations still describe what was established at their own times.
+
 ## Authorization and execution
 
 **Trial**
