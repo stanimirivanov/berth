@@ -9,7 +9,7 @@ Preserve passing and negative controls for ownership, docs, floor, workflow and 
 checks. Do not print source/secret contents or raw scanner reports. Static analysis
 is not a sandbox, test-semantics proof or cloud-permission audit; document limitations.
 
-Use `pnpm check:fast` in the opt-in hook and `pnpm check` in read-only CI. Keep pinned
+The opt-in hook runs `pnpm check:fast`. Read-only CI runs `pnpm check`. Keep pinned
 Node/pnpm/scanner versions consistent with workflow fixtures. Preserve full-history
 checkout, disabled persisted Git credentials and trusted-base floor execution. No
 pull_request_target, cloud credentials, deployment, privileged publication or automatic

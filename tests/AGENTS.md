@@ -5,8 +5,8 @@ harness fixtures are native .test.mjs and checked by tsconfig.harness.json. Both
 are discovered by `pnpm test`. Keep independent synthetic fixtures and exercise
 observable behavior; never populate test files with private captures or identities.
 
-Each new sensor needs a passing control and a meaningful failing case. Confirm the
-failure before implementing the rule. Do not add skips, todo/only calls, suppression
+Each new sensor needs a passing control and a meaningful failing case.
+Do not add skips, todo/only calls, suppression
 directives, or remove baseline tests to make a gate green. Changes to test names
 can trigger the conservative floor; preserve names unless explicitly reviewed.
 

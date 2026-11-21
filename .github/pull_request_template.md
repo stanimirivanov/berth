@@ -1,12 +1,21 @@
 Closes #
 
-Describe the concrete problem and resulting behavior, including the owning boundary.
+## Summary
 
-- Summary:
-- Verification commands/results (include incomplete checks):
-- Acceptance evidence (local tests versus live provider evidence):
-- Known limitations and cleanup:
-- Harness/dependency changes and rationale, if any:
+Describe the change and the boundary it affects.
 
-Review declaration documentation for truth, not just presence. Preserve authentication,
-request bounds, private inputs and state ownership. Do not merge automatically.
+## Evidence
+
+Report commands and results, including incomplete checks. For trial changes,
+identify which evidence came from local fixtures and which came from live work.
+
+## Merge Danger
+
+**Door**
+
+Describe reversibility and any cleanup or rollback.
+
+**Blast Radius**
+
+Name the affected surfaces and known limitations. Explain any changes to
+dependencies or verification gates.
