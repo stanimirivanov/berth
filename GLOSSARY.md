@@ -77,6 +77,11 @@ allowance criteria. A successful operation can coexist with a partial verdict.
 A read-only view of the latest recorded operation state, including retained
 expired or terminal operations.
 
+**Needs attention**
+A follow-up indicator in operation history. It flags an unresolved request or
+mutation, an outcome of `needs-reconciliation`, or an expired execution window
+with an outcome still recorded as `active`.
+
 **Dated evidence**
 An observation or report preserved with its observation time or cutoff. It
 records what was established at that point.
