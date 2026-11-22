@@ -24,6 +24,19 @@ export default [
     },
     rules: {
       "berth/component-files": "error",
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@angular/platform-browser",
+              importNames: ["provideCssVarNamespacing"],
+              message:
+                "Build-time CSP hashes require Angular's default CSS variable namespace.",
+            },
+          ],
+        },
+      ],
       "@angular-eslint/use-component-selector": "error",
       "@angular-eslint/component-selector": [
         "error",

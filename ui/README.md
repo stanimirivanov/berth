@@ -23,6 +23,10 @@ CI installs Chromium and runs the same checks. The UI is a separate package beca
 Angular 22 requires TypeScript 6; the Node trial keeps TypeScript 7. Versions and
 both lockfiles are pinned. Dependency lifecycle scripts remain explicitly disabled.
 
+Use `pnpm build:ui` to produce preview and release assets together with their
+CSP hashes. The loopback server reads the generated Pages `_headers` file
+when serving HTML.
+
 ## Preview actual retained records
 
 Migration 008 from PR #88 must first be installed by the owner in the dedicated

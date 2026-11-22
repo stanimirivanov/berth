@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "ng serve --host 127.0.0.1",
-    "build": "ng build",
+    "build": "ng build && node ../tools/build-ui-csp.mjs",
     "test": "playwright test"
   },
   "dependencies": {

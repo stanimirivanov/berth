@@ -1,4 +1,8 @@
-import { ChangeDetectionStrategy, Component } from "@angular/core";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ViewEncapsulation,
+} from "@angular/core";
 import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { HistoryStore } from "./operation-history/history-store";
 
@@ -9,5 +13,7 @@ import { HistoryStore } from "./operation-history/history-store";
   providers: [HistoryStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./app.html",
+  styleUrl: "./app.css",
+  encapsulation: ViewEncapsulation.None,
 })
 export class App {}

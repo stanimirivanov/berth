@@ -5,6 +5,7 @@ import {
   computed,
   inject,
   type OnInit,
+  ViewEncapsulation,
 } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
 import { HistoryStore } from "./history-store";
@@ -15,6 +16,8 @@ import { HistoryStore } from "./history-store";
   imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./operation-history.html",
+  styleUrl: "./operation-history.css",
+  encapsulation: ViewEncapsulation.None,
 })
 export class OperationHistory implements OnInit {
   protected readonly operation =

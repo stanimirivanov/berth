@@ -17,8 +17,8 @@ export class Example {}`,
   );
 
   const [selector] = await lint.lintText(
-    `import { Component } from "@angular/core";
-@Component({ selector: "app-example", templateUrl: "./app.html" })
+    `import { Component, ViewEncapsulation } from "@angular/core";
+@Component({ selector: "app-example", templateUrl: "./app.html", styleUrl: "./app.css", encapsulation: ViewEncapsulation.None })
 export class App {}`,
     { filePath: "ui/src/app.ts" },
   );
@@ -38,6 +38,24 @@ test("Angular lint accepts the shell and rejects template type escapes", async (
     template?.messages.map(({ ruleId }) => ruleId),
     ["@angular-eslint/template/no-any"],
   );
+});
+
+test("Angular lint rejects a mismatched style file and runtime selector rewriting", async () => {
+  for (const [style, encapsulation] of [
+    ["other.css", "None"],
+    ["app.css", "Emulated"],
+  ]) {
+    const [result] = await lint.lintText(
+      `import { Component, ViewEncapsulation } from "@angular/core";
+@Component({ selector: "berth-app", templateUrl: "./app.html", styleUrl: "./${style}", encapsulation: ViewEncapsulation.${encapsulation} })
+export class App {}`,
+      { filePath: "ui/src/app.ts" },
+    );
+    assert.deepEqual(
+      result?.messages.map(({ ruleId }) => ruleId),
+      ["berth/component-files"],
+    );
+  }
 });
 
 test("Angular lint checks component basenames and colocated files for namespace imports", async () => {

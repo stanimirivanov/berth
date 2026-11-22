@@ -1,7 +1,3 @@
-@import "./app.css";
-@import "./infrastructure/infrastructure.css";
-@import "./operation-history/operation-history.css";
-
 :root {
   color-scheme: light;
   --ink: #182e36;

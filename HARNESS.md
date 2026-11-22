@@ -35,7 +35,7 @@ formatting, including its quote style, the ESLint rules, and the
 For `ui/src/`, also follow the [Angular style guide](https://angular.dev/style-guide).
 Group related files by feature. Keep bootstrap in `main.ts` and keep each
 component's TypeScript, HTML template and CSS together as matching hyphenated
-basenames. Reference templates with `templateUrl`. Keep dependencies and fields
+basenames. Use `templateUrl` and `styleUrl`. Keep dependencies and fields
 above component methods, use `protected` for template-only members, and move
 complex template expressions into the component's presentation logic.
 
@@ -49,16 +49,23 @@ scaffold with `--dry-run`, for example:
 pnpm --dir ui exec ng generate component usage-summary --path src/infrastructure --dry-run
 ```
 
-Review the generated files against the component and static stylesheet
-conventions below. Move generated component CSS into the static bundle and
-remove the generated `styleUrl` entry.
+Review the generated files against the component conventions below. Keep
+`styleUrl` and set `encapsulation: ViewEncapsulation.None`.
 
-Bundle the co-located CSS through `ui/src/styles.css` and scope its selectors
-to the owning component. Use the global file for shared tokens and defaults.
-This keeps the CSS in the static stylesheet under Berth's `style-src 'self'`
-policy. Angular's runtime component style injection requires a different CSP
-setup. Verify component styling against the production build in Chromium.
+Scope component selectors under the owning host element. Use
+`ViewEncapsulation.None` so the renderer keeps those selectors stable for the
+build-time CSP hashes. Keep Angular's default CSS variable namespace and use
+`ui/src/styles.css` for shared tokens and defaults.
+
+`pnpm build:ui` hashes decoded CSS from the pinned Angular AOT browser chunks,
+including lazy chunks, after applying the default CSS variable substitution.
+It adds the hashes to `style-src` in the published Pages `_headers` file.
+Review and test this extraction when updating Angular. The build rejects
+unsupported recognized style definitions and a header line beyond the Pages
+limit. The preview reads the same generated policy. Chromium verifies that
+the approved styles apply and unlisted inline styles are blocked.
 [Angular CSP guidance](https://angular.dev/best-practices/security#configure-styles-for-static-hosting)
+· [Pages header rules](https://developers.cloudflare.com/pages/configuration/headers/)
 
 `pnpm lint` checks TypeScript module syntax, type-only imports and exports,
 constant declarations, and unsupported constructs such as namespaces and
@@ -66,13 +73,12 @@ const enums. UI TypeScript also requires braces and one variable per
 declaration. `pnpm lint:angular` checks Berth selector naming, dependency
 injection, standalone components, signal and lifecycle conventions, and
 template control flow, strict equality and type escapes. The component
-layout rule requires matching class and file names, sibling HTML and CSS,
-and an external template. It rejects component metadata that injects CSS
-at runtime.
+layout rule requires matching class and file names, relative references to
+sibling HTML and CSS, and the encapsulation setting required by the hash
+build. Inline template and style metadata are rejected.
 
-Review feature placement, template complexity, member visibility and CLI
-scaffold choice during code review. Chromium verifies that the production
-stylesheet works under the preview CSP.
+Review feature placement, template complexity, member visibility, selector
+scope and CLI scaffold choice during code review.
 
 ## Ownership and effects
 

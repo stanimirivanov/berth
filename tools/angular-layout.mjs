@@ -2,7 +2,7 @@ import { statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import ts from "typescript-ast";
 
-/** Keep each Angular component's three source files together without runtime CSS injection. */
+/** Keep Angular component files together and constrain how Angular renders the CSS. */
 export const componentFiles = {
   meta: { schema: [] },
   /** Register a layout check for Angular components imported by the file.
@@ -59,12 +59,26 @@ export const componentFiles = {
               metadata && ts.isObjectLiteralExpression(metadata)
                 ? metadata.properties.filter(ts.isPropertyAssignment)
                 : [];
+            /** Resolve a quoted or unquoted metadata property without evaluating it. */
+            const propertyName = (
+              /** @type {ts.PropertyAssignment} */ property,
+            ) =>
+              ts.isIdentifier(property.name) ||
+              ts.isStringLiteral(property.name)
+                ? property.name.text
+                : undefined;
             const template = properties.find(
-              (property) => property.name.getText(file) === "templateUrl",
+              (property) => propertyName(property) === "templateUrl",
+            )?.initializer;
+            const style = properties.find(
+              (property) => propertyName(property) === "styleUrl",
+            )?.initializer;
+            const encapsulation = properties.find(
+              (property) => propertyName(property) === "encapsulation",
             )?.initializer;
             const inline = properties.some((property) =>
-              /^(template|styles|styleUrl|styleUrls)$/.test(
-                property.name.getText(file).replace(/^['"]|['"]$/g, ""),
+              /^(template|styles|styleUrls)$/.test(
+                propertyName(property) ?? "",
               ),
             );
             /** Check that the matched file exists beside the component source. */
@@ -80,6 +94,10 @@ export const componentFiles = {
               !template ||
               !ts.isStringLiteralLike(template) ||
               template.text !== `./${name}.html` ||
+              !style ||
+              !ts.isStringLiteralLike(style) ||
+              style.text !== `./${name}.css` ||
+              encapsulation?.getText(file) !== "ViewEncapsulation.None" ||
               inline ||
               !hasSibling("html") ||
               !hasSibling("css")
@@ -90,7 +108,7 @@ export const componentFiles = {
               context.report({
                 loc: { line: line + 1, column: character },
                 message:
-                  "Use matching component class and .ts, .html and .css basenames. Set templateUrl and bundle CSS through the static stylesheet.",
+                  "Use matching component class and file basenames, relative templateUrl and styleUrl, and ViewEncapsulation.None for CSP hashes.",
               });
             }
           }

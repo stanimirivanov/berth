@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 
 const first = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -87,6 +88,10 @@ test("the history detail route passes its operation identifier to the authentica
   });
   await page.goto(path);
   await expect(page.getByLabel("History access token")).toBeVisible();
+  await expect(page.getByRole("region", { name: "History access" })).toHaveCSS(
+    "border-top-width",
+    "1px",
+  );
   expect(requests).toEqual([]);
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
@@ -108,6 +113,51 @@ test("the history detail route passes its operation identifier to the authentica
     page.getByRole("heading", { name: "Operation details" }),
   ).toBeVisible();
   expect(requests.at(-1)).toBe(`/api/history/${first}`);
+});
+
+test("the production CSP allows compiled component CSS and blocks unlisted inline styles", async ({
+  page,
+}) => {
+  const response = await page.goto("/");
+  const policy = response?.headers()["content-security-policy"] ?? "";
+  const pagesHeaders = await readFile(
+    new URL("../dist/history/browser/_headers", import.meta.url),
+    "utf8",
+  );
+  expect(pagesHeaders).toContain(`Content-Security-Policy: ${policy}\n`);
+  expect(policy).toContain("style-src 'self' 'sha256-");
+  expect(policy).not.toContain("'unsafe-inline'");
+  expect(policy).not.toContain("'nonce-");
+  await expect(page.locator("berth-infrastructure")).toHaveCSS(
+    "display",
+    "block",
+  );
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation).toHaveCSS("display", "flex");
+  await navigation.getByRole("link", { name: "Operation history" }).click();
+  await expect(page.getByRole("region", { name: "History access" })).toHaveCSS(
+    "border-top-width",
+    "1px",
+  );
+  const blocked = await page.evaluate(async () => {
+    const violation = new Promise<string>((resolve) => {
+      document.addEventListener(
+        "securitypolicyviolation",
+        (event) => resolve(event.effectiveDirective),
+        { once: true },
+      );
+    });
+    const probe = document.createElement("style");
+    probe.textContent = "body { --berth-unlisted-style: applied; }";
+    document.head.append(probe);
+    return {
+      directive: await violation,
+      value: getComputedStyle(document.body).getPropertyValue(
+        "--berth-unlisted-style",
+      ),
+    };
+  });
+  expect(blocked).toEqual({ directive: "style-src-elem", value: "" });
 });
 
 test("history supports authenticated pagination, selection, retained expiry, keyboard access and memory-only credentials", async ({

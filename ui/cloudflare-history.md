@@ -62,7 +62,9 @@ existing managed domain.
 [Pages custom domains](https://developers.cloudflare.com/pages/configuration/custom-domains/) ·
 [Rate limiting](https://developers.cloudflare.com/waf/rate-limiting-rules/)
 
-After authorization, build from the repository root with `pnpm build:ui`. From
+After authorization, build from the repository root with `pnpm build:ui`.
+This generates the CSP hashes in the output `_headers`. Publish that file
+with the browser assets from the same build. From
 `ui/`, use Wrangler `pages deploy dist/history/browser --project-name YOUR_PROJECT --branch main`
 so Wrangler discovers `ui/functions/`. Use the project's configured production
 branch if it differs from `main`. Dashboard drag-and-drop uploads omit Pages
