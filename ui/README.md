@@ -48,9 +48,9 @@ Neon database. This PR installs nothing and makes no cloud requests during tests
 - **Disconnect** clears the in-memory token and records and invalidates late
   responses. Reloading the page also clears access; no browser storage or cookies
   are used. Entering a token does not connect to any cloud provider API.
-- Use in-app navigation in this slice. Direct serving of operation URLs in the
-  preview server and Pages is tracked by
-  [M01-PR2](https://github.com/stanimirivanov/berth/issues/113).
+- Open or refresh `/operations` or `/operations/<operation-id>` directly.
+  Saved links use the history token prompt after a page load. A malformed
+  identifier shows **Invalid operation link** before any history request.
 - The read service creates one restricted connection per admitted read, establishes
   a read-only transaction, checks SQL privilege drift and invokes only the two
   owner-installed history read functions. Session statement timeout is 2 seconds,

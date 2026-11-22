@@ -7,22 +7,29 @@ import {
   type OnInit,
   ViewEncapsulation,
 } from "@angular/core";
-import { ActivatedRoute } from "@angular/router";
-import { HistoryStore } from "./history-store";
+import { ActivatedRoute, RouterLink } from "@angular/router";
+import { HistoryStore, isOperationId } from "./history-store";
 
 /** Read-only history screen. The shell holds accepted access in tab memory. */
 @Component({
   selector: "berth-operation-history",
-  imports: [DatePipe],
+  imports: [DatePipe, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./operation-history.html",
   styleUrl: "./operation-history.css",
   encapsulation: ViewEncapsulation.None,
 })
 export class OperationHistory implements OnInit {
-  protected readonly operation =
-    inject(ActivatedRoute).snapshot.paramMap.get("operation");
+  private readonly route = inject(ActivatedRoute);
   protected readonly store = inject(HistoryStore);
+  private readonly segments = this.route.snapshot.url;
+  protected readonly operation = this.segments[1]?.path ?? null;
+  protected readonly invalidOperation =
+    this.operation !== null &&
+    (!isOperationId(this.operation) ||
+      this.segments.some(
+        (segment) => Object.keys(segment.parameters).length > 0,
+      ));
   protected readonly selection = computed(() => {
     const selected = this.store.selected();
     return this.operation === null || selected?.operation === this.operation
@@ -39,7 +46,11 @@ export class OperationHistory implements OnInit {
 
   /** Load a newly entered view while keeping failed reads available for manual retry. */
   ngOnInit() {
-    if (!this.store.connected() || this.store.error()) {
+    if (
+      this.invalidOperation ||
+      !this.store.connected() ||
+      this.store.error()
+    ) {
       return;
     }
     if (this.operation !== null) {

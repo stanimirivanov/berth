@@ -39,6 +39,11 @@ const initial: State = {
 const uuid =
   /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
+/** Match the history API's canonical operation identifier. */
+export function isOperationId(value: string) {
+  return uuid.test(value);
+}
+
 /** Deny malformed responses before render; Angular still escapes all text. */
 function record(value: unknown): Operation {
   if (!value || typeof value !== "object") {
@@ -46,7 +51,7 @@ function record(value: unknown): Operation {
   }
   const item = value as Operation;
   if (
-    !uuid.test(item.operation) ||
+    !isOperationId(item.operation) ||
     item.verdict !== "partial" ||
     !["active", "needs-reconciliation", "succeeded", "failed"].includes(
       item.outcome,
@@ -141,7 +146,7 @@ export const HistoryStore = signalStore(
           if (
             !Array.isArray(result.items) ||
             result.items.length > 50 ||
-            (result.next !== null && !uuid.test(result.next))
+            (result.next !== null && !isOperationId(result.next))
           ) {
             throw Error();
           }
@@ -166,7 +171,7 @@ export const HistoryStore = signalStore(
     };
     return {
       connect(value: string, operation: string | null = null) {
-        if (operation !== null && !uuid.test(operation)) {
+        if (operation !== null && !isOperationId(operation)) {
           patchState(store, { error: "Invalid operation link." });
           return;
         }
@@ -192,7 +197,7 @@ export const HistoryStore = signalStore(
         }
       },
       select(operation: string) {
-        if (uuid.test(operation)) {
+        if (isOperationId(operation)) {
           void load(null, operation);
         }
       },

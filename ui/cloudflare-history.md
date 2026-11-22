@@ -12,8 +12,12 @@ toolchain. The history proxy tests exercise both Pages entrypoints against the
 real Neon response handler with injected local data. The Angular build copies
 `_routes.json` and `_headers` into `ui/dist/history/browser`. Only
 `/api/history` and its descendants invoke Pages Functions. Static UI requests
-bypass the Function and receive the static security headers.
+bypass the Function and receive the static security headers. The build emits
+scoped rewrites for `/operations` and `/operations/:operation`. A top-level
+`404.html` keeps other missing documents and assets at HTTP 404. The history
+API catch-all keeps deeper misses in JSON.
 [Pages routing](https://developers.cloudflare.com/pages/functions/routing/)
+· [Pages rewrites](https://developers.cloudflare.com/pages/configuration/redirects/#advanced-redirects)
 
 ## Prepare a separately authorized release
 
