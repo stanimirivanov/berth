@@ -24,6 +24,28 @@ docs/comment-quality.md       declaration contract standard
 docs/harness-failures.md       sanitized failures and controls
 ```
 
+## Source style
+
+Use the [Google TypeScript style guide](https://google.github.io/styleguide/tsguide.html)
+for TypeScript changes. Use ES modules, mark type-only imports and exports,
+prefer `const`, and keep one variable per declaration. Follow Berth's Biome
+formatting, including its quote style, the ESLint rules, and the
+[declaration documentation contract](docs/comment-quality.md).
+
+For `ui/src/`, also follow the [Angular style guide](https://angular.dev/style-guide).
+Group related files by feature. Keep bootstrap in `main.ts` and keep each
+component's TypeScript, HTML template and CSS together as matching hyphenated
+basenames. Reference templates with `templateUrl`. Keep dependencies and fields
+above component methods, use `protected` for template-only members, and move
+complex template expressions into the component's presentation logic.
+
+Bundle the co-located CSS through `ui/src/styles.css` and scope its selectors
+to the owning component. Use the global file for shared tokens and defaults.
+This keeps the CSS in the static stylesheet under Berth's `style-src 'self'`
+policy. Angular's runtime component style injection requires a different CSP
+setup. Verify component styling against the production build in Chromium.
+[Angular CSP guidance](https://angular.dev/best-practices/security#configure-styles-for-static-hosting)
+
 ## Ownership and effects
 
 | Owner | Owned state/effects | Allowed dependencies |

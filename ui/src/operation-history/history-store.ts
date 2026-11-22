@@ -84,8 +84,8 @@ function record(value: unknown): Operation {
 export const HistoryStore = signalStore(
   withState(initial),
   withMethods((store) => {
-    let token = "",
-      generation = 0;
+    let token = "";
+    let generation = 0;
     const request = async (path: string) => {
       const response = await Effect.runPromise(
         Effect.tryPromise({

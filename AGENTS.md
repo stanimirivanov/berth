@@ -15,7 +15,7 @@ below for technical requirements and the owner's instructions for task scope.
 - [SPEC.md](SPEC.md) defines the trial, evidence and authorization boundaries.
   Local verification uses synthetic fixtures and does not authorize cloud operations.
 - [CONSTRAINTS.md](CONSTRAINTS.md) defines the quality floor.
-  [HARNESS.md](HARNESS.md) explains the verification gates and setup.
+  [HARNESS.md](HARNESS.md) defines source style, verification gates and setup.
   Run the affected checks and `pnpm check:fast` and `pnpm check` before delivery.
 - [Comment quality](docs/comment-quality.md) defines the JSDoc/TSDoc contract.
 - Backend and verification use pinned Node 24, pnpm and TypeScript 7.

@@ -44,6 +44,7 @@ test("the shell marks the active page and opens the existing history access scre
   ).toBeVisible();
   await expect(page.getByText("Inventory is not available yet.")).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation).toHaveCSS("display", "flex");
   const infrastructure = navigation.getByRole("link", {
     name: "Infrastructure",
   });
@@ -54,6 +55,10 @@ test("the shell marks the active page and opens the existing history access scre
   await expect(history).toHaveAttribute("aria-current", "page");
   await expect(infrastructure).not.toHaveAttribute("aria-current", "page");
   await expect(page.getByLabel("History access token")).toBeVisible();
+  await expect(page.getByRole("region", { name: "History access" })).toHaveCSS(
+    "border-top-width",
+    "1px",
+  );
   expect(requests).toEqual([]);
 });
 
