@@ -1,9 +1,15 @@
 import { DatePipe } from "@angular/common";
-import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  type OnInit,
+} from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
 import { HistoryStore } from "./history.store";
 
-/** Private read-only history screen. Token exists in component memory only; no auto-polling. */
+/** Read-only history screen. The shell holds accepted access in tab memory. */
 @Component({
   selector: "berth-operation-history",
   imports: [DatePipe],
@@ -14,9 +20,11 @@ import { HistoryStore } from "./history.store";
       <section class="access" aria-label="History access">
         @if (!store.connected()) {
           <form (submit)="connect($event)"><label for="token">History access token</label><div class="access-row"><input id="token" type="password" autocomplete="off" [value]="token" (input)="token = $any($event.target).value" maxlength="128" spellcheck="false"><button type="submit">Load history</button></div><small>Kept in memory for this tab. No database or cloud credentials.</small></form>
-        } @else { <p>History access connected</p><div class="actions"><button (click)="store.refresh()" [disabled]="store.loading()">Refresh history</button><button class="secondary" (click)="disconnect()">Disconnect</button></div> }
+        } @else { <p>History access connected</p><div class="actions"><button (click)="refresh()" [disabled]="store.loading()">{{ operation === null ? 'Refresh history' : 'Refresh detail' }}</button><button class="secondary" (click)="disconnect()">Disconnect</button></div> }
       </section>
       @if (store.error()) { <p role="alert" class="error">{{ store.error() }}</p> }
+      @if (operation !== null && store.loading()) { <p role="status">Loading operation details…</p> }
+      @if (operation === null) {
       <section [attr.aria-busy]="store.loading()" aria-label="Recorded operations">
         @if (store.loading()) { <p role="status">Loading operation history…</p> }
         @if (store.loaded() && !store.loading() && !store.error() && store.items().length === 0) { <p role="status" class="empty">No recorded operations.</p> }
@@ -28,15 +36,23 @@ import { HistoryStore } from "./history.store";
           <nav aria-label="History pagination"><button class="secondary" (click)="store.refresh()" [disabled]="store.loading()">Newest operations</button><button (click)="store.older()" [disabled]="store.loading() || !store.next()">Older operations</button></nav>
         }
       </section>
-      @if (store.selected(); as selected) {
+      }
+      @if (selection(); as selected) {
         <section class="details" aria-label="Selected operation"><h2>Operation details</h2><p class="mono">{{ selected.operation }}</p><dl><dt>Lifecycle outcome</dt><dd>{{ selected.outcome }}</dd><dt>Phase</dt><dd>{{ selected.phase ?? 'Not recorded' }}</dd><dt>Execution expiry (UTC)</dt><dd>{{ selected.expiresAt | date:'medium':'UTC' }}</dd><dt>Cleanup requested</dt><dd>{{ selected.cleanupRequested ? 'Yes' : 'No' }}</dd><dt>Upload unresolved</dt><dd>{{ selected.pendingUpload ? 'Yes' : 'No' }}</dd><dt>Object removal recorded</dt><dd>{{ selected.objectRemoved ? 'Yes' : 'No' }}</dd></dl><p>Unresolved mutations: {{ selected.unresolved.mutations }}</p><p>Unresolved requests: {{ selected.unresolved.requests }}</p><h3>Application request budgets</h3><p>Spent / limit. These are not provider billing totals.</p><dl>@for (meter of meters; track meter.key) { <dt>{{ meter.label }}</dt><dd>{{ selected.budgets[meter.key].used }} / {{ selected.budgets[meter.key].limit }}</dd> }</dl>
         </section>
       }
   `,
 })
-export class OperationHistory {
-  private readonly route = inject(ActivatedRoute);
+export class OperationHistory implements OnInit {
+  readonly operation =
+    inject(ActivatedRoute).snapshot.paramMap.get("operation");
   readonly store = inject(HistoryStore);
+  readonly selection = computed(() => {
+    const selected = this.store.selected();
+    return this.operation === null || selected?.operation === this.operation
+      ? selected
+      : null;
+  });
   token = "";
   readonly meters = [
     { key: "normal", label: "Normal Object Storage" },
@@ -45,22 +61,25 @@ export class OperationHistory {
     { key: "neon", label: "Neon application" },
   ] as const;
 
-  /** Populate the list when returning from a detail link with only detail loaded. */
+  /** Load a newly entered view while keeping failed reads available for manual retry. */
   ngOnInit() {
-    if (
-      !this.route.snapshot.paramMap.has("operation") &&
-      this.store.connected() &&
-      !this.store.loaded()
-    )
+    if (!this.store.connected() || this.store.error()) return;
+    if (this.operation !== null) {
+      if (!this.selection()) this.store.select(this.operation);
+    } else if (!this.store.loaded() && this.store.selected()) {
       this.store.refresh();
+    }
+  }
+
+  /** Refresh the view identified by the route. */
+  refresh() {
+    if (this.operation === null) this.store.refresh();
+    else this.store.select(this.operation);
   }
 
   connect(event: Event) {
     event.preventDefault();
-    this.store.connect(
-      this.token,
-      this.route.snapshot.paramMap.get("operation"),
-    );
+    this.store.connect(this.token, this.operation);
     this.token = "";
   }
   disconnect() {

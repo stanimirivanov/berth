@@ -71,7 +71,12 @@ test("the history detail route passes its operation identifier to the authentica
     expect(route.request().headers().authorization).toBe(
       `Bearer ${"h".repeat(40)}`,
     );
-    return route.fulfill({ json: item(first) });
+    return route.fulfill({
+      json:
+        requests.at(-1) === "/api/history"
+          ? { items: [item(second)], next: null }
+          : item(first),
+    });
   });
   await page.goto(path);
   await expect(page.getByLabel("History access token")).toBeVisible();
@@ -82,6 +87,20 @@ test("the history detail route passes its operation identifier to the authentica
     page.getByRole("heading", { name: "Operation details" }),
   ).toBeVisible();
   expect(requests).toEqual([`/api/history/${first}`]);
+  await page.getByRole("button", { name: "Refresh detail" }).click();
+  await expect
+    .poll(() => requests)
+    .toEqual([`/api/history/${first}`, `/api/history/${first}`]);
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("link", { name: "Operation history" })
+    .click();
+  await expect(page.getByRole("button", { name: second })).toBeVisible();
+  await page.goBack();
+  await expect(
+    page.getByRole("heading", { name: "Operation details" }),
+  ).toBeVisible();
+  expect(requests.at(-1)).toBe(`/api/history/${first}`);
 });
 
 test("history supports authenticated pagination, selection, retained expiry, keyboard access and memory-only credentials", async ({
@@ -147,6 +166,16 @@ test("history supports authenticated pagination, selection, retained expiry, key
   expect(
     await page.evaluate(() => [localStorage.length, sessionStorage.length]),
   ).toEqual([0, 0]);
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await navigation.getByRole("link", { name: "Infrastructure" }).click();
+  await expect(page.getByRole("button", { name: first })).toHaveCount(0);
+  await navigation.getByRole("link", { name: "Operation history" }).click();
+  await expect(page.getByRole("button", { name: first })).toBeVisible();
+  await openHistory(page);
+  await expect(page.getByLabel("History access token")).toHaveValue("");
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await expect(page.getByRole("button", { name: first })).toBeVisible();
   await page.getByRole("button", { name: "Disconnect" }).click();
   await expect(page.getByLabel("History access token")).toHaveValue("");
 
@@ -185,6 +214,29 @@ test("history has loading, empty, unavailable and unauthorized states without le
     page.getByText("Access denied. Enter a valid history token."),
   ).toBeVisible();
   await expect(page.getByText("must-not-display")).toHaveCount(0);
+});
+
+test("returning to history preserves a failed first read until the owner retries", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  await page.route("**/api/history**", (route) => {
+    requests.push(route.request().url());
+    return route.fulfill({ status: 503, json: { error: "unavailable" } });
+  });
+  await openHistory(page);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "History is unavailable.",
+  );
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await navigation.getByRole("link", { name: "Infrastructure" }).click();
+  await navigation.getByRole("link", { name: "Operation history" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "History is unavailable.",
+  );
+  expect(requests).toHaveLength(1);
 });
 
 test("history remains usable on narrow screens", async ({ page }) => {
