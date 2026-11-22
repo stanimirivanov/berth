@@ -3,11 +3,13 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
-  type OnInit,
+  untracked,
   ViewEncapsulation,
 } from "@angular/core";
-import { ActivatedRoute, RouterLink } from "@angular/router";
+import { toSignal } from "@angular/core/rxjs-interop";
+import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { HistoryStore, isOperationId } from "./history-store";
 
 /** Read-only history screen. The shell holds accepted access in tab memory. */
@@ -19,22 +21,31 @@ import { HistoryStore, isOperationId } from "./history-store";
   styleUrl: "./operation-history.css",
   encapsulation: ViewEncapsulation.None,
 })
-export class OperationHistory implements OnInit {
+export class OperationHistory {
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   protected readonly store = inject(HistoryStore);
-  private readonly segments = this.route.snapshot.url;
-  protected readonly operation = this.segments[1]?.path ?? null;
-  protected readonly invalidOperation =
-    this.operation !== null &&
-    (!isOperationId(this.operation) ||
-      this.segments.some(
-        (segment) => Object.keys(segment.parameters).length > 0,
-      ));
-  protected readonly selection = computed(() => {
-    const selected = this.store.selected();
-    return this.operation === null || selected?.operation === this.operation
-      ? selected
-      : null;
+  private readonly segments = toSignal(this.route.url, { requireSync: true });
+  private readonly operation = computed(() => this.segments()[1]?.path ?? null);
+  protected readonly invalidOperation = computed(() => {
+    const operation = this.operation();
+    return (
+      operation !== null &&
+      (!isOperationId(operation) ||
+        this.segments().some(
+          (segment) => Object.keys(segment.parameters).length > 0,
+        ))
+    );
+  });
+  protected readonly emptyList = computed(
+    () => this.store.list()?.items.length === 0,
+  );
+  protected readonly showDetail = computed(() => {
+    const selection = this.store.operation();
+    const operation = this.operation();
+    return (
+      selection !== null && (operation === null || operation === selection)
+    );
   });
   protected token = "";
   protected readonly meters = [
@@ -44,36 +55,33 @@ export class OperationHistory implements OnInit {
     { key: "neon", label: "Neon application" },
   ] as const;
 
-  /** Load a newly entered view while keeping failed reads available for manual retry. */
-  ngOnInit() {
-    if (
-      this.invalidOperation ||
-      !this.store.connected() ||
-      this.store.error()
-    ) {
-      return;
-    }
-    if (this.operation !== null) {
-      if (!this.selection()) {
-        this.store.select(this.operation);
-      }
-    } else if (!this.store.loaded() && this.store.selected()) {
-      this.store.refresh();
-    }
+  /** React to route changes without reopening the view when read state changes. */
+  constructor() {
+    effect(() => {
+      const operation = this.operation();
+      const valid = !this.invalidOperation();
+      untracked(() => {
+        if (valid) {
+          this.store.open(operation);
+        } else {
+          this.store.select(null);
+        }
+      });
+    });
   }
 
-  /** Refresh the view identified by the route. */
-  protected refresh() {
-    if (this.operation === null) {
-      this.store.refresh();
+  /** Keep the saved URL in sync when selecting another record from that view. */
+  protected select(operation: string) {
+    if (this.operation() === null) {
+      this.store.select(operation);
     } else {
-      this.store.select(this.operation);
+      void this.router.navigate(["/operations", operation]);
     }
   }
 
   protected connect(event: Event) {
     event.preventDefault();
-    this.store.connect(this.token, this.operation);
+    this.store.connect(this.token, this.operation());
     this.token = "";
   }
   protected disconnect() {

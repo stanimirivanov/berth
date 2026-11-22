@@ -1,4 +1,4 @@
-@if (invalidOperation) {
+@if (invalidOperation()) {
   <h1>Invalid operation link</h1>
   <p><a href="/operations" routerLink="/operations">Operation history</a></p>
 } @else {
@@ -12,7 +12,14 @@
     <p>A completed operation is not proof of full live validation. Provider usage and remaining free allowances are not shown here.</p>
   </aside>
   <section class="access" aria-label="History access">
-    @if (!store.connected()) {
+    @if (store.accessError() === "forbidden") {
+      <p role="alert" class="error">Access to Operation history is blocked on this site. Open the configured Berth URL for your deployment.</p>
+    } @else if (!store.connected()) {
+      @if (store.accessError() === "unauthorized") {
+        <p role="alert" class="error">Access denied. Enter a valid history token.</p>
+      } @else if (store.accessError() === "invalid") {
+        <p role="alert" class="error">Enter a valid history token.</p>
+      }
       <form (submit)="connect($event)">
         <label for="token">History access token</label>
         <div class="access-row">
@@ -33,34 +40,43 @@
     } @else {
       <p>History access connected</p>
       <div class="actions">
-        <button type="button" (click)="refresh()" [disabled]="store.loading()">
-          {{ operation === null ? 'Refresh history' : 'Refresh detail' }}
+        <button type="button" (click)="store.refreshList()" [disabled]="store.listLoading()">
+          Refresh history
         </button>
         <button type="button" class="secondary" (click)="disconnect()">Disconnect</button>
       </div>
     }
   </section>
-  @if (store.error()) {
-    <p role="alert" class="error">{{ store.error() }}</p>
-  }
-  @if (operation !== null && store.loading()) {
-    <p role="status">Loading operation details…</p>
-  }
-  @if (operation === null) {
-    <section [attr.aria-busy]="store.loading()" aria-label="Recorded operations">
-      @if (store.loading()) {
+  @if (store.connected()) {
+    <section [attr.aria-busy]="store.listLoading()" aria-label="Recorded operations">
+      @if (store.list(); as list) {
+        <p><small>Last fetched <time [attr.datetime]="list.fetchedAt">{{ list.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
+      }
+      @if (store.listLoading()) {
         <p role="status">Loading operation history…</p>
       }
-      @if (store.loaded() && !store.loading() && !store.error() && store.items().length === 0) {
+      @if (store.listFailure(); as failure) {
+        <p role="alert" class="error">
+          History is unavailable. Retry when the read service is available.
+          @if (store.list()) { Displayed data may be out of date. }
+        </p>
+        <div class="actions">
+          <button type="button" (click)="store.retryList()">Retry</button>
+          @if (failure.before !== null) {
+            <button type="button" class="secondary" (click)="store.newest()">Go to newest</button>
+          }
+        </div>
+      }
+      @if (emptyList()) {
         <p role="status" class="empty">No recorded operations.</p>
       }
-      @if (store.items().length) {
+      @if (store.list(); as list) {
         <div class="section-heading">
           <h2>Recorded operations</h2>
           <span>Newest first · UTC times</span>
         </div>
         <ul class="operations">
-          @for (item of store.items(); track item.operation) {
+          @for (item of list.items; track item.operation) {
             <li>
               <div>
                 <span class="status">{{ item.outcome }}</span>
@@ -69,8 +85,7 @@
               <button
                 type="button"
                 class="operation-id"
-                (click)="store.select(item.operation)"
-                [disabled]="store.loading()"
+                (click)="select(item.operation)"
               >
                 {{ item.operation }}
               </button>
@@ -79,44 +94,59 @@
           }
         </ul>
         <nav class="history-pagination" aria-label="History pagination">
-          <button type="button" class="secondary" (click)="store.refresh()" [disabled]="store.loading()">
+          <button type="button" class="secondary" (click)="store.newest()" [disabled]="store.listLoading()">
             Newest operations
           </button>
-          <button type="button" (click)="store.older()" [disabled]="store.loading() || !store.next()">
+          <button type="button" (click)="store.older()" [disabled]="store.listLoading() || !list.next">
             Older operations
           </button>
         </nav>
       }
     </section>
   }
-  @if (selection(); as selected) {
-    <section class="details" aria-label="Selected operation">
+  @if (showDetail()) {
+    <section class="details" aria-label="Selected operation" [attr.aria-busy]="store.detailLoading()">
       <h2>Operation details</h2>
-      <p class="mono">{{ selected.operation }}</p>
-      <dl>
-        <dt>Lifecycle outcome</dt>
-        <dd>{{ selected.outcome }}</dd>
-        <dt>Phase</dt>
-        <dd>{{ selected.phase ?? 'Not recorded' }}</dd>
-        <dt>Execution expiry (UTC)</dt>
-        <dd>{{ selected.expiresAt | date: 'medium' : 'UTC' }}</dd>
-        <dt>Cleanup requested</dt>
-        <dd>{{ selected.cleanupRequested ? 'Yes' : 'No' }}</dd>
-        <dt>Upload unresolved</dt>
-        <dd>{{ selected.pendingUpload ? 'Yes' : 'No' }}</dd>
-        <dt>Object removal recorded</dt>
-        <dd>{{ selected.objectRemoved ? 'Yes' : 'No' }}</dd>
-      </dl>
-      <p>Unresolved mutations: {{ selected.unresolved.mutations }}</p>
-      <p>Unresolved requests: {{ selected.unresolved.requests }}</p>
-      <h3>Application request budgets</h3>
-      <p>Spent / limit. These are not provider billing totals.</p>
-      <dl>
-        @for (meter of meters; track meter.key) {
-          <dt>{{ meter.label }}</dt>
-          <dd>{{ selected.budgets[meter.key].used }} / {{ selected.budgets[meter.key].limit }}</dd>
-        }
-      </dl>
+      <button type="button" (click)="store.refreshDetail()" [disabled]="store.detailLoading()">Refresh detail</button>
+      @if (store.detailLoading()) {
+        <p role="status">Loading operation details…</p>
+      }
+      @if (store.detailFailure()) {
+        <p role="alert" class="error">
+          {{ store.detailFailure() === 'missing' ? 'Operation not found.' : 'Operation details are unavailable.' }}
+          @if (store.detail()) { Displayed data may be out of date. }
+        </p>
+        <button type="button" (click)="store.refreshDetail()">Retry</button>
+      }
+      @if (store.detail(); as detail) {
+        @let selected = detail.record;
+        <p><small>Last fetched <time [attr.datetime]="detail.fetchedAt">{{ detail.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
+        <p class="mono">{{ selected.operation }}</p>
+        <dl>
+          <dt>Lifecycle outcome</dt>
+          <dd>{{ selected.outcome }}</dd>
+          <dt>Phase</dt>
+          <dd>{{ selected.phase ?? 'Not recorded' }}</dd>
+          <dt>Execution expiry (UTC)</dt>
+          <dd>{{ selected.expiresAt | date: 'medium' : 'UTC' }}</dd>
+          <dt>Cleanup requested</dt>
+          <dd>{{ selected.cleanupRequested ? 'Yes' : 'No' }}</dd>
+          <dt>Upload unresolved</dt>
+          <dd>{{ selected.pendingUpload ? 'Yes' : 'No' }}</dd>
+          <dt>Object removal recorded</dt>
+          <dd>{{ selected.objectRemoved ? 'Yes' : 'No' }}</dd>
+        </dl>
+        <p>Unresolved mutations: {{ selected.unresolved.mutations }}</p>
+        <p>Unresolved requests: {{ selected.unresolved.requests }}</p>
+        <h3>Application request budgets</h3>
+        <p>Spent / limit. These are not provider billing totals.</p>
+        <dl>
+          @for (meter of meters; track meter.key) {
+            <dt>{{ meter.label }}</dt>
+            <dd>{{ selected.budgets[meter.key].used }} / {{ selected.budgets[meter.key].limit }}</dd>
+          }
+        </dl>
+      }
     </section>
   }
 }

@@ -58,9 +58,10 @@ Neon database. This PR installs nothing and makes no cloud requests during tests
   Concurrent reads in one service instance return unavailable rather than queue.
 
 A missing migration, invalid database credentials or service outage gives a generic
-unavailable state. A 401 requires disconnecting and entering a valid token. Unknown
-records return 404. Stored records remain readable after their execution expiry;
-this is not permission to perform any expired cloud work.
+unavailable state. A 401 clears the token and both panes, then prompts for a new
+token at the same URL. A 403 clears both panes and directs you to the Berth URL
+configured for the deployment. A detail 404 clears only the missing detail.
+Stored records remain readable after their execution expiry.
 
 ## Hosted boundary and limitations
 

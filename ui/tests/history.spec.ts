@@ -95,11 +95,17 @@ test("the history detail route passes its operation identifier to the authentica
   await expect(
     page.getByRole("heading", { name: "Operation details" }),
   ).toBeVisible();
-  expect(requests).toEqual([`/api/history/${first}`]);
+  await expect
+    .poll(() => requests)
+    .toEqual([`/api/history/${first}`, "/api/history"]);
   await page.getByRole("button", { name: "Refresh detail" }).click();
   await expect
     .poll(() => requests)
-    .toEqual([`/api/history/${first}`, `/api/history/${first}`]);
+    .toEqual([
+      `/api/history/${first}`,
+      "/api/history",
+      `/api/history/${first}`,
+    ]);
   await page
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Operation history" })
@@ -338,13 +344,17 @@ test("history has loading, empty, unavailable and unauthorized states without le
   await page.getByRole("button", { name: "Load history", exact: true }).click();
   await expect(page.getByText("Loading operation history…")).toBeVisible();
   await expect(page.getByText("No recorded operations.")).toBeVisible();
+  const fetchedAt = page
+    .getByRole("region", { name: "Recorded operations" })
+    .locator("time[datetime]");
+  const successfulRead = await fetchedAt.getAttribute("datetime");
   status = 503;
   await page.getByRole("button", { name: "Refresh history" }).click();
-  await expect(
-    page.getByText(
-      "History is unavailable. Retry when the read service is available.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText(
+    "History is unavailable.",
+  );
+  await expect(page.getByText("No recorded operations.")).toBeVisible();
+  await expect(fetchedAt).toHaveAttribute("datetime", successfulRead ?? "");
   status = 401;
   await page.getByRole("button", { name: "Refresh history" }).click();
   await expect(
@@ -416,3 +426,240 @@ test("disconnect discards late responses and page reload requires access again",
   await openHistory(page);
   await expect(page.getByLabel("History access token")).toHaveValue("");
 });
+
+test("a failed older-page read keeps the successful page and retries the same cursor", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  const held = Promise.withResolvers<void>();
+  let olderAttempts = 0;
+  await page.route("**/api/history**", async (route) => {
+    const url = new URL(route.request().url());
+    requests.push(url.pathname + url.search);
+    if (url.pathname.endsWith(first)) {
+      await route.fulfill({ json: item(first) });
+      return;
+    }
+    const cursor = url.searchParams.get("before");
+    if (cursor) {
+      olderAttempts++;
+      if (olderAttempts === 1) {
+        await held.promise;
+      }
+      if (olderAttempts !== 2) {
+        await route.fulfill({ status: 503, json: {} });
+        return;
+      }
+    }
+    await route.fulfill({
+      json: {
+        items: [item(cursor ? second : first)],
+        next: cursor ? null : first,
+      },
+    });
+  });
+  await openHistory(page);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  const list = page.getByRole("region", { name: "Recorded operations" });
+  const fetchedAt = list.locator("time[datetime]");
+  await expect(fetchedAt).toHaveAttribute("datetime", /Z$/);
+  const successfulRead = await fetchedAt.getAttribute("datetime");
+  const older = list.getByRole("button", { name: "Older operations" });
+  const firstRow = list.getByRole("button", { name: first });
+  const detail = page.getByRole("region", { name: "Selected operation" });
+  const olderPath = `/api/history?before=${first}`;
+  await older.click();
+  try {
+    await expect.poll(() => requests).toEqual(["/api/history", olderPath]);
+    await firstRow.click();
+    await expect(detail.getByText("Loading operation details…")).toBeVisible();
+    expect(requests).toEqual(["/api/history", olderPath]);
+  } finally {
+    held.resolve();
+  }
+  await expect(list.getByRole("alert")).toContainText("may be out of date");
+  await expect(firstRow).toBeVisible();
+  await expect(fetchedAt).toHaveAttribute("datetime", successfulRead ?? "");
+  await expect(detail.getByText(first)).toBeVisible();
+  await list.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(list.getByText(second)).toBeVisible();
+
+  await list.getByRole("button", { name: "Newest operations" }).click();
+  await expect(firstRow).toBeVisible();
+  await older.click();
+  await list.getByRole("button", { name: "Go to newest" }).click();
+  await expect(list.getByRole("alert")).toHaveCount(0);
+  await expect(firstRow).toBeVisible();
+  await expect(detail.getByText(first)).toBeVisible();
+  expect(requests).toEqual([
+    "/api/history",
+    olderPath,
+    `/api/history/${first}`,
+    olderPath,
+    "/api/history",
+    olderPath,
+    "/api/history",
+  ]);
+});
+
+test("a pending obsolete detail yields to the latest selection before the queued list refresh", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  const held = Promise.withResolvers<void>();
+  const replacement = Promise.withResolvers<void>();
+  await page.route("**/api/history**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    requests.push(path);
+    if (path.endsWith(first)) {
+      await held.promise;
+      await route.fulfill({ json: item(first) });
+    } else if (path.endsWith(second)) {
+      await replacement.promise;
+      await route.fulfill({ status: 404, json: {} });
+    } else {
+      await route.fulfill({
+        json: { items: [item(first), item(second)], next: null },
+      });
+    }
+  });
+  await openHistory(page);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await page.getByRole("button", { name: first, exact: true }).click();
+  try {
+    await expect
+      .poll(() => requests)
+      .toEqual(["/api/history", `/api/history/${first}`]);
+    await page
+      .getByRole("button", { name: "Refresh history" })
+      .click({ timeout: 1500 });
+    await page
+      .getByRole("button", { name: second, exact: true })
+      .click({ timeout: 1500 });
+    expect(requests).toEqual(["/api/history", `/api/history/${first}`]);
+  } finally {
+    held.resolve();
+  }
+  const detail = page.getByRole("region", { name: "Selected operation" });
+  try {
+    await expect.poll(() => requests.at(-1)).toBe(`/api/history/${second}`);
+    await expect(detail.getByText("Loading operation details…")).toBeVisible();
+    await expect(detail.getByText(first)).toHaveCount(0);
+  } finally {
+    replacement.resolve();
+  }
+  await expect(page.getByText("Operation not found.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: second, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Selected operation" }).getByText(first),
+  ).toHaveCount(0);
+  await expect
+    .poll(() => requests)
+    .toEqual([
+      "/api/history",
+      `/api/history/${first}`,
+      `/api/history/${second}`,
+      "/api/history",
+    ]);
+});
+
+test("detail refresh retains its timestamp on failure and clears only detail on 404", async ({
+  page,
+}) => {
+  let detailStatus = 200;
+  await page.route("**/api/history**", (route) => {
+    const detail = new URL(route.request().url()).pathname.endsWith(first);
+    return route.fulfill(
+      detail
+        ? {
+            status: detailStatus,
+            json: detailStatus === 200 ? item(first) : {},
+          }
+        : { json: { items: [item(second)], next: null } },
+    );
+  });
+  await page.goto(`/operations/${first}`);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  const list = page.getByRole("region", { name: "Recorded operations" });
+  const detail = page.getByRole("region", { name: "Selected operation" });
+  await expect(list.getByRole("button", { name: second })).toBeVisible();
+  const fetchedAt = detail.locator("time[datetime]");
+  await expect(fetchedAt).toHaveAttribute("datetime", /Z$/);
+  const successfulRead = await fetchedAt.getAttribute("datetime");
+  detailStatus = 503;
+  await detail.getByRole("button", { name: "Refresh detail" }).click();
+  await expect(detail.getByRole("alert")).toContainText("may be out of date");
+  await expect(detail.getByText(first)).toBeVisible();
+  await expect(fetchedAt).toHaveAttribute("datetime", successfulRead ?? "");
+  detailStatus = 404;
+  await detail.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(detail.getByRole("alert")).toHaveText("Operation not found.");
+  await expect(detail.getByText(first)).toHaveCount(0);
+  await expect(fetchedAt).toHaveCount(0);
+  await expect(list.getByRole("button", { name: second })).toBeVisible();
+});
+
+for (const status of [401, 403]) {
+  test(`a superseded detail returning ${status} clears both panes and discards queued reads`, async ({
+    page,
+  }) => {
+    const requests: string[] = [];
+    const held = Promise.withResolvers<void>();
+    let rejectDetail = false;
+    await page.route("**/api/history**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      requests.push(path);
+      if (path.endsWith(first) && rejectDetail) {
+        await held.promise;
+        await route.fulfill({ status, json: { secret: "must-not-display" } });
+      } else {
+        await route.fulfill({
+          json: path.endsWith(first)
+            ? item(first)
+            : { items: [item(second)], next: null },
+        });
+      }
+    });
+    await page.goto(`/operations/${first}`);
+    await page.getByLabel("History access token").fill("h".repeat(40));
+    await page.getByRole("button", { name: "Load history" }).click();
+    const secondRow = page.getByRole("button", { name: second });
+    await expect(secondRow).toBeVisible();
+    rejectDetail = true;
+    await page.getByRole("button", { name: "Refresh detail" }).click();
+    try {
+      await expect.poll(() => requests).toHaveLength(3);
+      await page.getByRole("button", { name: "Refresh history" }).click();
+      await secondRow.click();
+      await expect(page).toHaveURL(`/operations/${second}`);
+    } finally {
+      held.resolve();
+    }
+    const alert = page.getByRole("alert");
+    if (status === 401) {
+      await expect(alert).toContainText("Enter a valid history token");
+      await expect(page.getByLabel("History access token")).toHaveValue("");
+      await expect(page).toHaveURL(`/operations/${second}`);
+    } else {
+      await expect(alert).toContainText("Open the configured Berth URL");
+      await expect(page.getByLabel("History access token")).toHaveCount(0);
+    }
+    await expect(
+      page.getByRole("region", { name: "Recorded operations" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("region", { name: "Selected operation" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("must-not-display")).toHaveCount(0);
+    expect(requests).toEqual([
+      `/api/history/${first}`,
+      "/api/history",
+      `/api/history/${first}`,
+    ]);
+  });
+}
