@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 const first = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   second = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -21,6 +21,69 @@ const item = (operation: string) => ({
   unresolved: { requests: 1, mutations: 1 },
 });
 
+/** Open the history screen through the application's main navigation. */
+async function openHistory(page: Page) {
+  await page.goto("/");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("link", { name: "Operation history" })
+    .click();
+}
+
+test("the shell marks the active page and opens the existing history access screen", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/api/")) requests.push(path);
+  });
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Infrastructure" }),
+  ).toBeVisible();
+  await expect(page.getByText("Inventory is not available yet.")).toBeVisible();
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  const infrastructure = navigation.getByRole("link", {
+    name: "Infrastructure",
+  });
+  const history = navigation.getByRole("link", { name: "Operation history" });
+  await expect(infrastructure).toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: "Open operation history" }).click();
+  await expect(page).toHaveURL(/\/operations$/);
+  await expect(history).toHaveAttribute("aria-current", "page");
+  await expect(infrastructure).not.toHaveAttribute("aria-current", "page");
+  await expect(page.getByLabel("History access token")).toBeVisible();
+  expect(requests).toEqual([]);
+});
+
+test("the history detail route passes its operation identifier to the authenticated read", async ({
+  page,
+}) => {
+  const path = `/operations/${first}`;
+  // This test supplies the shell for the initial document. Serving saved links
+  // in preview and on Pages is a separate delivery issue.
+  const shell = await page.request.get("/");
+  await page.route(`**${path}`, (route) => route.fulfill({ response: shell }));
+  const requests: string[] = [];
+  await page.route("**/api/history**", (route) => {
+    requests.push(new URL(route.request().url()).pathname);
+    expect(route.request().headers().authorization).toBe(
+      `Bearer ${"h".repeat(40)}`,
+    );
+    return route.fulfill({ json: item(first) });
+  });
+  await page.goto(path);
+  await expect(page.getByLabel("History access token")).toBeVisible();
+  expect(requests).toEqual([]);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Operation details" }),
+  ).toBeVisible();
+  expect(requests).toEqual([`/api/history/${first}`]);
+});
+
 test("history supports authenticated pagination, selection, retained expiry, keyboard access and memory-only credentials", async ({
   page,
 }) => {
@@ -40,7 +103,7 @@ test("history supports authenticated pagination, selection, retained expiry, key
           },
     });
   });
-  await page.goto("/");
+  await openHistory(page);
   await expect(
     page.getByRole("heading", { name: "Operation history", exact: true }),
   ).toBeVisible();
@@ -104,7 +167,7 @@ test("history has loading, empty, unavailable and unauthorized states without le
           : { secret: "must-not-display" },
     });
   });
-  await page.goto("/");
+  await openHistory(page);
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history", exact: true }).click();
   await expect(page.getByText("Loading operation history…")).toBeVisible();
@@ -126,7 +189,7 @@ test("history has loading, empty, unavailable and unauthorized states without le
 
 test("history remains usable on narrow screens", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto("/");
+  await openHistory(page);
   await expect(
     page.getByRole("button", { name: "Load history", exact: true }),
   ).toBeVisible();
@@ -151,7 +214,7 @@ test("disconnect discards late responses and page reload requires access again",
     });
     await route.fulfill({ json: { items: [item(first)], next: null } });
   });
-  await page.goto("/");
+  await openHistory(page);
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history", exact: true }).click();
   await expect(page.getByText("Loading operation history…")).toBeVisible();
@@ -161,6 +224,6 @@ test("disconnect discards late responses and page reload requires access again",
   await expect(
     page.getByRole("button", { name: first, exact: true }),
   ).toHaveCount(0);
-  await page.reload();
+  await openHistory(page);
   await expect(page.getByLabel("History access token")).toHaveValue("");
 });

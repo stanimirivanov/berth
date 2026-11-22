@@ -80,7 +80,7 @@ function record(value: unknown): Operation {
   return item;
 }
 
-/** Per-component memory only; disconnect invalidates outstanding replies and clears token/data. */
+/** Tab memory only. Disconnect clears credentials and invalidates outstanding replies. */
 export const HistoryStore = signalStore(
   withState(initial),
   withMethods((store) => {
@@ -149,14 +149,18 @@ export const HistoryStore = signalStore(
       }
     };
     return {
-      connect(value: string) {
+      connect(value: string, operation: string | null = null) {
+        if (operation !== null && !uuid.test(operation)) {
+          patchState(store, { error: "Invalid operation link." });
+          return;
+        }
         if (!/^[A-Za-z0-9_-]{32,128}$/.test(value)) {
           patchState(store, { error: "Enter a valid history token." });
           return;
         }
         token = value;
         patchState(store, { connected: true });
-        void load(null);
+        void load(null, operation);
       },
       disconnect() {
         generation++;

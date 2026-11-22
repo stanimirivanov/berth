@@ -1,60 +1,68 @@
-import { DatePipe } from "@angular/common";
-import { ChangeDetectionStrategy, Component, inject } from "@angular/core";
+import { ChangeDetectionStrategy, Component } from "@angular/core";
 import { bootstrapApplication } from "@angular/platform-browser";
+import {
+  provideRouter,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from "@angular/router";
 import { HistoryStore } from "./history.store";
+import { OperationHistory } from "./operation-history";
 
-/** Private read-only history screen. Token exists in component memory only; no auto-polling. */
+/** Reserve the landing route while the inventory service is pending. */
 @Component({
-  selector: "berth-history",
-  imports: [DatePipe],
+  selector: "berth-infrastructure",
+  imports: [RouterLink],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <h1>Infrastructure</h1>
+    <p>Inventory is not available yet.</p>
+    <p><a routerLink="/operations">Open operation history</a></p>
+  `,
+})
+class Infrastructure {}
+
+/** Shared navigation and tab-memory history access for the routed views. */
+@Component({
+  selector: "berth-app",
+  imports: [RouterLink, RouterLinkActive, RouterOutlet],
   providers: [HistoryStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header><a href="/" class="brand" aria-label="Berth home">BERTH<span> / operations</span></a><span class="readonly">Read only</span></header>
-    <main>
-      <section class="intro"><p class="eyebrow">OCI Object Storage · Retained evidence</p><h1>Operation history</h1><p>Review lifecycle outcomes, spent request budgets and unresolved work.</p></section>
-      <aside class="verdict" aria-label="Feasibility verdict"><strong>Partial / no-go</strong><p>A completed operation is not proof of full live validation. Provider usage and remaining free allowances are not shown here.</p></aside>
-      <section class="access" aria-label="History access">
-        @if (!store.connected()) {
-          <form (submit)="connect($event)"><label for="token">History access token</label><div class="access-row"><input id="token" type="password" autocomplete="off" [value]="token" (input)="token = $any($event.target).value" maxlength="128" spellcheck="false"><button type="submit">Load history</button></div><small>Kept in memory for this tab. No database or cloud credentials.</small></form>
-        } @else { <p>History access connected</p><div class="actions"><button (click)="store.refresh()" [disabled]="store.loading()">Refresh history</button><button class="secondary" (click)="disconnect()">Disconnect</button></div> }
-      </section>
-      @if (store.error()) { <p role="alert" class="error">{{ store.error() }}</p> }
-      <section [attr.aria-busy]="store.loading()" aria-label="Recorded operations">
-        @if (store.loading()) { <p role="status">Loading operation history…</p> }
-        @if (store.loaded() && !store.loading() && !store.error() && store.items().length === 0) { <p role="status" class="empty">No recorded operations.</p> }
-        @if (store.items().length) {
-          <div class="section-heading"><h2>Recorded operations</h2><span>Newest first · UTC times</span></div>
-          <ul class="operations">@for (item of store.items(); track item.operation) {
-            <li><div><span class="status">{{ item.outcome }}</span><time>{{ item.startedAt | date:'medium':'UTC' }}</time></div><button class="operation-id" (click)="store.select(item.operation)" [disabled]="store.loading()">{{ item.operation }}</button><p>Phase: {{ item.phase ?? 'Not recorded' }} · Unresolved mutations: {{ item.unresolved.mutations }}</p></li>
-          }</ul>
-          <nav aria-label="History pagination"><button class="secondary" (click)="store.refresh()" [disabled]="store.loading()">Newest operations</button><button (click)="store.older()" [disabled]="store.loading() || !store.next()">Older operations</button></nav>
-        }
-      </section>
-      @if (store.selected(); as selected) {
-        <section class="details" aria-label="Selected operation"><h2>Operation details</h2><p class="mono">{{ selected.operation }}</p><dl><dt>Lifecycle outcome</dt><dd>{{ selected.outcome }}</dd><dt>Phase</dt><dd>{{ selected.phase ?? 'Not recorded' }}</dd><dt>Execution expiry (UTC)</dt><dd>{{ selected.expiresAt | date:'medium':'UTC' }}</dd><dt>Cleanup requested</dt><dd>{{ selected.cleanupRequested ? 'Yes' : 'No' }}</dd><dt>Upload unresolved</dt><dd>{{ selected.pendingUpload ? 'Yes' : 'No' }}</dd><dt>Object removal recorded</dt><dd>{{ selected.objectRemoved ? 'Yes' : 'No' }}</dd></dl><p>Unresolved mutations: {{ selected.unresolved.mutations }}</p><p>Unresolved requests: {{ selected.unresolved.requests }}</p><h3>Application request budgets</h3><p>Spent / limit. These are not provider billing totals.</p><dl>@for (meter of meters; track meter.key) { <dt>{{ meter.label }}</dt><dd>{{ selected.budgets[meter.key].used }} / {{ selected.budgets[meter.key].limit }}</dd> }</dl>
-        </section>
-      }
-    </main><footer>No lifecycle controls. No provider requests. Historical evidence remains unchanged.</footer>
+    <header>
+      <a routerLink="/" class="brand" aria-label="Berth home">BERTH</a>
+      <nav class="main-navigation" aria-label="Main navigation">
+        <a routerLink="/" routerLinkActive="current" ariaCurrentWhenActive="page"
+          [routerLinkActiveOptions]="{ exact: true }">Infrastructure</a>
+        <a routerLink="/operations" routerLinkActive="current" ariaCurrentWhenActive="page">Operation history</a>
+      </nav>
+      <span class="readonly">Read only</span>
+    </header>
+    <main><router-outlet /></main>
+    <footer>No lifecycle controls. No provider requests. Historical evidence remains unchanged.</footer>
   `,
 })
-class App {
-  readonly store = inject(HistoryStore);
-  token = "";
-  readonly meters = [
-    { key: "normal", label: "Normal Object Storage" },
-    { key: "cleanup", label: "Cleanup Object Storage" },
-    { key: "monitoring", label: "Monitoring" },
-    { key: "neon", label: "Neon application" },
-  ] as const;
-  connect(event: Event) {
-    event.preventDefault();
-    this.store.connect(this.token);
-    this.token = "";
-  }
-  disconnect() {
-    this.token = "";
-    this.store.disconnect();
-  }
-}
-bootstrapApplication(App);
+class App {}
+
+bootstrapApplication(App, {
+  providers: [
+    provideRouter([
+      {
+        path: "",
+        pathMatch: "full",
+        component: Infrastructure,
+        title: "Berth · Infrastructure",
+      },
+      {
+        path: "operations",
+        component: OperationHistory,
+        title: "Berth · Operation history",
+      },
+      {
+        path: "operations/:operation",
+        component: OperationHistory,
+        title: "Berth · Operation history",
+      },
+    ]),
+  ],
+});
