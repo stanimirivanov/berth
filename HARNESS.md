@@ -39,6 +39,19 @@ basenames. Reference templates with `templateUrl`. Keep dependencies and fields
 above component methods, use `protected` for template-only members, and move
 complex template expressions into the component's presentation logic.
 
+Prefer the pinned [Angular CLI generator](https://angular.dev/cli/generate)
+when creating components, services, directives, pipes, guards and other Angular
+artifacts with a matching schematic. Run `pnpm --dir ui exec ng generate` from
+the repository root and use `--path` to target the owning feature. Preview the
+scaffold with `--dry-run`, for example:
+
+```bash
+pnpm --dir ui exec ng generate component usage-summary --path src/infrastructure --dry-run
+```
+
+Review the generated files against the component and static stylesheet
+conventions below.
+
 Bundle the co-located CSS through `ui/src/styles.css` and scope its selectors
 to the owning component. Use the global file for shared tokens and defaults.
 This keeps the CSS in the static stylesheet under Berth's `style-src 'self'`
