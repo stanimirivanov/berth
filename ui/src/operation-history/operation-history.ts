@@ -1,16 +1,22 @@
 import { DatePipe } from "@angular/common";
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
+  type ElementRef,
   effect,
   inject,
+  signal,
   untracked,
   ViewEncapsulation,
+  viewChild,
+  viewChildren,
 } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
-import { ActivatedRoute, Router, RouterLink } from "@angular/router";
-import { HistoryStore, isOperationId } from "./history-store";
+import { ActivatedRoute, RouterLink } from "@angular/router";
+import { activeExpiry, attentionReasons, ownerProcedures } from "./attention";
+import { HistoryStore, isOperationId, type Operation } from "./history-store";
 
 /** Read-only history screen. The shell holds accepted access in tab memory. */
 @Component({
@@ -23,10 +29,11 @@ import { HistoryStore, isOperationId } from "./history-store";
 })
 export class OperationHistory {
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   protected readonly store = inject(HistoryStore);
   private readonly segments = toSignal(this.route.url, { requireSync: true });
-  private readonly operation = computed(() => this.segments()[1]?.path ?? null);
+  protected readonly operation = computed(
+    () => this.segments()[1]?.path ?? null,
+  );
   protected readonly invalidOperation = computed(() => {
     const operation = this.operation();
     return (
@@ -40,13 +47,58 @@ export class OperationHistory {
   protected readonly emptyList = computed(
     () => this.store.list()?.items.length === 0,
   );
-  protected readonly showDetail = computed(() => {
-    const selection = this.store.operation();
-    const operation = this.operation();
-    return (
-      selection !== null && (operation === null || operation === selection)
-    );
+  protected readonly showDetail = computed(() => this.operation() !== null);
+  private readonly inboxHeading =
+    viewChild<ElementRef<HTMLElement>>("inboxHeading");
+  private readonly detailHeading =
+    viewChild<ElementRef<HTMLElement>>("detailHeading");
+  private readonly rows =
+    viewChildren<ElementRef<HTMLAnchorElement>>("operationRow");
+  private previousFocusRoute: string | null | undefined;
+  private restoredRow: HTMLAnchorElement | undefined;
+  private readonly now = signal(Date.now());
+  private readonly expiryTick = signal(0);
+
+  protected readonly groups = computed(() => {
+    const attention: Operation[] = [];
+    const other: Operation[] = [];
+    for (const operation of this.store.list()?.items ?? []) {
+      const group = attentionReasons(operation, this.now()).length
+        ? attention
+        : other;
+      group.push(operation);
+    }
+    return [
+      { label: "Needs attention", items: attention },
+      { label: "Other operations", items: other },
+    ];
   });
+
+  protected readonly detailLoading = computed(
+    () =>
+      this.store.operation() !== this.operation() || this.store.detailLoading(),
+  );
+  protected readonly detailFailure = computed(() =>
+    this.store.operation() === this.operation()
+      ? this.store.detailFailure()
+      : null,
+  );
+  protected readonly detail = computed(() => {
+    const result = this.store.detail();
+    return result?.record.operation === this.operation() ? result : null;
+  });
+  protected readonly reasons = computed(() => {
+    const detail = this.detail();
+    return detail ? attentionReasons(detail.record, this.now()) : [];
+  });
+
+  protected readonly recoveryLinks = computed(() => {
+    const procedures = new Set(
+      this.reasons().map((reason) => reason.procedure),
+    );
+    return Array.from(procedures, (procedure) => ownerProcedures[procedure]);
+  });
+
   protected token = "";
   protected readonly meters = [
     { key: "normal", label: "Normal Object Storage" },
@@ -68,14 +120,65 @@ export class OperationHistory {
         }
       });
     });
+    // Only record changes or the expiry timer reschedule the local clock.
+    effect((onCleanup) => {
+      this.expiryTick();
+      const now = Date.now();
+      const operations = this.store.list()?.items ?? [];
+      const selected = this.store.detail()?.record;
+      const visible = selected ? [...operations, selected] : operations;
+      const deadlines = visible
+        .map(activeExpiry)
+        .filter((expiry): expiry is number => expiry !== null && expiry > now);
+      this.now.set(now);
+      if (deadlines.length) {
+        // Recheck locally at the next expiry. Do not refresh the history API.
+        const delay = Math.min(2_147_483_647, Math.min(...deadlines) - now);
+        const timer = setTimeout(
+          () => this.expiryTick.update((tick) => tick + 1),
+          delay,
+        );
+        onCleanup(() => clearTimeout(timer));
+      }
+    });
+    afterRenderEffect(() => this.restoreFocus());
   }
 
-  /** Keep the saved URL in sync when selecting another record from that view. */
-  protected select(operation: string) {
-    if (this.operation() === null) {
-      this.store.select(operation);
-    } else {
-      void this.router.navigate(["/operations", operation]);
+  /** Restore focus after route and pane state agree, including a regrouped row. */
+  private restoreFocus() {
+    if (!this.store.connected() || this.invalidOperation()) {
+      this.previousFocusRoute = undefined;
+      this.restoredRow = undefined;
+      return;
+    }
+    const operation = this.operation();
+    if (operation !== this.store.operation()) {
+      return;
+    }
+    const rows = this.rows().map((row) => row.nativeElement);
+    if (operation === this.previousFocusRoute) {
+      const previousRow = this.restoredRow;
+      if (
+        previousRow &&
+        !previousRow.isConnected &&
+        previousRow.ownerDocument.activeElement ===
+          previousRow.ownerDocument.body
+      ) {
+        this.restoredRow = rows.find((row) => row.id === previousRow.id);
+        (this.restoredRow ?? this.inboxHeading()?.nativeElement)?.focus();
+      }
+      return;
+    }
+    const previous = this.previousFocusRoute;
+    this.restoredRow = operation
+      ? undefined
+      : rows.find((row) => row.id === previous);
+    const target = operation
+      ? this.detailHeading()?.nativeElement
+      : (this.restoredRow ?? this.inboxHeading()?.nativeElement);
+    if (target) {
+      this.previousFocusRoute = operation;
+      target.focus();
     }
   }
 

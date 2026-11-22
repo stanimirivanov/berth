@@ -97,9 +97,8 @@ berth-operation-history {
     font-weight: 700;
   }
   .operation-id {
-    background: transparent;
+    display: inline-block;
     color: var(--accent);
-    border: 0;
     text-decoration: underline;
     font-family: monospace;
     padding: 0.75rem 0;
@@ -111,8 +110,34 @@ berth-operation-history {
     font-size: 0.875rem;
     color: var(--muted);
   }
-  .details {
-    margin-top: 1.5rem;
+  .inbox-layout {
+    display: grid;
+    gap: 1rem;
+  }
+  .inbox-layout.has-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: start;
+  }
+  .attention-reasons {
+    background: var(--warn);
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+  .attention-reasons h3 {
+    margin-top: 0;
+  }
+  .owner-procedures {
+    display: flex;
+    gap: 0.5rem 1rem;
+    flex-wrap: wrap;
+  }
+  @media (max-width: 767px) {
+    .inbox-layout.has-detail {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .has-detail .inbox {
+      display: none;
+    }
   }
   .mono {
     font-family: monospace;

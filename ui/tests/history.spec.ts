@@ -110,7 +110,7 @@ test("the history detail route passes its operation identifier to the authentica
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Operation history" })
     .click();
-  await expect(page.getByRole("button", { name: second })).toBeVisible();
+  await expect(page.getByRole("link", { name: second })).toBeVisible();
   await page.goBack();
   await expect(
     page.getByRole("heading", { name: "Operation details" }),
@@ -274,13 +274,17 @@ test("history supports authenticated pagination, selection, retained expiry, key
   ).toBeVisible();
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history", exact: true }).click();
-  await page.getByRole("button", { name: first, exact: true }).focus();
+  await page.getByRole("link", { name: first, exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "Operation details" }),
   ).toBeVisible();
+  const detail = page.getByRole("region", { name: "Selected operation" });
   await expect(
-    page.getByText("Unresolved mutations: 1", { exact: true }),
+    detail.getByText("Unresolved mutations: 1", { exact: true }),
+  ).toHaveCount(2);
+  await expect(
+    detail.getByText("Recorded outcome requires reconciliation."),
   ).toBeVisible();
   await expect(page.getByText("14 / 40", { exact: true })).toBeVisible();
   for (const width of [320, 768, 1024, 1440]) {
@@ -297,28 +301,28 @@ test("history supports authenticated pagination, selection, retained expiry, key
   });
   await page.getByRole("button", { name: "Older operations" }).click();
   await expect(
-    page.getByRole("button", { name: second, exact: true }),
+    page.getByRole("link", { name: second, exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Older operations" }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Newest operations" }).click();
   await expect(
-    page.getByRole("button", { name: first, exact: true }),
+    page.getByRole("link", { name: first, exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => [localStorage.length, sessionStorage.length]),
   ).toEqual([0, 0]);
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await navigation.getByRole("link", { name: "Infrastructure" }).click();
-  await expect(page.getByRole("button", { name: first })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: first })).toHaveCount(0);
   await navigation.getByRole("link", { name: "Operation history" }).click();
-  await expect(page.getByRole("button", { name: first })).toBeVisible();
+  await expect(page.getByRole("link", { name: first })).toBeVisible();
   await openHistory(page);
   await expect(page.getByLabel("History access token")).toHaveValue("");
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
-  await expect(page.getByRole("button", { name: first })).toBeVisible();
+  await expect(page.getByRole("link", { name: first })).toBeVisible();
   await page.getByRole("button", { name: "Disconnect" }).click();
   await expect(page.getByLabel("History access token")).toHaveValue("");
 
@@ -421,7 +425,7 @@ test("disconnect discards late responses and page reload requires access again",
   release?.();
   await expect(page.getByLabel("History access token")).toHaveValue("");
   await expect(
-    page.getByRole("button", { name: first, exact: true }),
+    page.getByRole("link", { name: first, exact: true }),
   ).toHaveCount(0);
   await openHistory(page);
   await expect(page.getByLabel("History access token")).toHaveValue("");
@@ -466,7 +470,7 @@ test("a failed older-page read keeps the successful page and retries the same cu
   await expect(fetchedAt).toHaveAttribute("datetime", /Z$/);
   const successfulRead = await fetchedAt.getAttribute("datetime");
   const older = list.getByRole("button", { name: "Older operations" });
-  const firstRow = list.getByRole("button", { name: first });
+  const firstRow = list.getByRole("link", { name: first });
   const detail = page.getByRole("region", { name: "Selected operation" });
   const olderPath = `/api/history?before=${first}`;
   await older.click();
@@ -527,7 +531,7 @@ test("a pending obsolete detail yields to the latest selection before the queued
   await openHistory(page);
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
-  await page.getByRole("button", { name: first, exact: true }).click();
+  await page.getByRole("link", { name: first, exact: true }).click();
   try {
     await expect
       .poll(() => requests)
@@ -536,7 +540,7 @@ test("a pending obsolete detail yields to the latest selection before the queued
       .getByRole("button", { name: "Refresh history" })
       .click({ timeout: 1500 });
     await page
-      .getByRole("button", { name: second, exact: true })
+      .getByRole("link", { name: second, exact: true })
       .click({ timeout: 1500 });
     expect(requests).toEqual(["/api/history", `/api/history/${first}`]);
   } finally {
@@ -552,7 +556,7 @@ test("a pending obsolete detail yields to the latest selection before the queued
   }
   await expect(page.getByText("Operation not found.")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: second, exact: true }),
+    page.getByRole("link", { name: second, exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Selected operation" }).getByText(first),
@@ -587,7 +591,7 @@ test("detail refresh retains its timestamp on failure and clears only detail on 
   await page.getByRole("button", { name: "Load history" }).click();
   const list = page.getByRole("region", { name: "Recorded operations" });
   const detail = page.getByRole("region", { name: "Selected operation" });
-  await expect(list.getByRole("button", { name: second })).toBeVisible();
+  await expect(list.getByRole("link", { name: second })).toBeVisible();
   const fetchedAt = detail.locator("time[datetime]");
   await expect(fetchedAt).toHaveAttribute("datetime", /Z$/);
   const successfulRead = await fetchedAt.getAttribute("datetime");
@@ -601,7 +605,7 @@ test("detail refresh retains its timestamp on failure and clears only detail on 
   await expect(detail.getByRole("alert")).toHaveText("Operation not found.");
   await expect(detail.getByText(first)).toHaveCount(0);
   await expect(fetchedAt).toHaveCount(0);
-  await expect(list.getByRole("button", { name: second })).toBeVisible();
+  await expect(list.getByRole("link", { name: second })).toBeVisible();
 });
 
 for (const status of [401, 403]) {
@@ -628,7 +632,7 @@ for (const status of [401, 403]) {
     await page.goto(`/operations/${first}`);
     await page.getByLabel("History access token").fill("h".repeat(40));
     await page.getByRole("button", { name: "Load history" }).click();
-    const secondRow = page.getByRole("button", { name: second });
+    const secondRow = page.getByRole("link", { name: second });
     await expect(secondRow).toBeVisible();
     rejectDetail = true;
     await page.getByRole("button", { name: "Refresh detail" }).click();
@@ -663,3 +667,195 @@ for (const status of [401, 403]) {
     ]);
   });
 }
+
+test("the Review inbox groups attention separately and leads detail with every reason", async ({
+  page,
+}) => {
+  const expired = { ...item(first), outcome: "active" };
+  const resolved = {
+    ...item(second),
+    outcome: "failed",
+    unresolved: { requests: 0, mutations: 0 },
+  };
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.route("**/api/history**", (route) =>
+    route.fulfill({
+      json: new URL(route.request().url()).pathname.endsWith(first)
+        ? expired
+        : { items: [resolved, expired], next: null },
+    }),
+  );
+  await openHistory(page);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  const attention = page.getByRole("region", { name: "Needs attention" });
+  const other = page.getByRole("region", { name: "Other operations" });
+  await expect(attention.getByText("active", { exact: true })).toBeVisible();
+  await expect(other.getByText("failed", { exact: true })).toBeVisible();
+  await expect(other.getByRole("link", { name: first })).toHaveCount(0);
+  await attention.getByRole("link", { name: first }).click();
+  await expect(page).toHaveURL(`/operations/${first}`);
+  const detail = page.getByRole("region", { name: "Selected operation" });
+  await expect(detail.getByRole("listitem")).toHaveText([
+    /Execution window expired.*active/,
+    /Unresolved requests/,
+    /Unresolved mutations/,
+  ]);
+  await expect(
+    detail.getByRole("link", { name: "Stop conditions" }),
+  ).toHaveAttribute(
+    "href",
+    /owner-recovery\.md#4-stop-conditions-and-leftovers$/,
+  );
+  await expect(
+    detail.getByRole("link", { name: "Owner recovery evidence checks" }),
+  ).toHaveAttribute(
+    "href",
+    /owner-recovery\.md#2-save-a-read-only-sql-snapshot-before-every-local-action$/,
+  );
+  await expect(detail.getByText("active", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Partial / no-go", { exact: true }),
+  ).toBeVisible();
+  const listBounds = await page
+    .getByRole("region", { name: "Recorded operations" })
+    .boundingBox();
+  const detailBounds = await detail.boundingBox();
+  expect(listBounds).not.toBeNull();
+  expect(detailBounds).not.toBeNull();
+  if (listBounds && detailBounds) {
+    expect(listBounds.x + listBounds.width).toBeLessThan(detailBounds.x);
+  }
+});
+
+test("mobile detail returns keyboard focus to its row on the retained older page", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  let missing = false;
+  await page.setViewportSize({ width: 375, height: 820 });
+  await page.route("**/api/history**", (route) => {
+    const url = new URL(route.request().url());
+    requests.push(url.pathname + url.search);
+    if (missing && url.pathname.endsWith(second)) {
+      return route.fulfill({ status: 404, json: {} });
+    }
+    return route.fulfill({
+      json: url.pathname.endsWith(second)
+        ? item(second)
+        : url.searchParams.has("before")
+          ? { items: [item(second)], next: null }
+          : { items: [item(first)], next: first },
+    });
+  });
+  await openHistory(page);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await page.getByRole("button", { name: "Older operations" }).click();
+  const row = page.getByRole("link", { name: second });
+  const detailHeading = page.getByRole("heading", {
+    name: "Operation details",
+  });
+  const inbox = page.getByRole("region", { name: "Recorded operations" });
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(`/operations/${second}`);
+  await expect(detailHeading).toBeFocused();
+  await expect(inbox).toBeHidden();
+  const detail = page.getByRole("region", { name: "Selected operation" });
+  await expect(detail.getByText("14 / 40", { exact: true })).toBeVisible();
+  const bounds = await detail.boundingBox();
+  expect(bounds?.width).toBeGreaterThan(330);
+
+  await page.goBack();
+  await expect(page).toHaveURL("/operations");
+  await expect(row).toBeFocused();
+  await page.goForward();
+  await expect(page).toHaveURL(`/operations/${second}`);
+  await expect(detailHeading).toBeFocused();
+  await page.getByRole("link", { name: "Back to inbox" }).click();
+  await expect(page).toHaveURL("/operations");
+  await expect(row).toBeFocused();
+  expect(requests.filter((path) => !path.endsWith(second))).toEqual([
+    "/api/history",
+    `/api/history?before=${first}`,
+  ]);
+
+  requests.length = 0;
+  missing = true;
+  await page.goto(`/operations/${second}`);
+  await expect(page.getByLabel("History access token")).toBeVisible();
+  expect(requests).toEqual([]);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await expect(detailHeading).toBeFocused();
+  await expect
+    .poll(() => requests)
+    .toEqual([`/api/history/${second}`, "/api/history"]);
+  await expect(detail.getByRole("alert")).toHaveText("Operation not found.");
+  await page.getByRole("link", { name: "Back to inbox" }).click();
+  await expect(page.getByRole("link", { name: first })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Review inbox" }),
+  ).toBeFocused();
+});
+
+test("an active operation moves to Needs attention at expiry without a history refresh", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-11-20T10:49:45Z") });
+  const requests: string[] = [];
+  const active = {
+    ...item(first),
+    outcome: "active",
+    unresolved: { requests: 0, mutations: 0 },
+  };
+  await page.route("**/api/history**", (route) => {
+    requests.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ json: { items: [active], next: null } });
+  });
+  await openHistory(page);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "Other operations" })
+      .getByRole("link", { name: first }),
+  ).toBeVisible();
+
+  await page.clock.fastForward(20_000);
+
+  const attention = page.getByRole("region", { name: "Needs attention" });
+  await expect(attention.getByRole("link", { name: first })).toBeVisible();
+  await expect(attention.getByText("active", { exact: true })).toBeVisible();
+  expect(requests).toEqual(["/api/history"]);
+});
+
+test("returning from desktop detail restores the page it opened from", async ({
+  page,
+}) => {
+  await page.route("**/api/history**", (route) => {
+    const url = new URL(route.request().url());
+    return route.fulfill({
+      json: url.pathname.endsWith(second)
+        ? item(second)
+        : url.searchParams.has("before")
+          ? { items: [item(second)], next: null }
+          : { items: [item(first)], next: first },
+    });
+  });
+  await openHistory(page);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  await page.getByRole("button", { name: "Older operations" }).click();
+
+  const originalRow = page.getByRole("link", { name: second });
+  await originalRow.click();
+  await page.getByRole("button", { name: "Newest operations" }).click();
+  await expect(page.getByRole("link", { name: first })).toBeVisible();
+
+  await page.getByRole("link", { name: "Back to inbox" }).click();
+  await expect(page).toHaveURL("/operations");
+  await expect(originalRow).toBeFocused();
+  await expect(page.getByRole("link", { name: first })).toHaveCount(0);
+});
