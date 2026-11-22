@@ -1,8 +1,9 @@
 # Issue tracker: GitHub
 
 Track Berth work in [stanimirivanov/berth](https://github.com/stanimirivanov/berth/issues).
-Use the `gh` CLI. [tasks/plan.md](../../tasks/plan.md) records sequencing and
-historical context. [SPEC.md](../../SPEC.md) holds the approved trial contract.
+Use the `gh` CLI. The delivery sequence, scope and dependencies live in the
+[GitHub milestones](https://github.com/stanimirivanov/berth/milestones).
+[SPEC.md](../../SPEC.md) holds the approved trial contract.
 
 ## Conventions
 
@@ -25,6 +26,8 @@ File issues only into the user's own repo. Never file into `mattpocock/skills` (
 - Start new work from `main` after `git pull --ff-only`. Reuse the matching issue
   when it exists. New issues carry scope, acceptance criteria, verification and
   the relevant milestone.
+- Give each application delivery issue one PR-sized scope and a title such as
+  `M01-PR1: Add the application shell`. Number PR scopes within each milestone.
 - Use `feature/issue-<number>` or `fix/issue-<number>`. Prefix commit and PR
   titles with `[#<number>]` and link the issue with `Closes #<number>` when
   the PR completes it.
