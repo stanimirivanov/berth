@@ -74,7 +74,9 @@ See [dependency audit notes](docs/toolchain-audit.md) for current CLI advisories
 - [Approved trial specification](SPEC.md)
 - [Account setup and permissions](docs/oci-neon-setup.md)
 - [Restricted OCI identity setup](docs/oci-bootstrap.md)
-- [Implementation plan and GitHub issue index](tasks/plan.md)
+- [M01 — Application shell and Review inbox](https://github.com/stanimirivanov/berth/milestone/4)
+- [M02 — Infrastructure inventory and release readiness](https://github.com/stanimirivanov/berth/milestone/5)
+- [Archived trial record and application roadmap](https://github.com/stanimirivanov/berth/blob/1b45307893a16cdda994f754b4742522fb92e6eb/tasks/plan.md)
 - [Agent workflow and repository contracts](AGENTS.md)
 
 Hosting must use free plans and operate without the owner's computer online.
