@@ -1,0 +1,21 @@
+<header>
+  <a href="/" routerLink="/" class="brand" aria-label="Berth home">BERTH</a>
+  <nav class="main-navigation" aria-label="Main navigation">
+    <a
+      href="/" routerLink="/"
+      routerLinkActive="current"
+      ariaCurrentWhenActive="page"
+      [routerLinkActiveOptions]="{ exact: true }"
+    >
+      Infrastructure
+    </a>
+    <a href="/operations" routerLink="/operations" routerLinkActive="current" ariaCurrentWhenActive="page">
+      Operation history
+    </a>
+  </nav>
+  <span class="readonly">Read only</span>
+</header>
+<main>
+  <router-outlet />
+</main>
+<footer>No lifecycle controls. No provider requests. Historical evidence remains unchanged.</footer>

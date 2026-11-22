@@ -30,4 +30,8 @@ export default [
       ],
     },
   },
+  {
+    files: ["ui/src/**/*.ts", "ui/tests/**/*.ts", "ui/*.ts"],
+    rules: { curly: ["error", "all"], "one-var": ["error", "never"] },
+  },
 ];

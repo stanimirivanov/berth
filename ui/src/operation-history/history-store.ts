@@ -41,7 +41,9 @@ const uuid =
 
 /** Deny malformed responses before render; Angular still escapes all text. */
 function record(value: unknown): Operation {
-  if (!value || typeof value !== "object") throw Error();
+  if (!value || typeof value !== "object") {
+    throw Error();
+  }
   const item = value as Operation;
   if (
     !uuid.test(item.operation) ||
@@ -55,8 +57,9 @@ function record(value: unknown): Operation {
     [item.pendingUpload, item.cleanupRequested, item.objectRemoved].some(
       (flag) => typeof flag !== "boolean",
     )
-  )
+  ) {
     throw Error();
+  }
   for (const key of ["normal", "cleanup", "monitoring", "neon"] as const) {
     const meter = item.budgets?.[key];
     if (
@@ -66,8 +69,9 @@ function record(value: unknown): Operation {
       meter.used < 0 ||
       meter.limit < 1 ||
       meter.used > meter.limit
-    )
+    ) {
       throw Error();
+    }
   }
   if (
     !item.unresolved ||
@@ -75,17 +79,18 @@ function record(value: unknown): Operation {
       (count) => !Number.isInteger(count) || count < 0,
     ) ||
     item.unresolved.mutations > item.unresolved.requests
-  )
+  ) {
     throw Error();
+  }
   return item;
 }
 
-/** Per-component memory only; disconnect invalidates outstanding replies and clears token/data. */
+/** Tab memory only. Disconnect clears credentials and invalidates outstanding replies. */
 export const HistoryStore = signalStore(
   withState(initial),
   withMethods((store) => {
-    let token = "",
-      generation = 0;
+    let token = "";
+    let generation = 0;
     const request = async (path: string) => {
       const response = await Effect.runPromise(
         Effect.tryPromise({
@@ -99,15 +104,18 @@ export const HistoryStore = signalStore(
           catch: () => new Error("unavailable"),
         }),
       );
-      if (!response.ok)
+      if (!response.ok) {
         throw Error(response.status === 401 ? "unauthorized" : "unavailable");
+      }
       return response.json();
     };
     const load = async (
       before: string | null,
       operation: string | null = null,
     ) => {
-      if (store.loading()) return;
+      if (store.loading()) {
+        return;
+      }
       const epoch = ++generation;
       patchState(store, {
         loading: true,
@@ -120,23 +128,28 @@ export const HistoryStore = signalStore(
             ? `/api/history/${operation}`
             : `/api/history${before ? `?before=${encodeURIComponent(before)}` : ""}`,
         );
-        if (epoch !== generation) return;
+        if (epoch !== generation) {
+          return;
+        }
         if (operation) {
           const selected = record(result);
-          if (selected.operation !== operation) throw Error();
+          if (selected.operation !== operation) {
+            throw Error();
+          }
           patchState(store, { selected });
         } else {
           if (
             !Array.isArray(result.items) ||
             result.items.length > 50 ||
             (result.next !== null && !uuid.test(result.next))
-          )
+          ) {
             throw Error();
+          }
           const items = result.items.map(record);
           patchState(store, { items, next: result.next, loaded: true });
         }
       } catch (error) {
-        if (epoch === generation)
+        if (epoch === generation) {
           patchState(store, {
             selected: null,
             error:
@@ -144,19 +157,26 @@ export const HistoryStore = signalStore(
                 ? "Access denied. Enter a valid history token."
                 : "History is unavailable. Retry when the read service is available.",
           });
+        }
       } finally {
-        if (epoch === generation) patchState(store, { loading: false });
+        if (epoch === generation) {
+          patchState(store, { loading: false });
+        }
       }
     };
     return {
-      connect(value: string) {
+      connect(value: string, operation: string | null = null) {
+        if (operation !== null && !uuid.test(operation)) {
+          patchState(store, { error: "Invalid operation link." });
+          return;
+        }
         if (!/^[A-Za-z0-9_-]{32,128}$/.test(value)) {
           patchState(store, { error: "Enter a valid history token." });
           return;
         }
         token = value;
         patchState(store, { connected: true });
-        void load(null);
+        void load(null, operation);
       },
       disconnect() {
         generation++;
@@ -167,10 +187,14 @@ export const HistoryStore = signalStore(
         void load(null);
       },
       older() {
-        if (store.next()) void load(store.next());
+        if (store.next()) {
+          void load(store.next());
+        }
       },
       select(operation: string) {
-        if (uuid.test(operation)) void load(null, operation);
+        if (uuid.test(operation)) {
+          void load(null, operation);
+        }
       },
     };
   }),

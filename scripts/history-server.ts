@@ -51,6 +51,17 @@ createServer(async (incoming, outgoing) => {
       return;
     }
     const content = await readFile(resolve(directory, name));
+    if (type.startsWith("text/html")) {
+      const headers = await readFile(resolve(directory, "_headers"), "utf8");
+      const policy = /^ {2}Content-Security-Policy: ([^\r\n]+)$/m.exec(
+        headers,
+      )?.[1];
+      if (!policy?.includes("style-src 'self' 'sha256-")) {
+        outgoing.writeHead(503).end("History preview requires the CSP build");
+        return;
+      }
+      outgoing.setHeader("Content-Security-Policy", policy);
+    }
     outgoing.writeHead(200, { "Content-Type": type });
     outgoing.end(content);
   } catch {

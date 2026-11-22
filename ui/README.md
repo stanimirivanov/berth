@@ -23,6 +23,10 @@ CI installs Chromium and runs the same checks. The UI is a separate package beca
 Angular 22 requires TypeScript 6; the Node trial keeps TypeScript 7. Versions and
 both lockfiles are pinned. Dependency lifecycle scripts remain explicitly disabled.
 
+Use `pnpm build:ui` to produce preview and release assets together with their
+CSP hashes. The loopback server reads the generated Pages `_headers` file
+when serving HTML.
+
 ## Preview actual retained records
 
 Migration 008 from PR #88 must first be installed by the owner in the dedicated
@@ -35,12 +39,18 @@ Neon database. This PR installs nothing and makes no cloud requests during tests
   administrator API key. No provider credentials belong in the browser or service.
 - Run `pnpm history:serve` from the repository root after building the UI. It binds
   only `http://127.0.0.1:4201` and serves the UI/API at the same origin, with a strict
-  CSP and no CORS. Open that exact URL and enter the history token.
-- Click **Load history**, choose an operation for detail, and use **Older operations**,
-  **Newest operations** or **Refresh history**. There is no automatic polling/retry.
+  CSP and no CORS. Open that exact URL.
+- From **Infrastructure**, open **Operation history**. The interim Infrastructure
+  page shows that inventory is unavailable and makes no inventory request.
+- Enter the history token, click **Load history**, and choose an operation for
+  detail. Use **Older operations**, **Newest operations** or **Refresh history**
+  to browse. There is no automatic polling or retry.
 - **Disconnect** clears the in-memory token and records and invalidates late
   responses. Reloading the page also clears access; no browser storage or cookies
   are used. Entering a token does not connect to any cloud provider API.
+- Use in-app navigation in this slice. Direct serving of operation URLs in the
+  preview server and Pages is tracked by
+  [M01-PR2](https://github.com/stanimirivanov/berth/issues/113).
 - The read service creates one restricted connection per admitted read, establishes
   a read-only transaction, checks SQL privilege drift and invokes only the two
   owner-installed history read functions. Session statement timeout is 2 seconds,

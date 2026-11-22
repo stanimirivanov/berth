@@ -5,6 +5,7 @@
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
+      "prefix": "berth",
       "architect": {
         "build": {
           "builder": "@angular/build:application",

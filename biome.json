@@ -8,5 +8,25 @@
     "rules": {
       "preset": "recommended"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noCommonJs": "error",
+            "noNamespace": "error",
+            "useConst": "error",
+            "useExportType": "error",
+            "useImportType": "error"
+          },
+          "suspicious": {
+            "noConstEnum": "error",
+            "noVar": "error"
+          }
+        }
+      }
+    }
+  ]
 }

@@ -24,6 +24,62 @@ docs/comment-quality.md       declaration contract standard
 docs/harness-failures.md       sanitized failures and controls
 ```
 
+## Source style
+
+Use the [Google TypeScript style guide](https://google.github.io/styleguide/tsguide.html)
+for TypeScript changes. Use ES modules, mark type-only imports and exports,
+prefer `const`, and keep one variable per declaration. Follow Berth's Biome
+formatting, including its quote style, the ESLint rules, and the
+[declaration documentation contract](docs/comment-quality.md).
+
+For `ui/src/`, also follow the [Angular style guide](https://angular.dev/style-guide).
+Group related files by feature. Keep bootstrap in `main.ts` and keep each
+component's TypeScript, HTML template and CSS together as matching hyphenated
+basenames. Use `templateUrl` and `styleUrl`. Keep dependencies and fields
+above component methods, use `protected` for template-only members, and move
+complex template expressions into the component's presentation logic.
+
+Prefer the pinned [Angular CLI generator](https://angular.dev/cli/generate)
+when creating components, services, directives, pipes, guards and other Angular
+artifacts with a matching schematic. Run `pnpm --dir ui exec ng generate` from
+the repository root and use `--path` to target the owning feature. Preview the
+scaffold with `--dry-run`, for example:
+
+```bash
+pnpm --dir ui exec ng generate component usage-summary --path src/infrastructure --dry-run
+```
+
+Review the generated files against the component conventions below. Keep
+`styleUrl` and set `encapsulation: ViewEncapsulation.None`.
+
+Scope component selectors under the owning host element. Use
+`ViewEncapsulation.None` so the renderer keeps those selectors stable for the
+build-time CSP hashes. Keep Angular's default CSS variable namespace and use
+`ui/src/styles.css` for shared tokens and defaults.
+
+`pnpm build:ui` hashes decoded CSS from the pinned Angular AOT browser chunks,
+including lazy chunks, after applying the default CSS variable substitution.
+It adds the hashes to `style-src` in the published Pages `_headers` file.
+Review and test this extraction when updating Angular. The build rejects
+unsupported recognized style definitions and a header line beyond the Pages
+limit. The preview reads the same generated policy. Chromium verifies that
+the approved styles apply and unlisted inline styles are blocked.
+[Angular CSP guidance](https://angular.dev/best-practices/security#configure-styles-for-static-hosting)
+· [Pages header rules](https://developers.cloudflare.com/pages/configuration/headers/)
+
+`pnpm lint` checks TypeScript module syntax, type-only imports and exports,
+constant declarations, and unsupported constructs such as namespaces and
+const enums. UI TypeScript also requires braces and one variable per
+declaration. `pnpm lint:angular` checks Berth selector naming, dependency
+injection, standalone components, signal and lifecycle conventions, and
+template control flow, strict equality and type escapes. The component
+layout rule requires matching class and file names, relative references to
+sibling HTML and CSS, and the encapsulation setting required by the hash
+build. Inline template and style metadata are rejected.
+
+Review feature placement, template complexity, member visibility, selector
+scope and CLI scaffold choice during code review.
+
 ## Ownership and effects
 
 | Owner | Owned state/effects | Allowed dependencies |
