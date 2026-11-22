@@ -44,7 +44,13 @@ decision](0003-project-current-history-and-preserve-dated-evidence.md) and the
 | Detail `404` | Show **Operation not found**, clear any prior detail for that operation and keep the list available. |
 | Access denied | Clear the token and all loaded operation data and discard in-flight replies from the old access state. On `401`, keep the current URL and prompt for a valid token. On `403`, explain the site is blocked and direct the owner to the configured Berth URL. |
 
-The panes track their results separately. They can sequence requests because the
-current Neon read service admits one read at a time per instance. Refresh and
-retry are manual. Validate the history token locally as 32–128 characters from
-`A–Z`, `a–z`, `0–9`, `_` or `-` before making a request.
+The panes track their results separately. The browser dispatches one history read
+at a time because the Neon service admits one read per instance. On entry from
+a saved link, read the detail first, then load the initial list if needed. When
+a read is already dispatched, let it finish and give the latest queued detail
+priority over a queued list read. A newer request for the same pane supersedes
+its pending result. Any access denial for the current token clears both panes,
+including when the responding read was superseded.
+
+Refresh and retry are manual. Validate the history token locally as 32–128
+characters from `A–Z`, `a–z`, `0–9`, `_` or `-` before making a request.
