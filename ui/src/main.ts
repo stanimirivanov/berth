@@ -1,11 +1,13 @@
 import { bootstrapApplication } from "@angular/platform-browser";
-import { provideRouter } from "@angular/router";
+import { provideRouter, UrlSerializer } from "@angular/router";
 import { App } from "./app";
 import { Infrastructure } from "./infrastructure/infrastructure";
 import { OperationHistory } from "./operation-history/operation-history";
+import { OperationUrlSerializer } from "./operation-history/operation-url-serializer";
 
 bootstrapApplication(App, {
   providers: [
+    { provide: UrlSerializer, useClass: OperationUrlSerializer },
     provideRouter([
       {
         path: "",

@@ -9,12 +9,35 @@ const api = historyApi(
   historyReader(process.env),
 );
 const directory = resolve("ui/dist/history/browser");
+const htmlType = "text/html; charset=utf-8";
 const types: Record<string, string> = {
-  html: "text/html; charset=utf-8",
+  html: htmlType,
   js: "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8",
   ico: "image/x-icon",
 };
+
+/** Serve the shell only for canonical UI routes, leaving identifier validation to Angular. */
+function documentRoute(path: string) {
+  return path === "/" || /^\/operations(?:\/[^/]+)?$/.test(path);
+}
+
+/** Read a flat build asset, distinguishing an asset miss from broken preview output. */
+async function readAsset(path: string, shell: boolean) {
+  try {
+    return await readFile(resolve(directory, path));
+  } catch (error) {
+    if (
+      !shell &&
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
+}
 
 /** Explicit loopback preview server; no credentials are read until an authenticated history request. */
 createServer(async (incoming, outgoing) => {
@@ -40,18 +63,17 @@ createServer(async (incoming, outgoing) => {
       outgoing.end(await response.text());
       return;
     }
-    const name = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-    if (!/^[A-Za-z0-9._-]+$/.test(name) || name === "." || name === "..") {
-      outgoing.writeHead(404).end();
-      return;
-    }
-    const type = types[name.split(".").at(-1) ?? ""];
-    if (!type) {
-      outgoing.writeHead(404).end();
-      return;
-    }
-    const content = await readFile(resolve(directory, name));
-    if (type.startsWith("text/html")) {
+    const shell = documentRoute(url.pathname);
+    const name = shell ? "index.html" : url.pathname.slice(1);
+    const extension = name.split(".").at(-1) ?? "";
+    const type =
+      /^[A-Za-z0-9._-]+$/.test(name) && Object.hasOwn(types, extension)
+        ? types[extension]
+        : undefined;
+    const asset = type ? await readAsset(name, shell) : undefined;
+    const content = asset ?? (await readFile(resolve(directory, "404.html")));
+    const contentType = asset && type ? type : htmlType;
+    if (contentType === htmlType) {
       const headers = await readFile(resolve(directory, "_headers"), "utf8");
       const policy = /^ {2}Content-Security-Policy: ([^\r\n]+)$/m.exec(
         headers,
@@ -62,7 +84,7 @@ createServer(async (incoming, outgoing) => {
       }
       outgoing.setHeader("Content-Security-Policy", policy);
     }
-    outgoing.writeHead(200, { "Content-Type": type });
+    outgoing.writeHead(asset ? 200 : 404, { "Content-Type": contentType });
     outgoing.end(content);
   } catch {
     outgoing.writeHead(503).end("History preview unavailable");

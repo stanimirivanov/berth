@@ -69,10 +69,6 @@ test("the history detail route passes its operation identifier to the authentica
   page,
 }) => {
   const path = `/operations/${first}`;
-  // This test supplies the shell for the initial document. Serving saved links
-  // in preview and on Pages is a separate delivery issue.
-  const shell = await page.request.get("/");
-  await page.route(`**${path}`, (route) => route.fulfill({ response: shell }));
   const requests: string[] = [];
   await page.route("**/api/history**", (route) => {
     requests.push(new URL(route.request().url()).pathname);
@@ -86,7 +82,8 @@ test("the history detail route passes its operation identifier to the authentica
           : item(first),
     });
   });
-  await page.goto(path);
+  const document = await page.goto(path);
+  expect(document?.status()).toBe(200);
   await expect(page.getByLabel("History access token")).toBeVisible();
   await expect(page.getByRole("region", { name: "History access" })).toHaveCSS(
     "border-top-width",
@@ -113,6 +110,89 @@ test("the history detail route passes its operation identifier to the authentica
     page.getByRole("heading", { name: "Operation details" }),
   ).toBeVisible();
   expect(requests.at(-1)).toBe(`/api/history/${first}`);
+  const refreshed = await page.reload();
+  expect(refreshed?.status()).toBe(200);
+  await expect(page.getByLabel("History access token")).toHaveValue("");
+});
+
+test("malformed operation links explain the error without a history read", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith("/api/history")) {
+      requests.push(pathname);
+    }
+  });
+  for (const path of [
+    "/operations/not-a-uuid",
+    `/operations/not-a-uuid;operation=${first}`,
+    "/operations/%ZZ",
+    "/operations/;invalid",
+    `/operations/${first})`,
+    `/operations/${first}()`,
+    `/operations/${first};`,
+    "/operations/(unknown:foo)",
+  ]) {
+    const document = await page.goto(path);
+    expect(document?.status()).toBe(200);
+    await expect(
+      page.getByRole("heading", { name: "Invalid operation link" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("History access token")).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe(path);
+  }
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "Operation history" })
+    .click();
+  await expect(page.getByLabel("History access token")).toBeVisible();
+  expect(requests).toEqual([]);
+
+  const refreshed = await page.reload();
+  expect(refreshed?.status()).toBe(200);
+  await expect(page.getByLabel("History access token")).toBeVisible();
+});
+
+test("preview separates static misses from history API errors", async ({
+  request,
+}) => {
+  const htmlResponse = await request.get("/");
+  expect(htmlResponse.ok()).toBe(true);
+  const shell = await htmlResponse.text();
+  const [rewrites, notFound] = await Promise.all([
+    readFile(
+      new URL("../dist/history/browser/_redirects", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../dist/history/browser/404.html", import.meta.url),
+      "utf8",
+    ),
+  ]);
+  expect(rewrites.trim().split("\n")).toEqual([
+    "/operations / 200",
+    "/operations/:operation / 200",
+  ]);
+  for (const path of [
+    "/operations/",
+    "/operations/a/b",
+    "/missing-bundle.js",
+  ]) {
+    const miss = await request.get(path, { maxRedirects: 0 });
+    expect(miss.status()).toBe(404);
+    expect(miss.headers()["content-type"]).toContain("text/html");
+    expect(miss.headers()["content-security-policy"]).toBe(
+      htmlResponse.headers()["content-security-policy"],
+    );
+    expect(await miss.text()).toBe(notFound);
+  }
+  const apiMiss = await request.get("/api/history/too/deep");
+  expect(apiMiss.status()).toBe(404);
+  expect(apiMiss.headers()["content-type"]).toContain("application/json");
+  expect(await apiMiss.json()).toEqual({ error: "not-found" });
+  expect(notFound).not.toBe(shell);
 });
 
 test("the production CSP allows compiled component CSS and blocks unlisted inline styles", async ({

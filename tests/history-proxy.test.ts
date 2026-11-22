@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { historyApi } from "../src/trial/history-api.js";
+import { onRequest as nestedMiss } from "../ui/functions/api/history/[[rest]].js";
 import { onRequest as detail } from "../ui/functions/api/history/[operation].js";
 import { onRequest as list } from "../ui/functions/api/history/index.js";
 
@@ -127,6 +128,22 @@ test("Pages rejects invalid auth, origin, method, paths, query and target config
       incoming.url,
     );
   assert.equal(calls, 0);
+});
+
+test("the Pages history catch-all returns a JSON miss without contacting upstream", async () => {
+  const response = await nestedMiss(
+    { request: request("/api/history/too/deep"), env },
+    async () => {
+      assert.fail("An unknown history path must not reach Neon");
+    },
+  );
+  assert.equal(response.status, 404);
+  assert.match(
+    response.headers.get("content-type") ?? "",
+    /^application\/json/,
+  );
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await response.json(), { error: "not-found" });
 });
 
 test("Pages returns fixed errors for redirects, upstream failures, oversized or malformed bodies", async () => {
