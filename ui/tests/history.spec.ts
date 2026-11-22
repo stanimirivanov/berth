@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-const first = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-  second = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const first = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const second = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const item = (operation: string) => ({
   operation,
   startedAt: "2026-11-20T06:50:00Z",
@@ -36,7 +36,9 @@ test("the shell marks the active page and opens the existing history access scre
   const requests: string[] = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
-    if (path.startsWith("/api/")) requests.push(path);
+    if (path.startsWith("/api/")) {
+      requests.push(path);
+    }
   });
   await page.goto("/");
   await expect(

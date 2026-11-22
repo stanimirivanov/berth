@@ -50,7 +50,8 @@ pnpm --dir ui exec ng generate component usage-summary --path src/infrastructure
 ```
 
 Review the generated files against the component and static stylesheet
-conventions below.
+conventions below. Move generated component CSS into the static bundle and
+remove the generated `styleUrl` entry.
 
 Bundle the co-located CSS through `ui/src/styles.css` and scope its selectors
 to the owning component. Use the global file for shared tokens and defaults.
@@ -58,6 +59,20 @@ This keeps the CSS in the static stylesheet under Berth's `style-src 'self'`
 policy. Angular's runtime component style injection requires a different CSP
 setup. Verify component styling against the production build in Chromium.
 [Angular CSP guidance](https://angular.dev/best-practices/security#configure-styles-for-static-hosting)
+
+`pnpm lint` checks TypeScript module syntax, type-only imports and exports,
+constant declarations, and unsupported constructs such as namespaces and
+const enums. UI TypeScript also requires braces and one variable per
+declaration. `pnpm lint:angular` checks Berth selector naming, dependency
+injection, standalone components, signal and lifecycle conventions, and
+template control flow, strict equality and type escapes. The component
+layout rule requires matching class and file names, sibling HTML and CSS,
+and an external template. It rejects component metadata that injects CSS
+at runtime.
+
+Review feature placement, template complexity, member visibility and CLI
+scaffold choice during code review. Chromium verifies that the production
+stylesheet works under the preview CSP.
 
 ## Ownership and effects
 
