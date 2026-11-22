@@ -144,6 +144,7 @@ export const HistoryStore = signalStore(
     let token = "";
     let session = 0;
     let active = false;
+    let inboxPage: ListResult | null = null;
     const pending: Partial<Record<Read["pane"], Read>> = {};
     const latest: Partial<Record<Read["pane"], Read>> = {};
 
@@ -151,6 +152,7 @@ export const HistoryStore = signalStore(
     const clearAccess = (accessError: State["accessError"] = null) => {
       session++;
       token = "";
+      inboxPage = null;
       delete pending.list;
       delete pending.detail;
       delete latest.list;
@@ -268,10 +270,33 @@ export const HistoryStore = signalStore(
       void drain();
     };
 
+    /** Restore the page that opened the detail, preserving newer data for its cursor. */
+    const restoreInbox = () => {
+      const page = inboxPage;
+      inboxPage = null;
+      if (!page) {
+        return;
+      }
+      const listRead = latest.list;
+      if (listRead?.pane === "list" && listRead.before !== page.before) {
+        delete pending.list;
+        delete latest.list;
+        patchState(store, { listLoading: false });
+      }
+      if (store.list()?.before !== page.before) {
+        patchState(store, { list: page, listFailure: null });
+      }
+    };
+
     /** Retain detail data only while reading the same operation. */
     const select = (operation: string | null) => {
       if (operation === store.operation()) {
         return;
+      }
+      if (operation) {
+        inboxPage = store.list();
+      } else {
+        restoreInbox();
       }
       delete pending.detail;
       delete latest.detail;

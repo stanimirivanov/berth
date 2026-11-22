@@ -42,9 +42,13 @@ Neon database. This PR installs nothing and makes no cloud requests during tests
   CSP and no CORS. Open that exact URL.
 - From **Infrastructure**, open **Operation history**. The interim Infrastructure
   page shows that inventory is unavailable and makes no inventory request.
-- Enter the history token, click **Load history**, and choose an operation for
-  detail. Use **Older operations**, **Newest operations** or **Refresh history**
-  to browse. There is no automatic polling or retry.
+- Enter the history token and click **Load history**. The Review inbox groups
+  records by whether they need attention. Open a record to see its follow-up
+  reasons, owner-procedure links and lifecycle evidence.
+- Use **Older operations**, **Newest operations** or **Refresh history** to
+  browse. On a narrow screen, detail takes the full width. **Back to inbox**
+  restores the page the detail opened from and focuses the selected row if present.
+  There is no automatic polling or retry.
 - **Disconnect** clears the in-memory token and records and invalidates late
   responses. Reloading the page also clears access; no browser storage or cookies
   are used. Entering a token does not connect to any cloud provider API.

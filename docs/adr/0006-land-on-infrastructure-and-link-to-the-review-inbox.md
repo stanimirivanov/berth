@@ -37,3 +37,10 @@ operations into **Needs attention** and **Other operations**. Keep the existing
 detail hierarchy, linkable details and responsive list/detail layout. The
 feasibility verdict, resource presence and each recorded operation outcome
 remain distinct. See the [history API decision](0005-use-existing-history-api-with-independent-read-states.md).
+
+The detail URL carries only the selected operation. The tab keeps the
+successful inbox page that opened the detail and its cursor in memory. Browser
+Back and **Back to inbox** restore that page and focus the previously selected operation if its row
+is present. Otherwise, focus the inbox heading. Forward reopens the detail
+and focuses its heading. A fresh saved link prompts for access, reads the
+selected operation first and fills in the newest inbox page.
