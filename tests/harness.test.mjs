@@ -399,3 +399,32 @@ test("history boundaries permit only the read composition and reject provider or
     );
   }
 });
+
+test("retry boundaries permit the read-only observer and reject executor coupling", () => {
+  const sources = {
+    "src/trial/empty-control.ts": "",
+    "src/trial/retry-api.ts": 'import "./empty-control.js";',
+    "src/trial/retry-index.ts":
+      'import "./retry-api.js"; import "./retry-runtime.js";',
+    "src/trial/retry-runtime.ts":
+      'import "./retry-reconciliation.js"; import "../providers/oci/retry-observation.js";',
+    "src/trial/retry-reconciliation.ts":
+      'import "../providers/oci/retry-observation.js";',
+    "src/providers/oci/retry-observation.ts": "",
+    "src/providers/oci/client.ts": "",
+    "src/trial/executor.ts": "",
+  };
+  assert.deepEqual(analyze(sources), []);
+  assert.ok(
+    analyze({
+      ...sources,
+      "src/trial/retry-runtime.ts": 'import "./executor.js";',
+    }).some((error) => error.rule === "architecture"),
+  );
+  assert.ok(
+    analyze({
+      ...sources,
+      "src/providers/oci/retry-observation.ts": 'import "./client.js";',
+    }).some((error) => error.rule === "architecture"),
+  );
+});

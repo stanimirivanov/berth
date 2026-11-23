@@ -95,6 +95,10 @@ jobs:
       - run: pnpm run test:inventory-db
         env:
           BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run test:retry-db
+        env:
+          BERTH_TEST_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      - run: pnpm run build:retry
       - run: pnpm run build:live-executor
       - run: pnpm run test:admission-db
         env:
