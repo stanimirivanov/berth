@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scheduledHandler } from "../src/trial/scheduled.js";
+import { scheduledHandler } from "../src/trial/scheduled.ts";
 
 const start = Date.parse("2026-11-13T10:00:00Z");
 

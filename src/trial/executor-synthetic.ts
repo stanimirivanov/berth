@@ -2,8 +2,8 @@ import type {
   BucketIntent,
   ObjectSdk,
   ObservedBucket,
-} from "../providers/oci/client.js";
-import { probeContent, probeIntent } from "../providers/oci/trial-object.js";
+} from "../providers/oci/client.ts";
+import { probeContent, probeIntent } from "../providers/oci/trial-object.ts";
 /** Two booleans model the proof's external service; no credentials or object bytes are stored. */
 export interface SyntheticCloud {
   bucket: boolean;

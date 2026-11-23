@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readMetric, usageQuery } from "../src/providers/oci/usage.js";
+import { readMetric, usageQuery } from "../src/providers/oci/usage.ts";
 
 const uploadedAt = Date.parse("2026-11-14T00:10:00Z"),
   now = uploadedAt + 7200000;
@@ -86,7 +86,7 @@ test("wrong bucket, compartment, tier and ambiguous streams cannot warn", () => 
 });
 
 test("Monitoring transport bounds bodies, rejects pagination and never retries", async () => {
-  const { monitoringTransport } = await import("../src/providers/oci/usage.js");
+  const { monitoringTransport } = await import("../src/providers/oci/usage.ts");
   for (const mode of ["oversize", "pagination", "error"]) {
     let calls = 0,
       cancelled = false;
@@ -124,7 +124,7 @@ test("Monitoring transport bounds bodies, rejects pagination and never retries",
 });
 
 test("Monitoring transport preserves a fixed signed target and parsed source payload", async () => {
-  const { monitoringTransport } = await import("../src/providers/oci/usage.js");
+  const { monitoringTransport } = await import("../src/providers/oci/usage.ts");
   let sends = 0;
   const transport = monitoringTransport(
     "eu-frankfurt-1",

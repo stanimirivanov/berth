@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readinessTransport } from "../src/providers/oci/readiness.js";
+import { readinessTransport } from "../src/providers/oci/readiness.ts";
 
 test("readiness sends exactly one bounded signed GET and rejects pagination or ambiguous target evidence", async () => {
   let calls = 0;

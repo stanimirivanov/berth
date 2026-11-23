@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
-import { makeCheckpointHandler } from "./checkpoint-handler.js";
-import { runCheckpoint } from "./checkpoint-run.js";
+import { makeCheckpointHandler } from "./checkpoint-handler.ts";
+import { runCheckpoint } from "./checkpoint-run.ts";
 
 const boot = randomUUID();
 

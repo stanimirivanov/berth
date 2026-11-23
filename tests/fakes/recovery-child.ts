@@ -1,10 +1,10 @@
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { NoRetryConfigurationDetails } from "oci-common";
 import { Client } from "pg";
-import type { ObjectSdk } from "../../src/providers/oci/client.js";
-import { runExecutor } from "../../src/trial/executor.js";
-import { executorStore } from "../../src/trial/executor-store.js";
-import { mutations, sdkMethods, writeBoundary } from "./faults.js";
+import type { ObjectSdk } from "../../src/providers/oci/client.ts";
+import { runExecutor } from "../../src/trial/executor.ts";
+import { executorStore } from "../../src/trial/executor-store.ts";
+import { mutations, sdkMethods, writeBoundary } from "./faults.ts";
 
 const [configFile] = process.argv.slice(2);
 if (!configFile) throw Error("Fixture config missing");

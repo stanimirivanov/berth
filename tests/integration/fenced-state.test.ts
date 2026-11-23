@@ -4,8 +4,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import * as Effect from "effect/Effect";
 import { Client } from "pg";
-import { claimState, makeFencedState } from "../../src/trial/fenced-state.js";
-import { lifecycle } from "./fenced-lifecycle.js";
+import { claimState, makeFencedState } from "../../src/trial/fenced-state.ts";
+import { lifecycle } from "./fenced-lifecycle.ts";
 
 test("fenced state rejects stale generations and preserves state through takeover", {
   timeout: 30000,

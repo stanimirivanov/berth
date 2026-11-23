@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import type {
   RetryObservation,
   RetryObserver,
-} from "../../providers/oci/retry-observation.js";
-import type { RetryAction } from "./api.js";
-import type { RetryLedger, RetryProof } from "./contract.js";
+} from "../../providers/oci/retry-observation.ts";
+import type { RetryAction } from "./api.ts";
+import type { RetryLedger, RetryProof } from "./contract.ts";
 
 /** Claim once, commit every reservation before its GET, and account under the selected execution scope. */
 export function retryActions(

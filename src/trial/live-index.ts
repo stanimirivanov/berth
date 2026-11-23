@@ -1,5 +1,5 @@
-import { makeLiveHandler } from "./live-hosted.js";
-import { executeLive, executeLiveAdmission } from "./live-runtime.js";
+import { makeLiveHandler } from "./live-hosted.ts";
+import { executeLive, executeLiveAdmission } from "./live-runtime.ts";
 
 /** Separate live root: imports perform no SQL, signing, deployment or provider requests. */
 export default makeLiveHandler(

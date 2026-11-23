@@ -1,8 +1,8 @@
 import {
   decodeInventoryPage,
   type InventoryPage,
-} from "../inventory/contract.js";
-import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.js";
+} from "../inventory/contract.ts";
+import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
 /** Read one offering page through a connection granted only Inventory reader capability. */
 export function retainedInventoryLedger(db: RetainedTrialDatabase) {

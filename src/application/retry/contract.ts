@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import type { RetryObservation } from "../../providers/oci/retry-observation.js";
+import type { RetryObservation } from "../../providers/oci/retry-observation.ts";
 
 const operation = Schema.String.check(
   Schema.isPattern(

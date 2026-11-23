@@ -4,9 +4,9 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { capabilities } from "../scripts/oci-admin.js";
-import { runOciAdmin } from "../scripts/oci-admin-setup.js";
-import { observedOciResponses } from "./fixtures/oci-observed.js";
+import { capabilities } from "../scripts/oci-admin.ts";
+import { runOciAdmin } from "../scripts/oci-admin-setup.ts";
+import { observedOciResponses } from "./fixtures/oci-observed.ts";
 
 const id = (kind: string) => `ocid1.${kind}.oc1..aaaaaaaarecovery`;
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retainedHistoryLedger } from "../src/application/retained-trial-ledger/history.js";
+import { retainedHistoryLedger } from "../src/application/retained-trial-ledger/history.ts";
 
 test("operation history uses only parameterized read functions and redacts database failures", async () => {
   const queries: { text: string; values: unknown[] | undefined }[] = [];

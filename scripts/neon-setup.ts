@@ -9,7 +9,7 @@ import {
   prepareDatabase,
   SetupError,
   verifyRuntime,
-} from "./neon-database.js";
+} from "./neon-database.ts";
 
 export interface Target extends DatabaseTarget {
   project: string;

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { historyApi } from "../src/application/history/api.js";
-import { onRequest as nestedMiss } from "../ui/functions/api/history/[[rest]].js";
-import { onRequest as detail } from "../ui/functions/api/history/[operation].js";
-import { onRequest as list } from "../ui/functions/api/history/index.js";
+import { historyApi } from "../src/application/history/api.ts";
+import { onRequest as nestedMiss } from "../ui/functions/api/history/[[rest]].ts";
+import { onRequest as detail } from "../ui/functions/api/history/[operation].ts";
+import { onRequest as list } from "../ui/functions/api/history/index.ts";
 
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const env = {

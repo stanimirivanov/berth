@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as Effect from "effect/Effect";
-import { claimState, makeFencedState } from "../src/trial/fenced-state.js";
+import { claimState, makeFencedState } from "../src/trial/fenced-state.ts";
 
 test("fenced adapter captures ownership and never reacquires on uncertain writes", async () => {
   const calls: unknown[][] = [];

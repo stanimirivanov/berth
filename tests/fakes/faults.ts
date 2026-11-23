@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { NoRetryConfigurationDetails } from "oci-common";
 import type { Client } from "pg";
-import { FakeObjects } from "./oci.js";
+import { FakeObjects } from "./oci.ts";
 
 /** Stable semantic SQL boundary; values, identities and provider bodies never become labels. */
 export function writeBoundary(sql: string, values: unknown[], action = "") {

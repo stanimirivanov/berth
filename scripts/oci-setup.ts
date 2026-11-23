@@ -6,8 +6,8 @@ import {
   parseOciConfig,
   policyStatements,
   verifyOciAccess,
-} from "./oci-access.js";
-import { readPrivateText } from "./oci-files.js";
+} from "./oci-access.ts";
+import { readPrivateText } from "./oci-files.ts";
 
 export async function runOciSetup(args: string[]): Promise<void> {
   const { values } = parseArgs({

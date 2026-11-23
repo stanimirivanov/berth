@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { thresholdWarning } from "../src/trial/warnings.js";
+import { thresholdWarning } from "../src/trial/warnings.ts";
 
 test("app threshold warns at equality without a provider-cap claim", () => {
   assert.equal(thresholdWarning({ status: "unknown", value: null }), false);

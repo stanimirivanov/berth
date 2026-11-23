@@ -8,8 +8,8 @@ import {
   parseOciConfig,
   policyStatements,
   verifyOciAccess,
-} from "../scripts/oci-access.js";
-import { runOciSetup } from "../scripts/oci-setup.js";
+} from "../scripts/oci-access.ts";
+import { runOciSetup } from "../scripts/oci-setup.ts";
 
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const pem = keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString();

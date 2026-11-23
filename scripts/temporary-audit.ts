@@ -8,8 +8,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAuditDiff } from "./audit-diff.js";
-import { evaluateException } from "./audit-exception.js";
+import { collectAuditDiff } from "./audit-diff.ts";
+import { evaluateException } from "./audit-exception.ts";
 
 // Historical command retained for diagnostics; #59 retired its approval after the native gate cleared.
 const formerExpiresAt = Date.parse("2026-11-25T00:00:00Z");

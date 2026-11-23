@@ -1,6 +1,6 @@
 import { open } from "node:fs/promises";
 import { join } from "node:path";
-import { OciSetupError } from "./oci-access.js";
+import { OciSetupError } from "./oci-access.ts";
 
 export class OciUserRejection extends OciSetupError {
   constructor(

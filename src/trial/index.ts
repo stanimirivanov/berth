@@ -6,8 +6,8 @@ import {
 } from "oci-common";
 import { ObjectStorageClient } from "oci-objectstorage";
 import { Client } from "pg";
-import { makeProbe, ProbeFailure, type ProbeStage } from "./runtime-probe.js";
-import { runSyntheticLifecycle } from "./synthetic-lifecycle.js";
+import { makeProbe, ProbeFailure, type ProbeStage } from "./runtime-probe.ts";
+import { runSyntheticLifecycle } from "./synthetic-lifecycle.ts";
 
 const bootId = randomUUID();
 let invocations = 0;

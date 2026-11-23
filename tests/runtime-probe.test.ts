@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { makeProbe } from "../src/trial/runtime-probe.js";
-import { runSyntheticLifecycle } from "../src/trial/synthetic-lifecycle.js";
+import { makeProbe } from "../src/trial/runtime-probe.ts";
+import { runSyntheticLifecycle } from "../src/trial/synthetic-lifecycle.ts";
 
 test("actual Alchemy planner/apply creates, reads and destroys an isolated synthetic resource", async () => {
   const result = await runSyntheticLifecycle();
@@ -103,7 +103,7 @@ test("scheduler validates envelope, records stable duplicate ids and expires wit
 });
 
 test("deployment environment overrides both owner URLs and excludes administrator secrets", async () => {
-  const { deploymentEnvironment } = await import("../src/trial/deployment.js");
+  const { deploymentEnvironment } = await import("../src/trial/deployment.ts");
   const credentials = {
     DATABASE_URL:
       "postgresql://berth_runtime:secret@ep-test.us-east-2.aws.neon.tech/neondb?sslmode=verify-full",
@@ -186,7 +186,7 @@ test("Neon adapter's empty POST stream is accepted without accepting input", asy
 });
 
 test("probe failures expose only a controlled stage, never provider error text", async () => {
-  const { ProbeFailure } = await import("../src/trial/runtime-probe.js");
+  const { ProbeFailure } = await import("../src/trial/runtime-probe.ts");
   const handler = makeProbe({
     token: "x".repeat(43),
     expiresAt: Date.now() + 60000,

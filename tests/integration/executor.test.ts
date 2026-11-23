@@ -3,12 +3,12 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { runExecutor } from "../../src/trial/executor.js";
-import { executorApi } from "../../src/trial/executor-api.js";
-import { executorStore } from "../../src/trial/executor-store.js";
-import { syntheticSdk } from "../../src/trial/executor-synthetic.js";
-import { makeLedger } from "../../src/trial/ledger.js";
-import { FakeObjects } from "../fakes/oci.js";
+import { runExecutor } from "../../src/trial/executor.ts";
+import { executorApi } from "../../src/trial/executor-api.ts";
+import { executorStore } from "../../src/trial/executor-store.ts";
+import { syntheticSdk } from "../../src/trial/executor-synthetic.ts";
+import { makeLedger } from "../../src/trial/ledger.ts";
+import { FakeObjects } from "../fakes/oci.ts";
 
 const digest =
   "fbbab289f7f94b25736c58be46a994c441fd02552cc6022352e3d86d2fab7c83";

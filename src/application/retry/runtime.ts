@@ -7,14 +7,14 @@ import { Client, type ClientConfig } from "pg";
 import {
   type RetryObserver,
   retryObserver,
-} from "../../providers/oci/retry-observation.js";
+} from "../../providers/oci/retry-observation.ts";
 import {
   assertRetainedRetryRole,
   type RetryConnection,
   retainedRetryLedger,
-} from "../retained-trial-ledger/retry.js";
-import type { RetryAction } from "./api.js";
-import { retryActions } from "./reconciliation.js";
+} from "../retained-trial-ledger/retry.ts";
+import type { RetryAction } from "./api.ts";
+import { retryActions } from "./reconciliation.ts";
 
 /** Server-only configuration for owner sign-in and separately scoped credentials. */
 type Environment = Record<string, string | undefined>;

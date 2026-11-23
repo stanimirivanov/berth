@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { writeBoundary } from "./fakes/faults.js";
+import { writeBoundary } from "./fakes/faults.ts";
 
 test("fault inventory names writes without exposing arguments and excludes pure reads", () => {
   assert.equal(
@@ -45,7 +45,7 @@ test("fault inventory names writes without exposing arguments and excludes pure 
 
 test("independent provider refuses unreserved, reused and wrongly metered requests before effects", async (t) => {
   const { Client } = await import("pg");
-  const { cloudService } = await import("./fakes/faults.js");
+  const { cloudService } = await import("./fakes/faults.ts");
   const owner = new Client();
   let row: Record<string, unknown> | undefined = {
     id: "r1",
@@ -100,7 +100,7 @@ test("independent provider refuses unreserved, reused and wrongly metered reques
 });
 
 test("checkpoint outcome oracle rejects arbitrary stops and requires terminal recovery after provider success", async () => {
-  const { classifyRecovery } = await import("./fakes/faults.js");
+  const { classifyRecovery } = await import("./fakes/faults.ts");
   const row = {
     outcome: "needs-reconciliation",
     unknown: 1,

@@ -3,10 +3,10 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { retainedRetryLedger } from "../../src/application/retained-trial-ledger/retry.js";
-import { retryActions } from "../../src/application/retry/reconciliation.js";
-import { retryRuntime } from "../../src/application/retry/runtime.js";
-import { retryObserver } from "../../src/providers/oci/retry-observation.js";
+import { retainedRetryLedger } from "../../src/application/retained-trial-ledger/retry.ts";
+import { retryActions } from "../../src/application/retry/reconciliation.ts";
+import { retryRuntime } from "../../src/application/retry/runtime.ts";
+import { retryObserver } from "../../src/providers/oci/retry-observation.ts";
 
 const scope = {
   compartment: "ocid1.compartment.oc1..fixture",

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { historyApi } from "../src/application/history/api.js";
+import { historyApi } from "../src/application/history/api.ts";
 
 const token = "h".repeat(40),
   id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -43,7 +43,7 @@ test("history API authenticates before reads, admits strict bounded pages and ex
 
 test("history reader checks identity in a read-only transaction, closes on error and rejects provider credentials", async () => {
   const { historyReader } = await import(
-    "../src/application/history/runtime.js"
+    "../src/application/history/runtime.ts"
   );
   const env = {
     DATABASE_URL:

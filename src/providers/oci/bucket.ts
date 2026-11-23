@@ -8,7 +8,7 @@ import {
   type BucketIntent,
   createProposal,
   type ObservedBucket,
-} from "./client.js";
+} from "./client.ts";
 
 /** Minimal persisted identity, tied to the immutable saved operation and marker. */
 export interface BucketAttributes {

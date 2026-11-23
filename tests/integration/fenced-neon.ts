@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import * as Effect from "effect/Effect";
 import { Client } from "pg";
-import { readPrivateText } from "../../scripts/oci-files.js";
-import { claimState, makeFencedState } from "../../src/trial/fenced-state.js";
-import { lifecycle } from "./fenced-lifecycle.js";
+import { readPrivateText } from "../../scripts/oci-files.ts";
+import { claimState, makeFencedState } from "../../src/trial/fenced-state.ts";
+import { lifecycle } from "./fenced-lifecycle.ts";
 
 // Explicit operator-only live proof; never part of automatic tests or CI.
 let db: Client | undefined;

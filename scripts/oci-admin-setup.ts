@@ -11,11 +11,11 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { OciSetupError } from "./oci-access.js";
-import { bootstrapOci, parseAdminConfig } from "./oci-admin.js";
-import { saveUserRejection } from "./oci-diagnostics.js";
-import { readPrivateText } from "./oci-files.js";
-import { runOciRecovery } from "./oci-recovery.js";
+import { OciSetupError } from "./oci-access.ts";
+import { bootstrapOci, parseAdminConfig } from "./oci-admin.ts";
+import { saveUserRejection } from "./oci-diagnostics.ts";
+import { readPrivateText } from "./oci-files.ts";
+import { runOciRecovery } from "./oci-recovery.ts";
 
 async function save(path: string, text: string) {
   const file = await open(path, "wx", 0o600);

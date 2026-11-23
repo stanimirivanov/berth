@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { makeBucket } from "../src/providers/oci/bucket.js";
+import { makeBucket } from "../src/providers/oci/bucket.ts";
 import {
   bucketClient,
   objectClient,
   safeBucketSdk,
-} from "../src/providers/oci/client.js";
+} from "../src/providers/oci/client.ts";
 import {
   makeTrialObject,
   type ProbeReceipt,
   probeIntent,
-} from "../src/providers/oci/trial-object.js";
-import { dispatcher, intent } from "./fakes/oci.js";
-import { OciWire } from "./fakes/oci-wire.js";
+} from "../src/providers/oci/trial-object.ts";
+import { dispatcher, intent } from "./fakes/oci.ts";
+import { OciWire } from "./fakes/oci-wire.ts";
 
 async function fixture() {
   const wire = new OciWire(),

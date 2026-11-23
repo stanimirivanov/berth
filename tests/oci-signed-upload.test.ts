@@ -16,16 +16,16 @@ import {
   DefaultRequestSigner,
   SimpleAuthenticationDetailsProvider,
 } from "oci-common";
-import { liveFunction } from "../neon.js";
+import { liveFunction } from "../neon.ts";
 import {
   BucketFailure,
   boundedObjectSdk,
   objectClient,
-} from "../src/providers/oci/client.js";
-import type { ProbeReceipt } from "../src/providers/oci/trial-object.js";
-import { probeContent } from "../src/providers/oci/trial-object.js";
-import { dispatcher, intent } from "./fakes/oci.js";
-import { OciWire } from "./fakes/oci-wire.js";
+} from "../src/providers/oci/client.ts";
+import type { ProbeReceipt } from "../src/providers/oci/trial-object.ts";
+import { probeContent } from "../src/providers/oci/trial-object.ts";
+import { dispatcher, intent } from "./fakes/oci.ts";
+import { OciWire } from "./fakes/oci-wire.ts";
 
 /** Verify signatures independently, including byte hashes whenever the SDK signs body headers. */
 function verifyRequest(key: KeyObject, uri: string, init: RequestInit) {
@@ -130,7 +130,7 @@ test("official Neon bundle signs uploads and verifies one-MiB lifecycle across f
     assert.ok(entries["index.mjs"]);
     const entry = join(directory, "index.mjs");
     await writeFile(entry, entries["index.mjs"]);
-    const bundled: typeof import("./fakes/oci-signed-bundle.js") = await import(
+    const bundled: typeof import("./fakes/oci-signed-bundle.ts") = await import(
       pathToFileURL(entry).href
     );
     assert.equal(typeof bundled.default.fetch, "function");

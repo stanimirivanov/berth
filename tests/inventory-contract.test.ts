@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retainedInventoryLedger } from "../src/application/retained-trial-ledger/inventory.js";
+import { retainedInventoryLedger } from "../src/application/retained-trial-ledger/inventory.ts";
 
 test("the Inventory projection rejects presence without its dated observation or uncertainty reason", async () => {
   const at = "2026-01-01T10:00:00+00:00";

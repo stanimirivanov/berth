@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retainedRetryLedger } from "../src/application/retained-trial-ledger/retry.js";
-import { retryActions } from "../src/application/retry/reconciliation.js";
+import { retainedRetryLedger } from "../src/application/retained-trial-ledger/retry.ts";
+import { retryActions } from "../src/application/retry/reconciliation.ts";
 
 const operation = "62ebd914-6089-4e41-81a4-75081cb1cef3";
 const target = {

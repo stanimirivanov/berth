@@ -3,20 +3,20 @@ import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import test from "node:test";
 import type { HttpRequest } from "oci-common";
-import { makeBucket } from "../src/providers/oci/bucket.js";
+import { makeBucket } from "../src/providers/oci/bucket.ts";
 import {
   BucketFailure,
   bucketClient,
   objectClient,
   safeBucketSdk,
-} from "../src/providers/oci/client.js";
+} from "../src/providers/oci/client.ts";
 import {
   makeTrialObject,
   type ProbeReceipt,
   probeContent,
   probeIntent,
-} from "../src/providers/oci/trial-object.js";
-import { dispatcher, FakeObjects, intent } from "./fakes/oci.js";
+} from "../src/providers/oci/trial-object.ts";
+import { dispatcher, FakeObjects, intent } from "./fakes/oci.ts";
 
 async function fixture() {
   const sdk = new FakeObjects(),

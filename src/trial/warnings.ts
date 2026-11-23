@@ -5,8 +5,8 @@ import {
   type UsageTarget,
   type UsageTransport,
   usageQuery,
-} from "../providers/oci/usage.js";
-import type { LedgerClaim, LedgerDatabase } from "./ledger.js";
+} from "../providers/oci/usage.ts";
+import type { LedgerClaim, LedgerDatabase } from "./ledger.ts";
 /** App-owned demonstration threshold, unrelated to a provider allowance or hard cap. */
 export const usageThreshold = {
   bytes: 2097152,

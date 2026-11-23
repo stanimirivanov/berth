@@ -205,9 +205,15 @@ export function analyze(files) {
       }
       const name = target.text;
       if (name.startsWith(".")) {
-        const resolved = path.posix
-          .normalize(path.posix.join(path.posix.dirname(file), name))
-          .replace(/\.js$/, ".ts");
+        if (!name.endsWith(".ts")) {
+          fail(
+            node,
+            "architecture",
+            "Use the explicit .ts extension for local backend source imports.",
+          );
+          return;
+        }
+        const resolved = path.posix.join(path.posix.dirname(file), name);
         if (!(resolved in files))
           fail(
             node,

@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { Client, type ClientConfig } from "pg";
-import { readPrivateText } from "./oci-files.js";
+import { readPrivateText } from "./oci-files.ts";
 
 /** Use a dedicated recorder login and apply TLS settings independently of the URL. */
 function recorderConnection(value: string): ClientConfig {

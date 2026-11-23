@@ -3,8 +3,8 @@ import {
   decodeRetryReservation,
   decodeRetryStatus,
   type RetryLedger,
-} from "../retry/contract.js";
-import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.js";
+} from "../retry/contract.ts";
+import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
 /** A checked connection is opened per authenticated retry request. */
 export interface RetryConnection extends RetainedTrialDatabase {

@@ -4,21 +4,21 @@ import {
   SimpleAuthenticationDetailsProvider,
 } from "oci-common";
 import { Client } from "pg";
-import { boundedObjectSdk } from "../providers/oci/client.js";
-import { readinessTransport } from "../providers/oci/readiness.js";
-import { monitoringTransport } from "../providers/oci/usage.js";
-import { runExecutor } from "./executor.js";
-import { assertExecutorPrivileges } from "./executor-security.js";
-import { executorStore } from "./executor-store.js";
-import type { LedgerDatabase } from "./ledger.js";
+import { boundedObjectSdk } from "../providers/oci/client.ts";
+import { readinessTransport } from "../providers/oci/readiness.ts";
+import { monitoringTransport } from "../providers/oci/usage.ts";
+import { runExecutor } from "./executor.ts";
+import { assertExecutorPrivileges } from "./executor-security.ts";
+import { executorStore } from "./executor-store.ts";
+import type { LedgerDatabase } from "./ledger.ts";
 import {
   admissionStatus,
   liveAdmissionApi,
   meterAdmission,
-} from "./live-admission.js";
-import type { liveEnvironment } from "./live-environment.js";
-import type { LiveAction } from "./live-hosted.js";
-import { usageStore } from "./warnings.js";
+} from "./live-admission.ts";
+import type { liveEnvironment } from "./live-environment.ts";
+import type { LiveAction } from "./live-hosted.ts";
+import { usageStore } from "./warnings.ts";
 
 /** Invocation-local SQL connection; the runtime closes it after all executor work settles. */
 export interface LiveDatabase extends LedgerDatabase {
@@ -32,7 +32,7 @@ export interface LivePorts {
   database?: (connection: string) => LiveDatabase;
   fetch?: typeof fetch;
   /** Local provider fake for SQL integration tests; production always uses signed transport. */
-  sdk?: import("./executor.js").ExecutorOptions["sdk"];
+  sdk?: import("./executor.ts").ExecutorOptions["sdk"];
 }
 
 /** Construct single-send transports; merely constructing a signer dispatches no requests. */
@@ -167,7 +167,7 @@ async function withLiveDatabase<T>(
   ports: LivePorts,
   work: (
     db: LiveDatabase,
-    snapshot: import("./executor-store.js").ExecutionSnapshot,
+    snapshot: import("./executor-store.ts").ExecutionSnapshot,
   ) => Promise<T>,
 ): Promise<T> {
   const db = ports.database

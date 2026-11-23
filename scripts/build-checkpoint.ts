@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { buildFunctionBundle } from "@neon/config-runtime/v1";
-import { checkpointFunction } from "../neon.js";
+import { checkpointFunction } from "../neon.ts";
 
 const zip = await buildFunctionBundle(checkpointFunction);
 await writeFile("dist/checkpoint.zip", zip);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertExecutorPrivileges } from "../src/trial/executor-hosted.js";
+import { assertExecutorPrivileges } from "../src/trial/executor-hosted.ts";
 
 test("executor rejects missing, false and uncertain privilege evidence without exposing database details", async () => {
   for (const rows of [[], [{ restricted: false }], [{ restricted: null }]])
@@ -24,7 +24,7 @@ test("executor rejects missing, false and uncertain privilege evidence without e
 
 test("hosted startup refuses privilege drift before claiming work or reading reports", async (t) => {
   const { Client } = await import("pg");
-  const { execute } = await import("../src/trial/executor-hosted.js");
+  const { execute } = await import("../src/trial/executor-hosted.ts");
   let calls = 0,
     closed = 0;
   t.mock.method(Client.prototype, "connect", async () => {});

@@ -6,7 +6,7 @@ import type {
   BucketSdk,
   BudgetedDispatcher,
   ObjectSdk,
-} from "../../src/providers/oci/client.js";
+} from "../../src/providers/oci/client.ts";
 export const intent: BucketIntent = {
   operation: "00000000-0000-4000-8000-000000000001",
   marker: "00000000-0000-4000-8000-000000000002",

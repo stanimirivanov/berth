@@ -32,6 +32,9 @@ prefer `const`, and keep one variable per declaration. Follow Berth's Biome
 formatting, including its quote style, the ESLint rules, and the
 [declaration documentation contract](docs/comment-quality.md).
 
+Use explicit `.ts` extensions in relative imports and re-exports of backend
+TypeScript source. The compiler rewrites them to `.js` in Node ESM output.
+
 For `ui/src/`, also follow the [Angular style guide](https://angular.dev/style-guide).
 Group related files by feature. Keep bootstrap in `main.ts` and keep each
 component's TypeScript, HTML template and CSS together as matching hyphenated

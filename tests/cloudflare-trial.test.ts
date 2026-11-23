@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   makeTrialTransport,
   workerMetadata,
-} from "../scripts/cloudflare-trial.js";
+} from "../scripts/cloudflare-trial.ts";
 
 test("Cloudflare trial reserves requests before dispatch and preserves cleanup capacity", async () => {
   const events: string[] = [];

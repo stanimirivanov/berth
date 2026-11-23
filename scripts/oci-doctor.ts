@@ -8,8 +8,8 @@ import {
   type OciConfig,
   parseOciConfig,
   verifyOciAccess,
-} from "./oci-access.js";
-import { readPrivateText } from "./oci-files.js";
+} from "./oci-access.ts";
+import { readPrivateText } from "./oci-files.ts";
 
 const CLI_VERSION = "3.96.2";
 type Transport = (url: string, init: RequestInit) => Promise<Response>;

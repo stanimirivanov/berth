@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { retainedInventoryLedger } from "../../src/application/retained-trial-ledger/inventory.js";
+import { retainedInventoryLedger } from "../../src/application/retained-trial-ledger/inventory.ts";
 
 const observed = "2026-01-01T10:00:00+00:00";
 const unresolved = "2026-01-01T10:05:00+00:00";

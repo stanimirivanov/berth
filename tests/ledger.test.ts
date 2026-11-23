@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { makeLedger } from "../src/trial/ledger.js";
+import { makeLedger } from "../src/trial/ledger.ts";
 
 test("ledger does not retry unknown SQL outcomes or expose provider error details", async () => {
   let calls = 0;

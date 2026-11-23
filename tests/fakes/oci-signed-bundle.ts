@@ -4,13 +4,13 @@ export {
   DefaultRequestSigner,
   SimpleAuthenticationDetailsProvider,
 } from "oci-common";
-export { makeBucket } from "../../src/providers/oci/bucket.js";
+export { makeBucket } from "../../src/providers/oci/bucket.ts";
 export {
   boundedObjectSdk,
   objectClient,
-} from "../../src/providers/oci/client.js";
+} from "../../src/providers/oci/client.ts";
 export {
   makeTrialObject,
   probeIntent,
-} from "../../src/providers/oci/trial-object.js";
-export { default } from "../../src/trial/live-index.js";
+} from "../../src/providers/oci/trial-object.ts";
+export { default } from "../../src/trial/live-index.ts";

@@ -6,10 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { Client } from "pg";
-import { makeLedger } from "../../src/trial/ledger.js";
-import { classifyRecovery, cloudService } from "../fakes/faults.js";
+import { makeLedger } from "../../src/trial/ledger.ts";
+import { classifyRecovery, cloudService } from "../fakes/faults.ts";
 
-import { recoverySites } from "../fakes/recovery-shard.js";
+import { recoverySites } from "../fakes/recovery-shard.ts";
 
 const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
 assert.ok(
@@ -495,9 +495,9 @@ async function ownerRecoveryFixture(
 /** No Functions service participates; a fresh SDK and SQL connection represent each owner invocation. */
 async function ownerRecoverySetup() {
   const { generateKeyPairSync } = await import("node:crypto");
-  const { safeBucketSdk } = await import("../../src/providers/oci/client.js");
-  const { executeLive } = await import("../../src/trial/live-runtime.js");
-  const { OciWire } = await import("../fakes/oci-wire.js");
+  const { safeBucketSdk } = await import("../../src/providers/oci/client.ts");
+  const { executeLive } = await import("../../src/trial/live-runtime.ts");
+  const { OciWire } = await import("../fakes/oci-wire.ts");
   const owner = new Client({
     host: "127.0.0.1",
     port,

@@ -3,8 +3,8 @@ import test from "node:test";
 import {
   type ExceptionContext,
   evaluateException,
-} from "../scripts/audit-exception.js";
-import { picomatchReport as report } from "./fakes/audit-report.js";
+} from "../scripts/audit-exception.ts";
+import { picomatchReport as report } from "./fakes/audit-report.ts";
 
 const now = Date.parse("2026-11-19T12:00:00Z");
 const expiry = Date.parse("2026-11-25T00:00:00Z");

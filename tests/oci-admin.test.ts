@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import test from "node:test";
-import { bootstrapOci, parseAdminConfig } from "../scripts/oci-admin.js";
+import { bootstrapOci, parseAdminConfig } from "../scripts/oci-admin.ts";
 
 const ocid = (kind: string) => `ocid1.${kind}.oc1..aaaaaaaa${kind}`;
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -230,7 +230,7 @@ test("CLI plan is offline; apply refuses reused/private-invalid output and prese
   );
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
-  const { runOciAdmin } = await import("../scripts/oci-admin-setup.js");
+  const { runOciAdmin } = await import("../scripts/oci-admin-setup.ts");
   const dir = await mkdtemp(join(tmpdir(), "berth-admin-"));
   const originalLog = console.log;
   try {
@@ -324,7 +324,7 @@ test("successful CLI apply persists only trial credentials and a complete privat
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const { createPublicKey } = await import("node:crypto");
-  const { runOciAdmin } = await import("../scripts/oci-admin-setup.js");
+  const { runOciAdmin } = await import("../scripts/oci-admin-setup.ts");
   const dir = await mkdtemp(join(tmpdir(), "berth-admin-success-"));
   const originalLog = console.log;
   try {

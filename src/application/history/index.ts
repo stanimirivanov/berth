@@ -1,5 +1,5 @@
-import { historyApi } from "./api.js";
-import { historyReader } from "./runtime.js";
+import { historyApi } from "./api.ts";
+import { historyReader } from "./runtime.ts";
 
 /** Separate import-inert history root; no trial token, expiry gate, OCI key or schedules. */
 export default historyApi(
