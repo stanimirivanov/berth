@@ -4,7 +4,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
-  type ElementRef,
+  ElementRef,
   effect,
   inject,
   signal,
@@ -15,8 +15,15 @@ import {
 } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
 import { MatButtonModule } from "@angular/material/button";
+import { MatCard } from "@angular/material/card";
 import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatInputModule } from "@angular/material/input";
+import {
+  MatListItem,
+  MatListItemLine,
+  MatListItemTitle,
+  MatNavList,
+} from "@angular/material/list";
 import { MatProgressBarModule } from "@angular/material/progress-bar";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { activeExpiry, attentionReasons, ownerProcedures } from "./attention";
@@ -29,8 +36,13 @@ import { HistoryStore, isOperationId, type Operation } from "./history-store";
     DatePipe,
     RouterLink,
     MatButtonModule,
+    MatCard,
     MatFormFieldModule,
     MatInputModule,
+    MatListItem,
+    MatListItemLine,
+    MatListItemTitle,
+    MatNavList,
     MatProgressBarModule,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -63,8 +75,9 @@ export class OperationHistory {
     viewChild<ElementRef<HTMLElement>>("inboxHeading");
   private readonly detailHeading =
     viewChild<ElementRef<HTMLElement>>("detailHeading");
-  private readonly rows =
-    viewChildren<ElementRef<HTMLAnchorElement>>("operationRow");
+  private readonly rows = viewChildren("operationRow", {
+    read: ElementRef<HTMLAnchorElement>,
+  });
   private previousFocusRoute: string | null | undefined;
   private restoredRow: HTMLAnchorElement | undefined;
   private readonly now = signal(Date.now());

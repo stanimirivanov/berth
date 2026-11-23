@@ -19,15 +19,19 @@ berth-operation-history {
   .verdict p {
     margin: 0.25rem 0 0;
   }
-  .access,
-  .details,
-  .operations li {
+  .access {
     background: var(--surface);
     border: 1px solid var(--line);
+    margin-bottom: 1.5rem;
+  }
+  .access,
+  .inbox-panel,
+  .detail-panel {
+    min-width: 0;
     padding: 1.25rem;
   }
-  .access {
-    margin-bottom: 1.5rem;
+  .detail-panel {
+    align-items: flex-start;
   }
   .access-row,
   .actions,
@@ -43,25 +47,6 @@ berth-operation-history {
     flex: 1;
     min-width: min(100%, 18rem);
   }
-  button:not(.access-submit) {
-    cursor: pointer;
-    padding: 0.625rem 1rem;
-    min-height: 2.75rem;
-    border: 1px solid var(--accent);
-    background: var(--accent);
-    color: #fff;
-    font: inherit;
-    font-weight: 600;
-    border-radius: 0.25rem;
-  }
-  button:disabled {
-    cursor: default;
-    opacity: 0.55;
-  }
-  .secondary {
-    background: var(--surface);
-    color: var(--accent);
-  }
   small {
     display: block;
     margin-top: 0.5rem;
@@ -74,35 +59,38 @@ berth-operation-history {
     gap: 0.5rem;
   }
   .operations {
-    list-style: none;
-    margin: 0 0 1rem;
-    padding: 0;
+    margin-bottom: 1rem;
   }
-  .operations li + li {
-    border-top: 0;
+  .operations .operation-row {
+    height: auto;
+    padding-block: 0.5rem;
   }
-  .operations li > div {
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+  .operation-row:focus-visible,
+  button[mat-button]:focus-visible,
+  button[mat-flat-button]:focus-visible,
+  button[mat-stroked-button]:focus-visible {
+    outline: 3px solid var(--focus);
   }
-  .status {
-    font-weight: 700;
+  .operation-row:focus-visible {
+    outline-offset: -3px;
   }
   .operation-id {
-    display: inline-block;
     color: var(--accent);
-    text-decoration: underline;
     font-family: monospace;
-    padding: 0.75rem 0;
-    text-align: left;
-    word-break: break-all;
+    text-decoration: underline;
   }
-  .operations p {
-    margin: 0;
-    font-size: 0.875rem;
+  .operation-summary {
     color: var(--muted);
+    font-size: 0.875rem;
+  }
+  .operations .operation-row .operation-id[matListItemTitle],
+  .operations .operation-row .operation-summary[matListItemLine] {
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .operation-summary time {
+    margin-inline-start: 0.5rem;
   }
   .inbox-layout {
     display: grid;
@@ -138,6 +126,7 @@ berth-operation-history {
     overflow-wrap: anywhere;
   }
   dl {
+    align-self: stretch;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0.5rem 1rem;

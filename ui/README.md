@@ -33,6 +33,21 @@ styles. Material motion is disabled for the static CSP. Keep the visible
 loading text alongside progress.
 [Material qualification](../docs/research/angular-material-pages-csp.md)
 
+## Reuse the Review inbox controls in Infrastructure
+
+- Use the shared Azure theme and outlined Material cards for offering surfaces.
+  Give each offering a labelled section with its own heading. Keep the card
+  decorative and the qualification and presence labels tied to their evidence.
+- Use outlined Material buttons for **Refresh** and **Retry**, and a text
+  button for **Show more**. Preserve the visible loading message with Material
+  progress and retain existing instance rows when a page fails.
+- Keep **Review operation** an anchor to the saved operation URL. Use a
+  labelled Material navigation list when every row is one link, as in the
+  Review inbox. If an instance row contains other controls, use a regular
+  list and keep the operation link separate.
+- Qualify added controls with the production CSP and bundle checks before
+  release. Keep styles same-origin, Material motion disabled and Pages static.
+
 ## Preview actual retained records
 
 Migration 008 from PR #88 must first be installed by the owner in the dedicated
