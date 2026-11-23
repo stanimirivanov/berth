@@ -42,7 +42,13 @@ async function setup(loss?: string, delay = false) {
     password: "berth-test-only",
   });
   await owner.connect();
-  for (const file of ["001_trial", "002_executor", "003_usage"])
+  for (const file of [
+    "001_trial",
+    "002_executor",
+    "003_usage",
+    "009_managed_inventory",
+    "010_inventory_evidence",
+  ])
     await owner.query(await readFile(`migrations/${file}.sql`, "utf8"));
   const trial = await makeLedger(owner).start({
     operation,
@@ -215,8 +221,16 @@ async function setup(loss?: string, delay = false) {
     converge,
     async close() {
       await cloud.close();
-      for (const schema of ["berth_usage", "berth_executor", "berth_ledger"])
+      for (const schema of [
+        "berth_inventory",
+        "berth_usage",
+        "berth_executor",
+        "berth_ledger",
+      ])
         await owner.query(`DROP SCHEMA ${schema} CASCADE`);
+      await owner.query(
+        "DROP ROLE berth_inventory_reader, berth_inventory_recorder",
+      );
       await owner.end();
       await rm(dir, { recursive: true, force: true });
     },
@@ -531,6 +545,8 @@ async function ownerRecoverySetup() {
     "004_admission",
     "005_functions_exception",
     "006_free_functions_policy",
+    "009_managed_inventory",
+    "010_inventory_evidence",
   ])
     await owner.query(await readFile(`migrations/${file}.sql`, "utf8"));
   await owner.query("SELECT berth_executor.prepare($1,$2,$3,$4)", [
@@ -702,8 +718,16 @@ async function ownerRecoverySetup() {
         ).rows[0].count,
       ),
     close: async () => {
-      for (const schema of ["berth_usage", "berth_executor", "berth_ledger"])
+      for (const schema of [
+        "berth_inventory",
+        "berth_usage",
+        "berth_executor",
+        "berth_ledger",
+      ])
         await owner.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      await owner.query(
+        "DROP ROLE berth_inventory_reader, berth_inventory_recorder",
+      );
       await owner.end();
     },
   };

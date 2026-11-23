@@ -7,6 +7,15 @@ import { FakeObjects } from "./oci.js";
 
 /** Stable semantic SQL boundary; values, identities and provider bodies never become labels. */
 export function writeBoundary(sql: string, values: unknown[], action = "") {
+  if (sql.includes("to_regprocedure(")) return null;
+  if (sql.includes("berth_inventory.executor_receipt"))
+    return values[4] === null
+      ? "inventory.prepare-delete"
+      : "inventory.verify-removal";
+  if (sql.includes("berth_inventory.executor_presence"))
+    return "inventory.presence";
+  if (sql.includes("berth_inventory.publish_executor"))
+    return "inventory.publish";
   if (sql.includes("berth_executor.open")) return "executor.open";
   if (sql.includes("berth_executor.cleanup")) return "executor.cleanup";
   if (sql.includes("berth_executor.access")) {
@@ -229,6 +238,8 @@ export function classifyRecovery(
     "after:ledger.reserve:delete_object",
     "before:cloud.deleteObject",
     "after:ledger.reserve:delete_bucket",
+    "before:inventory.prepare-delete",
+    "after:inventory.prepare-delete",
     "before:cloud.deleteBucket",
     "before:ledger.settle:create_bucket:rejected:provider-response",
     "before:ledger.settle:put_object:rejected:provider-response",

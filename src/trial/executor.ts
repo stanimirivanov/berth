@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type BucketAttributes, makeBucket } from "../providers/oci/bucket.js";
 import {
   BucketFailure,
+  type BucketObservation,
   type BudgetedDispatcher,
   bucketClient,
   type ObjectSdk,
@@ -110,7 +111,14 @@ export async function runExecutor(
     randomUUID(),
     options.delivery,
   );
-  if (opened.kind !== "claimed") return { phase: opened.kind };
+  if (opened.kind !== "claimed") {
+    if (
+      opened.kind === "terminal" &&
+      (await store.inventoryEnabled().catch(() => false))
+    )
+      await store.publishInventory(options.operation).catch(() => undefined);
+    return { phase: opened.kind };
+  }
   const { claim } = opened;
   let snapshot = opened.snapshot;
   const start = Date.parse(snapshot.trial.started_at),
@@ -184,11 +192,48 @@ export async function runExecutor(
     return old?.id ?? (await ledger.begin(claim, randomUUID(), action));
   }
 
+  let inventoryEnabled = false;
+  let deletionTarget: BucketAttributes | undefined;
+  let deletionRequest: string | undefined;
+  let cleanupInspection: string | undefined;
+  let identityInspection: string | undefined;
+
+  /** Preserve the identity-bearing response after the provider validates it. */
+  async function recordInventoryPresence(bucket: BucketAttributes) {
+    if (!inventoryEnabled || !identityInspection) return;
+    try {
+      await store.inventoryPresence(claim, identityInspection, bucket);
+    } catch {
+      /* The verified lifecycle checkpoint remains independent of inventory. */
+    }
+  }
+
+  /** Evidence recording is supplementary to the already authorized cleanup. */
+  async function recordInventoryDelete(
+    request: string,
+    bucket: BucketAttributes,
+    listing: string | null,
+  ) {
+    try {
+      await store.inventoryReceipt(claim, request, bucket, listing);
+    } catch {
+      /* Keep the ledger reservation and let the existing cleanup guards decide dispatch. */
+    }
+  }
+
   const dispatcher: BudgetedDispatcher & {
-    dispatch<T>(action: TrialAction, send: () => Promise<T>): Promise<T>;
+    dispatch<T>(
+      action: TrialAction,
+      send: () => Promise<T>,
+      observation?: BucketObservation,
+    ): Promise<T>;
   } = {
     /** Preserve raw transport outcome only long enough to settle definite responses; never log it. */
-    async dispatch<T>(action: TrialAction, send: () => Promise<T>): Promise<T> {
+    async dispatch<T>(
+      action: TrialAction,
+      send: () => Promise<T>,
+      observation?: BucketObservation,
+    ): Promise<T> {
       await guard(action);
       const id = await attempt(action),
         request = randomUUID();
@@ -196,10 +241,17 @@ export async function runExecutor(
       if (!reservation.fresh) throw new BucketFailure("budget");
       let started = false;
       try {
+        if (action === "delete_bucket" && inventoryEnabled && deletionTarget) {
+          await recordInventoryDelete(request, deletionTarget, null);
+          deletionRequest = request;
+        }
         await guard(action);
         started = true;
         const result = await send();
         await ledger.settle(claim, request, "succeeded", "provider-response");
+        if (observation === "bucket-list" && action === "inspect_cleanup")
+          cleanupInspection = request;
+        if (observation === "bucket-identity") identityInspection = request;
         if (
           [
             "create_bucket",
@@ -318,8 +370,13 @@ export async function runExecutor(
           operation: intent.operation,
           marker: intent.marker,
         };
-        await makeBucket(intent, client).read(candidate, true);
-        await store.access(claim, "bucket", candidate);
+        const confirmed = await makeBucket(intent, client).read(
+          candidate,
+          true,
+        );
+        if (!confirmed) throw Error("Unresolved");
+        await recordInventoryPresence(confirmed);
+        await store.access(claim, "bucket", confirmed);
         snapshot = await store.access<ExecutionSnapshot>(claim, "snapshot");
       }
       for (const r of pending) {
@@ -379,6 +436,12 @@ export async function runExecutor(
           const listing = await client.list(intent, true);
           if (listing.items.length || listing.opcNextPage)
             throw Error("Unresolved");
+          if (inventoryEnabled && snapshot.bucket && cleanupInspection)
+            await recordInventoryDelete(
+              r.id,
+              snapshot.bucket,
+              cleanupInspection,
+            );
         } else throw Error("Unresolved");
         await ledger.settle(claim, r.id, "succeeded", "reconciled-provider");
         await ledger.end(claim, r.attempt, "succeeded");
@@ -386,7 +449,25 @@ export async function runExecutor(
       snapshot = await store.access<ExecutionSnapshot>(claim, "snapshot");
     }
 
+    try {
+      inventoryEnabled = await store.inventoryEnabled();
+    } catch {
+      /* A missing evidence capability cannot stop protected recovery. */
+    }
     await reconcile();
+
+    /** A crash may leave a successful conditional delete awaiting a verified list. */
+    async function latestSuccessfulDelete() {
+      const j = await journal();
+      return j.requests.find(
+        (r) =>
+          r.outcome === "succeeded" &&
+          j.attempts.some(
+            (a) => a.id === r.attempt && a.action === "delete_bucket",
+          ),
+      )?.id;
+    }
+
     const phase = nextPhase(
       snapshot.phase,
       start,
@@ -397,7 +478,15 @@ export async function runExecutor(
     );
     if (phase === "expired") return { phase };
     if (phase === "bucket") {
-      await bucketLifecycle(store, claim, intent, client);
+      await bucketLifecycle(
+        store,
+        claim,
+        intent,
+        client,
+        false,
+        undefined,
+        recordInventoryPresence,
+      );
       await store.access(claim, "phase", "object");
       return { phase: "object" };
     }
@@ -475,7 +564,26 @@ export async function runExecutor(
         ).remove();
         await store.access(claim, "object-removed");
       }
-      await bucketLifecycle(store, claim, intent, client, true);
+      await bucketLifecycle(store, claim, intent, client, true, {
+        /** Retain the freshly verified revision for the subsequent budgeted dispatch. */
+        preparing(bucket) {
+          deletionTarget = bucket;
+        },
+        /** Record only the scoped absence just verified by the provider. */
+        async verified() {
+          if (!inventoryEnabled || !cleanupInspection || !snapshot.bucket)
+            return;
+          const previous =
+            deletionRequest ??
+            (await latestSuccessfulDelete().catch(() => undefined));
+          if (previous)
+            await recordInventoryDelete(
+              previous,
+              deletionTarget ?? snapshot.bucket,
+              cleanupInspection,
+            );
+        },
+      });
     } else {
       const listing = await client.list(intent, true);
       if (listing.items.length || listing.opcNextPage)
@@ -513,6 +621,13 @@ export async function runExecutor(
       await ledger.release(claim);
     } catch {
       /* A terminal outcome or lost lease cannot be reacquired here. */
+    }
+    if (inventoryEnabled) {
+      try {
+        await store.publishInventory(claim.operation);
+      } catch {
+        /* The provider evidence is already queued. Do not interrupt protected cleanup. */
+      }
     }
   }
 }

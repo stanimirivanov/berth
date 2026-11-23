@@ -9,6 +9,7 @@ import {
 import * as Effect from "effect/Effect";
 import {
   type BucketAttributes,
+  type BucketDeletionEvidence,
   bucketProvider,
   OciBucket,
 } from "../providers/oci/bucket.js";
@@ -23,6 +24,8 @@ export async function bucketLifecycle(
   intent: BucketIntent,
   client: BucketClient,
   destroy = false,
+  deletion?: BucketDeletionEvidence,
+  presence?: (bucket: BucketAttributes) => Promise<void>,
 ) {
   /** No reacquisition or cached state: every persistent operation crosses the SQL fence. */
   const call = <T>(command: string, value: unknown = null) =>
@@ -101,7 +104,7 @@ export async function bucketLifecycle(
     yield* OciBucket("bucket", { operation: claim.operation });
     yield* apply(yield* Plan.make(stack));
   }).pipe(
-    Effect.provide(bucketProvider(intent, client, destroy)),
+    Effect.provide(bucketProvider(intent, client, destroy, deletion)),
     Effect.provideService(State, Effect.succeed(state)),
     Effect.provideService(Stack, stack),
     Effect.provideService(Stage, stack.stage),
@@ -110,6 +113,8 @@ export async function bucketLifecycle(
   if (!destroy) {
     const row = await store.access<PersistedState>(claim, "get-state");
     if (!row || !("attr" in row)) throw Error("Missing bucket identity");
-    await store.access(claim, "bucket", row.attr as BucketAttributes);
+    const attributes = row.attr as BucketAttributes;
+    await presence?.(attributes);
+    await store.access(claim, "bucket", attributes);
   }
 }

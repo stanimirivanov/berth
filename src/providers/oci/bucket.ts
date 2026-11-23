@@ -17,6 +17,12 @@ export interface BucketAttributes {
   operation: string;
   marker: string;
 }
+/** Capture the exact revision used in a conditional delete and verified scoped absence. */
+export interface BucketDeletionEvidence {
+  preparing(bucket: BucketAttributes): void;
+  verified(): Promise<void>;
+}
+
 /** One fixed bucket per saved trial. No update, replacement or arbitrary names. */
 interface BucketResource
   extends ResourceLike<
@@ -31,7 +37,11 @@ interface BucketResource
 export const OciBucket = Resource<BucketResource>("Berth.OCI.Bucket");
 
 /** Validate and capture immutable intent before any SDK call; no settings are caller-selectable. */
-export function makeBucket(saved: BucketIntent, client: BucketClient) {
+export function makeBucket(
+  saved: BucketIntent,
+  client: BucketClient,
+  deletion?: BucketDeletionEvidence,
+) {
   const i = Object.freeze({ ...saved });
   const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
   if (
@@ -140,7 +150,10 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
     /** Delete only a newly inspected empty owned bucket at its unchanged revision. */
     async remove(known: BucketAttributes) {
       const before = await read(known, true);
-      if (!before) return;
+      if (!before) {
+        await deletion?.verified();
+        return;
+      }
       const objects = (await client.objects(i)).listObjects;
       const uploads = await client.uploads(i);
       if (
@@ -154,8 +167,10 @@ export function makeBucket(saved: BucketIntent, client: BucketClient) {
       const latest = await client.get(i, true);
       const current = verify(latest.bucket, latest.eTag, known);
       if (current.etag !== before.etag) throw new BucketFailure("revision");
+      deletion?.preparing(current);
       await client.remove(i, current.etag);
       if (await exists(true)) throw new BucketFailure("unknown-outcome");
+      await deletion?.verified();
     },
   };
 }
@@ -169,9 +184,10 @@ export function bucketProvider(
   saved: BucketIntent,
   client: BucketClient,
   cleanup = false,
+  deletion?: BucketDeletionEvidence,
 ) {
   const intent = Object.freeze({ ...saved });
-  const bucket = makeBucket(intent, client);
+  const bucket = makeBucket(intent, client, deletion);
   /** Preserve typed safe diagnostics across the Effect boundary. */
   const run = <T>(work: () => Promise<T>) =>
     Effect.tryPromise({
