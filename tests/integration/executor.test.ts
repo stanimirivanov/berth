@@ -482,3 +482,468 @@ test("lost object delete response is reconciled without repeating the mutation",
       1,
     );
   }));
+
+/** Install the inventory writers over a disposable fenced executor. */
+function inventoryFixture(work: (owner: Client, db: Client) => Promise<void>) {
+  return fixture(async (owner, db) => {
+    await owner.query(
+      await readFile("migrations/009_managed_inventory.sql", "utf8"),
+    );
+    try {
+      await owner.query(
+        await readFile("migrations/010_inventory_evidence.sql", "utf8"),
+      );
+      await work(owner, db);
+    } finally {
+      await owner.query("ROLLBACK");
+      await owner.query("DROP SCHEMA berth_inventory CASCADE");
+      await owner.query("DROP ROLE IF EXISTS berth_inventory_recorder");
+      await owner.query("DROP ROLE berth_inventory_reader");
+    }
+  });
+}
+
+test("executor checkpoints publish identity-bound inventory without an extra provider call", () =>
+  inventoryFixture(async (owner, db) => {
+    const trial = await start(db);
+    const sdk = new FakeObjects();
+    const run = (n: number) =>
+      runExecutor(db, {
+        operation: trial.operation,
+        delivery: delivery(n),
+        expiresAt: Date.parse(trial.expires_at),
+        sdk: () => sdk,
+      });
+    const readInventory = async () =>
+      (await owner.query("SELECT berth_inventory.inventory_page() AS value"))
+        .rows[0]?.value;
+    assert.deepEqual(await run(810), { phase: "object" });
+    const present = (await readInventory()).items[0];
+    assert.equal(present?.operation, trial.operation);
+    assert.equal(present?.presence, "verified-present");
+    const source = await owner.query(
+      `SELECT a.action, e.observed_at = r.resolved_at AS "timeMatches"
+       FROM berth_inventory.executor_events e
+       JOIN berth_ledger.requests r ON r.id::text || '/presence' = e.reference
+       JOIN berth_ledger.attempts a ON a.id = r.attempt
+       WHERE e.kind = 'present'`,
+    );
+    assert.deepEqual(source.rows, [
+      { action: "create_bucket", timeMatches: true },
+    ]);
+    assert.equal(sdk.creates, 1);
+    assert.deepEqual(await run(811), { phase: "cleanup" });
+    assert.ok(sdk.value);
+    sdk.value.etag = "fixture-newer-revision";
+    assert.deepEqual(await run(812), { phase: "terminal" });
+    assert.equal(sdk.lastIfMatch, "fixture-newer-revision");
+    const removalProof = await owner.query(
+      "SELECT proof->>'etag' AS revision, proof ? 'absenceRequest' AS checked FROM berth_inventory.executor_events WHERE kind='removed'",
+    );
+    assert.deepEqual(removalProof.rows, [
+      { revision: "fixture-newer-revision", checked: true },
+    ]);
+    assert.deepEqual((await readInventory()).items, []);
+    assert.equal(sdk.deletes, 1);
+    assert.deepEqual(
+      sdk.calls.map(({ method }) => method),
+      [
+        "list",
+        "list",
+        "create",
+        "retention",
+        "grants",
+        "list",
+        "get",
+        "retention",
+        "grants",
+        "object-list",
+        "versions",
+        "uploads",
+        "put",
+        "head",
+        "get-object",
+        "object-list",
+        "versions",
+        "uploads",
+        "get-object",
+        "list",
+        "get",
+        "retention",
+        "grants",
+        "object-list",
+        "versions",
+        "uploads",
+        "delete-object",
+        "object-list",
+        "versions",
+        "uploads",
+        "list",
+        "get",
+        "retention",
+        "grants",
+        "object-list",
+        "uploads",
+        "get",
+        "delete",
+        "list",
+      ],
+    );
+    assert.deepEqual(
+      (
+        await owner.query(
+          "SELECT kind FROM berth_inventory.executor_events ORDER BY observed_at",
+        )
+      ).rows,
+      [{ kind: "present" }, { kind: "delete-prepared" }, { kind: "removed" }],
+    );
+  }));
+
+test("the independent recorder qualifies exact historical evidence and preserves operation state", () =>
+  inventoryFixture(async (owner, db) => {
+    const trial = await start(db);
+    await owner.query(
+      `UPDATE berth_ledger.trials
+       SET started_at = started_at - interval '1 day', expires_at = expires_at - interval '1 day',
+           outcome = 'needs-reconciliation', cleanup_used = 14
+       WHERE operation = $1`,
+      [trial.operation],
+    );
+    const before = (
+      await owner.query("SELECT berth_executor.report($1) AS value", [
+        trial.operation,
+      ])
+    ).rows[0]?.value;
+    const call = async (client: Client, receipt: unknown) =>
+      (
+        await client.query(
+          "SELECT berth_inventory.submit_owner_receipt($1::jsonb) AS value",
+          [JSON.stringify(receipt)],
+        )
+      ).rows[0]?.value;
+    const readInventory = async () =>
+      (await owner.query("SELECT berth_inventory.inventory_page() AS value"))
+        .rows[0]?.value;
+    const when = Date.parse(before.trial.started_at);
+    const present = {
+      reference: "fixture/presence",
+      operation: trial.operation,
+      observedAt: new Date(when + 1).toISOString(),
+      kind: "present",
+      bucket: {
+        id: "ocid1.bucket.oc1..legacyFixture",
+        region: trial.region,
+        namespace: trial.namespace,
+        compartment: trial.compartment,
+        name: trial.bucket,
+        operationTag: trial.operation,
+        marker: before.trial.marker,
+        etag: "fixture-revision",
+      },
+      observation: { status: 200, requestId: "fixture-get" },
+    };
+    // A known legacy delete reservation is newer than the owner presence receipt.
+    const oldAttempt = randomUUID();
+    await owner.query(
+      "INSERT INTO berth_executor.work(operation,bucket) VALUES ($1,$2::jsonb)",
+      [
+        trial.operation,
+        JSON.stringify({
+          id: present.bucket.id,
+          marker: present.bucket.marker,
+          etag: present.bucket.etag,
+          operation: trial.operation,
+        }),
+      ],
+    );
+    await owner.query(
+      "INSERT INTO berth_ledger.attempts(id,operation,action,generation,ordinal) VALUES($1,$2,'delete_bucket',1,1)",
+      [oldAttempt, trial.operation],
+    );
+    await owner.query(
+      "INSERT INTO berth_ledger.requests(id,attempt,operation,generation,meter,mutation,reserved_at) VALUES($1,$2,$3,1,'cleanup',true,$4)",
+      [
+        randomUUID(),
+        oldAttempt,
+        trial.operation,
+        new Date(when + 2).toISOString(),
+      ],
+    );
+    const checkpoint = (
+      await owner.query("SELECT berth_executor.report($1) AS value", [
+        trial.operation,
+      ])
+    ).rows[0]?.value;
+    assert.equal((await readInventory()).coverage, "incomplete");
+    await assert.rejects(call(db, present), { code: "42501" });
+    await assert.rejects(
+      db.query("SELECT * FROM berth_inventory.executor_events"),
+      { code: "42501" },
+    );
+    await owner.query(
+      "GRANT berth_inventory_recorder TO neondb_owner WITH SET TRUE",
+    );
+    await owner.query("SET ROLE berth_inventory_recorder");
+    try {
+      await assert.rejects(
+        call(owner, {
+          ...present,
+          bucket: { ...present.bucket, compartment: "different" },
+        }),
+        { message: "Owner receipt rejected" },
+      );
+      assert.equal(await call(owner, present), "recorded");
+      assert.equal(await call(owner, present), "already-recorded");
+      await owner.query("RESET ROLE");
+      assert.equal(
+        (await readInventory()).items[0]?.uncertainty,
+        "delete-unresolved",
+      );
+      await owner.query("SET ROLE berth_inventory_recorder");
+      assert.equal(
+        await call(owner, {
+          ...present,
+          reference: "fixture/after-delete-reservation",
+          observedAt: new Date(when + 3).toISOString(),
+          observation: { status: 200, requestId: "fixture-later-presence" },
+        }),
+        "recorded",
+      );
+      await owner.query("RESET ROLE");
+      assert.equal(
+        (await readInventory()).items[0]?.uncertainty,
+        "delete-unresolved",
+      );
+      await owner.query("SET ROLE berth_inventory_recorder");
+      await assert.rejects(
+        call(owner, {
+          ...present,
+          observation: { status: 200, requestId: 12345 },
+        }),
+        { message: "Owner receipt rejected" },
+      );
+      await assert.rejects(
+        owner.query("SELECT * FROM berth_inventory.evidence"),
+        { code: "42501" },
+      );
+      const removal = {
+        ...present,
+        reference: "fixture/removal",
+        observedAt: new Date(when + 4).toISOString(),
+        kind: "removed",
+        observation: {
+          deleteStatus: 204,
+          ifMatch: "fixture-revision",
+          absentStatus: 404,
+          listingComplete: true,
+          targetListed: false,
+          deleteRequestId: "fixture-delete",
+          getRequestId: "fixture-absence",
+          listRequestId: "fixture-list",
+        },
+      };
+      await assert.rejects(
+        call(owner, { ...removal, observation: { absentStatus: 404 } }),
+        { message: "Owner receipt rejected" },
+      );
+      assert.equal(await call(owner, removal), "recorded");
+      assert.equal(
+        await call(owner, {
+          ...present,
+          observation: { status: 200, requestId: "different-id" },
+        }),
+        "conflict",
+      );
+      assert.equal(
+        await call(owner, {
+          ...present,
+          reference: "fixture/late",
+          observation: { status: 200, requestId: "fixture-late" },
+          observedAt: new Date(when + 2).toISOString(),
+        }),
+        "recorded",
+      );
+      assert.equal(
+        await call(owner, {
+          ...present,
+          reference: "fixture/conflict",
+          observation: { status: 200, requestId: "fixture-conflict" },
+          observedAt: new Date(when + 5).toISOString(),
+        }),
+        "conflict",
+      );
+    } finally {
+      await owner.query("RESET ROLE");
+    }
+    assert.deepEqual((await readInventory()).items, []);
+    assert.equal((await readInventory()).coverage, "incomplete");
+    assert.deepEqual(
+      (
+        await owner.query("SELECT berth_executor.report($1) AS value", [
+          trial.operation,
+        ])
+      ).rows[0]?.value,
+      checkpoint,
+    );
+  }));
+
+test("unresolved create leaves a coverage gap and unresolved deletion retains the identified instance", () =>
+  inventoryFixture(async (owner, db) => {
+    const trial = await start(db);
+    class InterruptedBucket extends FakeObjects {
+      override async createBucket(
+        r: Parameters<FakeObjects["createBucket"]>[0],
+      ): Promise<never> {
+        await super.createBucket(r);
+        throw { statusCode: 500 };
+      }
+
+      loseNextListing = false;
+      override async listBuckets(r: Parameters<FakeObjects["listBuckets"]>[0]) {
+        const response = await super.listBuckets(r);
+        if (this.loseNextListing) {
+          this.loseNextListing = false;
+          return { items: [] };
+        }
+        return response;
+      }
+
+      override async deleteBucket(
+        r: Parameters<FakeObjects["deleteBucket"]>[0],
+      ): Promise<never> {
+        await super.deleteBucket(r);
+        throw { statusCode: 500 };
+      }
+    }
+    const sdk = new InterruptedBucket();
+    const run = (n: number) =>
+      runExecutor(db, {
+        operation: trial.operation,
+        delivery: delivery(n),
+        expiresAt: Date.parse(trial.expires_at),
+        sdk: () => sdk,
+      });
+    const readInventory = async () =>
+      (await owner.query("SELECT berth_inventory.inventory_page() AS value"))
+        .rows[0]?.value;
+    assert.deepEqual(await run(820), { phase: "needs-reconciliation" });
+    assert.deepEqual(await readInventory(), {
+      offering: "oci-object-storage-bucket",
+      coverage: "incomplete",
+      items: [],
+      next: null,
+    });
+    sdk.loseNextListing = true;
+    assert.deepEqual(await run(821), { phase: "needs-reconciliation" });
+    assert.deepEqual((await readInventory()).items, []);
+    assert.equal(sdk.deletes, 0);
+    assert.deepEqual(await run(822), { phase: "needs-reconciliation" });
+    const uncertain = (await readInventory()).items[0];
+    assert.equal(uncertain?.operation, trial.operation);
+    assert.equal(uncertain?.presence, "uncertain");
+    assert.equal(uncertain?.uncertainty, "delete-unresolved");
+    assert.ok(uncertain?.lastVerifiedAt);
+    assert.equal(sdk.creates, 1);
+    assert.equal(sdk.deletes, 1);
+    assert.deepEqual(await run(823), { phase: "terminal" });
+    assert.deepEqual((await readInventory()).items, []);
+    assert.equal(sdk.deletes, 1);
+  }));
+
+test("an open owner evidence transaction cannot fence cleanup or lose the verified deletion proof", () =>
+  inventoryFixture(async (owner, db) => {
+    const trial = await start(db);
+    const sdk = new FakeObjects();
+    const run = (n: number) =>
+      runExecutor(db, {
+        operation: trial.operation,
+        delivery: delivery(n),
+        expiresAt: Date.parse(trial.expires_at),
+        sdk: () => sdk,
+      });
+    assert.deepEqual(await run(830), { phase: "object" });
+    assert.deepEqual(await run(831), { phase: "cleanup" });
+    const bucket = sdk.value;
+    assert.ok(bucket?.id);
+    await owner.query(
+      "GRANT berth_inventory_recorder TO neondb_owner WITH SET TRUE",
+    );
+    await owner.query("BEGIN");
+    try {
+      await owner.query("SET LOCAL ROLE berth_inventory_recorder");
+      const receipt = {
+        reference: "fixture/held",
+        operation: trial.operation,
+        observedAt: new Date().toISOString(),
+        kind: "present",
+        bucket: {
+          id: bucket.id,
+          region: trial.region,
+          namespace: trial.namespace,
+          compartment: trial.compartment,
+          name: trial.bucket,
+          operationTag: trial.operation,
+          marker: bucket.freeformTags?.["berth-marker"],
+          etag: bucket.etag,
+        },
+        observation: { status: 200, requestId: "fixture-held-get" },
+      };
+      assert.equal(
+        (
+          await owner.query(
+            "SELECT berth_inventory.submit_owner_receipt($1::jsonb) AS outcome",
+            [JSON.stringify(receipt)],
+          )
+        ).rows[0]?.outcome,
+        "recorded",
+      );
+      assert.deepEqual(await run(832), { phase: "terminal" });
+      assert.equal(sdk.deletes, 1);
+    } finally {
+      await owner.query("ROLLBACK");
+    }
+    const pending = (
+      await owner.query("SELECT berth_inventory.inventory_page() AS value")
+    ).rows[0]?.value;
+    assert.equal(pending.items[0]?.uncertainty, "delete-unresolved");
+    assert.deepEqual(await run(833), { phase: "terminal" });
+    assert.equal(sdk.deletes, 1);
+    const published = (
+      await owner.query("SELECT berth_inventory.inventory_page() AS value")
+    ).rows[0]?.value;
+    assert.deepEqual(published.items, []);
+  }));
+
+test("failure of the evidence writer cannot consume cleanup capacity without dispatch", () =>
+  inventoryFixture(async (owner, db) => {
+    const trial = await start(db);
+    const sdk = new FakeObjects();
+    const faultingEvidence = {
+      async query(sql: string, args?: unknown[]) {
+        if (sql.startsWith("SELECT berth_inventory.executor_receipt("))
+          throw Error("fixture evidence unavailable");
+        return db.query(sql, args);
+      },
+    };
+    const run = (n: number) =>
+      runExecutor(faultingEvidence, {
+        operation: trial.operation,
+        delivery: delivery(n),
+        expiresAt: Date.parse(trial.expires_at),
+        sdk: () => sdk,
+      });
+    assert.deepEqual(await run(840), { phase: "object" });
+    assert.deepEqual(await run(841), { phase: "cleanup" });
+    assert.deepEqual(await run(842), { phase: "terminal" });
+    assert.equal(sdk.deletes, 1);
+    const page = (
+      await owner.query("SELECT berth_inventory.inventory_page() AS value")
+    ).rows[0]?.value;
+    assert.equal(page.items[0]?.uncertainty, "delete-unresolved");
+    const requests = await owner.query(
+      `SELECT r.outcome FROM berth_ledger.requests r
+       JOIN berth_ledger.attempts a ON a.id = r.attempt
+       WHERE a.action = 'delete_bucket'`,
+    );
+    assert.deepEqual(requests.rows, [{ outcome: "succeeded" }]);
+  }));

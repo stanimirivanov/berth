@@ -27,6 +27,9 @@ export type BucketAction =
   | "delete_bucket"
   | "put_object"
   | "delete_object";
+/** Read purposes that can substantiate identity or scoped absence. */
+export type BucketObservation = "bucket-identity" | "bucket-list";
+
 /**
  * Integration contract: reserve and commit before invoking send exactly once.
  * A missing/duplicate reservation must not invoke send. Keep ambiguous mutations
@@ -34,7 +37,11 @@ export type BucketAction =
  */
 export interface BudgetedDispatcher {
   /** One callback invocation is one underlying SDK request, never a pagination loop. */
-  dispatch<T>(action: BucketAction, send: () => Promise<T>): Promise<T>;
+  dispatch<T>(
+    action: BucketAction,
+    send: () => Promise<T>,
+    observation?: BucketObservation,
+  ): Promise<T>;
 }
 /** Structural subset of the pinned SDK, injectable without cloud credentials. */
 export interface BucketSdk {
@@ -147,23 +154,29 @@ export function bucketClient(
     region: homeRegion,
     /** Never use an automatic SDK paginator: each request needs its own reservation. */
     list: (i: BucketIntent, cleanup = false) =>
-      send(cleanup ? "inspect_cleanup" : "inspect", () =>
-        sdk.listBuckets({
-          namespaceName: i.namespace,
-          compartmentId: i.compartment,
-          limit: 2,
-          retryConfiguration,
-        }),
+      send(
+        cleanup ? "inspect_cleanup" : "inspect",
+        () =>
+          sdk.listBuckets({
+            namespaceName: i.namespace,
+            compartmentId: i.compartment,
+            limit: 2,
+            retryConfiguration,
+          }),
+        "bucket-list",
       ),
     /** Request opt-in tiering metadata so ownership validation also works on read and final pre-delete inspection. */
     get: (i: BucketIntent, cleanup = false) =>
-      send(cleanup ? "inspect_cleanup" : "inspect", () =>
-        sdk.getBucket({
-          namespaceName: i.namespace,
-          bucketName: i.bucket,
-          fields: [requests.GetBucketRequest.Fields.AutoTiering],
-          retryConfiguration,
-        }),
+      send(
+        cleanup ? "inspect_cleanup" : "inspect",
+        () =>
+          sdk.getBucket({
+            namespaceName: i.namespace,
+            bucketName: i.bucket,
+            fields: [requests.GetBucketRequest.Fields.AutoTiering],
+            retryConfiguration,
+          }),
+        "bucket-identity",
       ),
     /** Read at most one rules response; any rule or continuation blocks the trial. */
     retention: (i: BucketIntent, cleanup = false) =>
@@ -206,8 +219,10 @@ export function bucketClient(
       ),
     /** Create carries the saved marker; the caller must preserve uncertain completion. */
     create: (i: BucketIntent) =>
-      send("create_bucket", () =>
-        sdk.createBucket({ ...createProposal(i), retryConfiguration }),
+      send(
+        "create_bucket",
+        () => sdk.createBucket({ ...createProposal(i), retryConfiguration }),
+        "bucket-identity",
       ),
     /** The inspected ETag is mandatory; never retry without it. */
     async remove(i: BucketIntent, etag: string) {
@@ -282,15 +297,20 @@ function requestSender(
   async function send<T>(
     action: BucketAction,
     work: () => Promise<T>,
+    observation?: BucketObservation,
   ): Promise<T> {
     let invoked = false;
     try {
-      return await dispatcher.dispatch(action, async () => {
-        if (invoked || sdk.endpoint !== endpoint)
-          throw new BucketFailure("budget");
-        invoked = true;
-        return work();
-      });
+      return await dispatcher.dispatch(
+        action,
+        async () => {
+          if (invoked || sdk.endpoint !== endpoint)
+            throw new BucketFailure("budget");
+          invoked = true;
+          return work();
+        },
+        observation,
+      );
     } catch (error) {
       if (error instanceof BucketFailure) throw error;
       const message =

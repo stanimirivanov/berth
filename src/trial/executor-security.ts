@@ -51,7 +51,7 @@ export async function assertExecutorPrivileges(db: {
       AND NOT EXISTS (SELECT FROM pg_namespace n WHERE n.nspname NOT LIKE 'pg_temp%'
         AND has_schema_privilege(r.oid,n.oid,'CREATE'))
       AND NOT EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-        WHERE n.nspname IN ('berth_ledger','berth_executor','berth_usage')
+        WHERE n.nspname IN ('berth_ledger','berth_executor','berth_usage','berth_inventory')
         AND (has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
           OR has_any_column_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,REFERENCES')))
       AS restricted FROM pg_roles r WHERE r.rolname=current_user`);

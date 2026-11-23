@@ -80,6 +80,51 @@ export function executorStore(db: LedgerDatabase) {
   }
 
   return {
+    /** Enable evidence recording when its additive migration has been installed. */
+    inventoryEnabled: () =>
+      call<boolean>(
+        "SELECT to_regprocedure('berth_inventory.executor_receipt(uuid,uuid,bigint,uuid,uuid,jsonb)') IS NOT NULL AS result",
+        [],
+      ),
+    /** Queue the exact identity-bearing OCI response after ownership is verified. */
+    inventoryPresence: (
+      claim: LedgerClaim,
+      request: string,
+      bucket: BucketAttributes,
+    ) =>
+      call(
+        "SELECT berth_inventory.executor_presence($1,$2,$3,$4,$5::jsonb) AS result",
+        [
+          claim.operation,
+          claim.owner,
+          claim.generation,
+          request,
+          JSON.stringify(bucket),
+        ],
+      ),
+    /** Preserve the precise delete revision before dispatch or the verified list after it. */
+    inventoryReceipt: (
+      claim: LedgerClaim,
+      request: string,
+      bucket: BucketAttributes,
+      listing: string | null,
+    ) =>
+      call(
+        "SELECT berth_inventory.executor_receipt($1,$2,$3,$4,$5,$6::jsonb) AS result",
+        [
+          claim.operation,
+          claim.owner,
+          claim.generation,
+          request,
+          listing,
+          JSON.stringify(bucket),
+        ],
+      ),
+    /** Publish queued evidence in a separate transaction from the cleanup fence. */
+    publishInventory: (operation: string) =>
+      call("SELECT berth_inventory.publish_executor($1) AS result", [
+        operation,
+      ]),
     /** Read at most 50 retained summaries; SQL validates cursor/limit, without execution expiry gating. */
     history: (before: string | null = null, limit = 20) =>
       call<OperationHistoryPage>(
