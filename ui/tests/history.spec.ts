@@ -859,3 +859,77 @@ test("returning from desktop detail restores the page it opened from", async ({
   await expect(originalRow).toBeFocused();
   await expect(page.getByRole("link", { name: first })).toHaveCount(0);
 });
+
+test("Material access on a saved link preserves the static CSP and keyboard submission", async ({
+  page,
+}) => {
+  const reads: string[] = [];
+  const violations: string[] = [];
+  const detailReply = Promise.withResolvers<void>();
+  await page.exposeFunction(
+    "recordHistoryCspViolation",
+    (directive: string) => {
+      violations.push(directive);
+    },
+  );
+  await page.addInitScript(() => {
+    const browser = window as Window & {
+      recordHistoryCspViolation: (directive: string) => Promise<void>;
+    };
+    document.addEventListener("securitypolicyviolation", (event) => {
+      void browser.recordHistoryCspViolation(event.effectiveDirective);
+    });
+  });
+  await page.route("**/api/history**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    reads.push(path);
+    expect(route.request().headers().authorization).toBe(
+      `Bearer ${"h".repeat(40)}`,
+    );
+    if (path === `/api/history/${first}`) {
+      await detailReply.promise;
+      await route.fulfill({ json: item(first) });
+    } else {
+      await route.fulfill({ json: { items: [], next: null } });
+    }
+  });
+
+  const response = await page.goto(`/operations/${first}`);
+  expect(response?.status()).toBe(200);
+  const policy = response?.headers()["content-security-policy"] ?? "";
+  const pagesHeaders = await readFile(
+    new URL("../dist/history/browser/_headers", import.meta.url),
+    "utf8",
+  );
+  expect(pagesHeaders).toContain(`Content-Security-Policy: ${policy}\n`);
+  const token = page.getByLabel("History access token");
+  const detail = page.getByRole("region", { name: "Selected operation" });
+  try {
+    expect(reads).toEqual([]);
+    await expect(token).toHaveAttribute("type", "password");
+    await expect(token).toHaveAccessibleDescription(
+      /Kept in memory for this tab/,
+    );
+    await expect(page.getByRole("button", { name: "Load history" })).toHaveCSS(
+      "background-color",
+      "rgb(0, 92, 187)",
+    );
+    await token.fill("h".repeat(40));
+    await token.press("Enter");
+    await expect(detail.getByRole("status")).toHaveText(
+      "Loading operation details…",
+    );
+    await expect(
+      detail.getByRole("progressbar", { name: "Loading operation details" }),
+    ).toHaveCSS("height", "4px");
+    await expect.poll(() => reads).toEqual([`/api/history/${first}`]);
+  } finally {
+    detailReply.resolve();
+  }
+
+  await expect(detail.getByText(first, { exact: true })).toBeVisible();
+  await expect
+    .poll(() => reads)
+    .toEqual([`/api/history/${first}`, "/api/history"]);
+  expect(violations).toEqual([]);
+});

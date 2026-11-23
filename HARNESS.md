@@ -67,6 +67,13 @@ the approved styles apply and unlisted inline styles are blocked.
 [Angular CSP guidance](https://angular.dev/best-practices/security#configure-styles-for-static-hosting)
 · [Pages header rules](https://developers.cloudflare.com/pages/configuration/headers/)
 
+Use the pinned Angular Material components for the history access form and
+loading indicators. Keep the theme in the same-origin build stylesheet and
+Material motion disabled through `MATERIAL_ANIMATIONS`. CDK's default motion
+probe injects a style element outside the generated policy. Verify any new
+Material control in the production build before relying on it.
+[Material qualification](docs/research/angular-material-pages-csp.md)
+
 `pnpm lint` checks TypeScript module syntax, type-only imports and exports,
 constant declarations, and unsupported constructs such as namespaces and
 const enums. UI TypeScript also requires braces and one variable per

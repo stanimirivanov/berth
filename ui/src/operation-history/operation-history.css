@@ -29,11 +29,6 @@ berth-operation-history {
   .access {
     margin-bottom: 1.5rem;
   }
-  label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-  }
   .access-row,
   .actions,
   .history-pagination {
@@ -41,15 +36,14 @@ berth-operation-history {
     gap: 0.75rem;
     flex-wrap: wrap;
   }
-  input {
-    border: 1px solid var(--muted);
-    border-radius: 0.25rem;
-    padding: 0.625rem;
-    font: inherit;
-    min-width: 0;
-    flex: 1;
+  .access-row {
+    align-items: flex-start;
   }
-  button {
+  .access-row mat-form-field {
+    flex: 1;
+    min-width: min(100%, 18rem);
+  }
+  button:not(.access-submit) {
     cursor: pointer;
     padding: 0.625rem 1rem;
     min-height: 2.75rem;

@@ -1,3 +1,4 @@
+import { MATERIAL_ANIMATIONS } from "@angular/material/core";
 import { bootstrapApplication } from "@angular/platform-browser";
 import { provideRouter, type UrlMatcher, UrlSerializer } from "@angular/router";
 import { App } from "./app";
@@ -15,6 +16,8 @@ const matchHistory: UrlMatcher = (segments) => {
 
 bootstrapApplication(App, {
   providers: [
+    // The default motion path asks CDK to inject an unapproved style element.
+    { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
     { provide: UrlSerializer, useClass: OperationUrlSerializer },
     provideRouter([
       {
