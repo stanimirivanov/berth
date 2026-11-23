@@ -25,6 +25,15 @@ evidence at a recorded observation time.
 A managed resource instance may exist, but its presence is unresolved. Earlier
 verified observations still describe what was established at their own times.
 
+**Inventory coverage**
+How fully retained evidence accounts for the Berth operations that could affect
+the managed resource instances of an offering.
+
+**Inventory coverage gap**
+A relevant operation or observation that retained evidence cannot account for
+in the inventory. A resource observation without an established instance
+identity leaves a coverage gap.
+
 ## Authorization and execution
 
 **Trial**
