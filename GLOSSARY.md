@@ -86,6 +86,11 @@ further mutating dispatches under the operation until reconciliation.
 The work of resolving uncertainty by comparing retained intent and dispatch
 records with admissible evidence of what happened.
 
+**Retry provisioning**
+A Berth action that reconciles an existing operation and resumes from the last
+verified step when authorized. After its execution window ends, the action can
+reconcile read-only, and any further provider write requires fresh authorization.
+
 **Resource teardown**
 Verified removal of the operation's owned bucket and object.
 
@@ -112,6 +117,11 @@ expired or terminal operations.
 A follow-up indicator in operation history. It flags an unresolved request or
 mutation, an outcome of `needs-reconciliation`, or an expired execution window
 with an outcome still recorded as `active`.
+
+**Independent owner evidence**
+A dated provider observation the owner obtains through a separately authorized
+reconciliation or cleanup procedure when Berth cannot complete it. It can
+establish the presence or removal of a specific managed resource instance.
 
 **Dated evidence**
 An observation or report preserved with its observation time or cutoff. It
