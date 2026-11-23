@@ -21,21 +21,24 @@
         <p role="alert" class="error">Enter a valid history token.</p>
       }
       <form (submit)="connect($event)">
-        <label for="token">History access token</label>
         <div class="access-row">
-          <input
-            #tokenInput
-            id="token"
-            type="password"
-            autocomplete="off"
-            [value]="token"
-            (input)="token = tokenInput.value"
-            maxlength="128"
-            spellcheck="false"
-          />
-          <button type="submit">Load history</button>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>History access token</mat-label>
+            <input
+              #tokenInput
+              matInput
+              id="token"
+              type="password"
+              autocomplete="off"
+              [value]="token"
+              (input)="token = tokenInput.value"
+              maxlength="128"
+              spellcheck="false"
+            />
+            <mat-hint>Kept in memory for this tab. No database or cloud credentials.</mat-hint>
+          </mat-form-field>
+          <button mat-flat-button class="access-submit" type="submit">Load history</button>
         </div>
-        <small>Kept in memory for this tab. No database or cloud credentials.</small>
       </form>
     } @else {
       <p>History access connected</p>
@@ -56,6 +59,7 @@
         }
         @if (store.listLoading()) {
           <p role="status">Loading operation history…</p>
+          <mat-progress-bar mode="indeterminate" aria-label="Loading operation history" />
         }
         @if (store.listFailure(); as failure) {
           <p role="alert" class="error">
@@ -113,6 +117,7 @@
           <button type="button" (click)="store.refreshDetail()" [disabled]="detailLoading()">Refresh detail</button>
           @if (detailLoading()) {
             <p role="status">Loading operation details…</p>
+            <mat-progress-bar mode="indeterminate" aria-label="Loading operation details" />
           }
           @if (detailFailure()) {
             <p role="alert" class="error">

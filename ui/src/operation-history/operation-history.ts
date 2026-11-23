@@ -14,6 +14,10 @@ import {
   viewChildren,
 } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
+import { MatButtonModule } from "@angular/material/button";
+import { MatFormFieldModule } from "@angular/material/form-field";
+import { MatInputModule } from "@angular/material/input";
+import { MatProgressBarModule } from "@angular/material/progress-bar";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { activeExpiry, attentionReasons, ownerProcedures } from "./attention";
 import { HistoryStore, isOperationId, type Operation } from "./history-store";
@@ -21,7 +25,14 @@ import { HistoryStore, isOperationId, type Operation } from "./history-store";
 /** Read-only history screen. The shell holds accepted access in tab memory. */
 @Component({
   selector: "berth-operation-history",
-  imports: [DatePipe, RouterLink],
+  imports: [
+    DatePipe,
+    RouterLink,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressBarModule,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./operation-history.html",
   styleUrl: "./operation-history.css",

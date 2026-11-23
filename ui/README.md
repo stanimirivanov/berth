@@ -27,6 +27,12 @@ Use `pnpm build:ui` to produce preview and release assets together with their
 CSP hashes. The loopback server reads the generated Pages `_headers` file
 when serving HTML.
 
+The history access form and loading indicators use pinned Angular Material.
+The build links the theme as same-origin CSS and hashes runtime component
+styles. Material motion is disabled for the static CSP. Keep the visible
+loading text alongside progress.
+[Material qualification](../docs/research/angular-material-pages-csp.md)
+
 ## Preview actual retained records
 
 Migration 008 from PR #88 must first be installed by the owner in the dedicated
