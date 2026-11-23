@@ -981,3 +981,104 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
     .toEqual([`/api/history/${first}`, "/api/history"]);
   expect(violations).toEqual([]);
 });
+
+test("owner access stays unverified until a protected response decodes", async ({
+  page,
+}) => {
+  let attempt = 0;
+  await page.route("**/api/history", (route) => {
+    attempt++;
+    if (attempt === 1) {
+      return route.fulfill({ status: 503, json: {} });
+    }
+    const record = { ...item(first), startedAt: "2026-11-20T06:50:00+00:00" };
+    return route.fulfill({
+      json: {
+        items: [
+          attempt === 2 ? { ...record, startedAt: [record.startedAt] } : record,
+        ],
+        next: null,
+      },
+    });
+  });
+
+  await openHistory(page);
+  const token = page.getByLabel("History access token");
+  const submit = page.getByRole("button", { name: "Load history" });
+  await token.fill("invalid");
+  await submit.click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Enter a valid history token.",
+  );
+  expect(attempt).toBe(0);
+
+  await token.fill("h".repeat(40));
+  await submit.click();
+  const access = page.getByRole("region", { name: "History access" });
+  const inbox = page.getByRole("region", { name: "Recorded operations" });
+  const retry = inbox.getByRole("button", { name: "Retry", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(access).toContainText("History access has not been verified");
+  await retry.click();
+  await expect(retry).toBeVisible();
+  await expect(access).toContainText("History access has not been verified");
+  await expect(inbox.getByRole("link", { name: first })).toHaveCount(0);
+  await retry.click();
+  await expect(inbox.getByRole("link", { name: first })).toBeVisible();
+  await expect(access).toContainText("History access connected");
+  expect(attempt).toBe(3);
+});
+
+test("leaving History discards the old detail and keeps access unverified on return", async ({
+  page,
+}) => {
+  const pending = Promise.withResolvers<void>();
+  const resumed = Promise.withResolvers<void>();
+  const reads: string[] = [];
+  const path = `/operations/${first}`;
+  const endpoint = `/api/history/${first}`;
+  let detailReads = 0;
+  await page.route("**/api/history**", async (route) => {
+    const requestPath = new URL(route.request().url()).pathname;
+    reads.push(requestPath);
+    if (requestPath !== endpoint) {
+      await route.fulfill({ json: { items: [], next: null } });
+      return;
+    }
+    detailReads++;
+    if (detailReads === 1) {
+      await pending.promise;
+    } else {
+      await resumed.promise;
+    }
+    await route.fulfill({ json: item(first) });
+  });
+
+  await page.goto(path);
+  await page.getByLabel("History access token").fill("h".repeat(40));
+  await page.getByRole("button", { name: "Load history" }).click();
+  try {
+    await expect.poll(() => reads).toEqual([endpoint]);
+    const oldReply = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === endpoint,
+    );
+    await page
+      .getByRole("link", { name: "Infrastructure", exact: true })
+      .click();
+    await expect(page).toHaveURL("/");
+    pending.resolve();
+    await oldReply;
+    await page.goBack();
+    await expect(page).toHaveURL(path);
+    await expect(
+      page.getByText("History access has not been verified."),
+    ).toBeVisible();
+    await expect(page.getByText("Loading operation details…")).toBeVisible();
+    await expect.poll(() => reads).toEqual([endpoint, endpoint]);
+  } finally {
+    pending.resolve();
+    resumed.resolve();
+  }
+  await expect(page.getByText("History access connected")).toBeVisible();
+  await expect.poll(() => reads).toEqual([endpoint, endpoint, "/api/history"]);
+});

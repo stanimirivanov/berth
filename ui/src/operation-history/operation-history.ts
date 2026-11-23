@@ -4,6 +4,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   ElementRef,
   effect,
   inject,
@@ -26,8 +27,10 @@ import {
 } from "@angular/material/list";
 import { MatProgressBarModule } from "@angular/material/progress-bar";
 import { ActivatedRoute, RouterLink } from "@angular/router";
+import { isOperationId } from "../operation-id";
+import { OWNER_SESSION } from "../owner-access/owner-session";
 import { activeExpiry, attentionReasons, ownerProcedures } from "./attention";
-import { HistoryStore, isOperationId, type Operation } from "./history-store";
+import { HistoryStore, type Operation } from "./history-store";
 
 /** Read-only history screen. The shell holds accepted access in tab memory. */
 @Component({
@@ -52,7 +55,9 @@ import { HistoryStore, isOperationId, type Operation } from "./history-store";
 })
 export class OperationHistory {
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly store = inject(HistoryStore);
+  protected readonly owner = inject(OWNER_SESSION);
   private readonly segments = toSignal(this.route.url, { requireSync: true });
   protected readonly operation = computed(
     () => this.segments()[1]?.path ?? null,
@@ -133,6 +138,7 @@ export class OperationHistory {
 
   /** React to route changes without reopening the view when read state changes. */
   constructor() {
+    this.destroyRef.onDestroy(() => this.store.leave());
     effect(() => {
       const operation = this.operation();
       const valid = !this.invalidOperation();
@@ -140,6 +146,7 @@ export class OperationHistory {
         if (valid) {
           this.store.open(operation);
         } else {
+          this.store.leave();
           this.store.select(null);
         }
       });
@@ -170,7 +177,7 @@ export class OperationHistory {
 
   /** Restore focus after route and pane state agree, including a regrouped row. */
   private restoreFocus() {
-    if (!this.store.connected() || this.invalidOperation()) {
+    if (!this.owner.canRead() || this.invalidOperation()) {
       this.previousFocusRoute = undefined;
       this.restoredRow = undefined;
       return;
@@ -206,13 +213,17 @@ export class OperationHistory {
     }
   }
 
+  /** Submit a valid owner token and open the requested History view. */
   protected connect(event: Event) {
     event.preventDefault();
-    this.store.connect(this.token, this.operation());
+    if (this.owner.connect(this.token)) {
+      this.store.open(this.operation());
+    }
     this.token = "";
   }
+  /** Clear the shared owner session and its protected feature data. */
   protected disconnect() {
     this.token = "";
-    this.store.disconnect();
+    this.owner.disconnect();
   }
 }

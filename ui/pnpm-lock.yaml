@@ -193,9 +193,6 @@ importers:
       '@ngrx/signals':
         specifier: 22.0.1
         version: 22.0.1(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
-      effect:
-        specifier: 4.1.4
-        version: 4.1.4
       rxjs:
         specifier: 7.8.2
         version: 7.8.2
@@ -1807,9 +1804,6 @@ packages:
     peerDependenciesMeta:
       oxc-resolver:
         optional: true
-
-  effect@4.1.4:
-    resolution: {integrity: sha512-Tgrv/9FN+TZYyOn8XSli+fVqAfwDrDAkiX5Uu9vztINb675VTQdhD0gWI5Kzvhlh9QqzjZvw72iugqw5pwoghQ==}
 
   electron-to-chromium@1.5.491:
     resolution: {integrity: sha512-zMOQrvaTekJMwENqx1Rnyl3qieqGxIui5CRu9g6ktKzQ/T54fq0Qfr3V/SEhGrkStWI3eYMSzMN4rbyFwfQSzA==}
@@ -3953,8 +3947,6 @@ snapshots:
       domhandler: 6.0.1
 
   dts-resolver@3.0.0: {}
-
-  effect@4.1.4: {}
 
   electron-to-chromium@1.5.491: {}
 

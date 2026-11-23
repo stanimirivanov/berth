@@ -12,12 +12,12 @@
     <p>A completed operation is not proof of full live validation. Provider usage and remaining free allowances are not shown here.</p>
   </aside>
   <section class="access" aria-label="History access">
-    @if (store.accessError() === "forbidden") {
+    @if (owner.status() === "forbidden") {
       <p role="alert" class="error">Access to Operation history is blocked on this site. Open the configured Berth URL for your deployment.</p>
-    } @else if (!store.connected()) {
-      @if (store.accessError() === "unauthorized") {
+    } @else if (!owner.canRead()) {
+      @if (owner.status() === "unauthorized") {
         <p role="alert" class="error">Access denied. Enter a valid history token.</p>
-      } @else if (store.accessError() === "invalid") {
+      } @else if (owner.status() === "invalid") {
         <p role="alert" class="error">Enter a valid history token.</p>
       }
       <form (submit)="connect($event)">
@@ -41,13 +41,17 @@
         </div>
       </form>
     } @else {
-      <p>History access connected</p>
+      @if (owner.status() === "verified") {
+        <p>History access connected</p>
+      } @else {
+        <p>History access has not been verified.</p>
+      }
       <div class="actions">
         <button mat-button type="button" (click)="disconnect()">Disconnect</button>
       </div>
     }
   </section>
-  @if (store.connected()) {
+  @if (owner.canRead()) {
     <div class="inbox-layout" [class.has-detail]="showDetail()">
       <section class="inbox" [attr.aria-busy]="store.listLoading()" aria-label="Recorded operations">
         <mat-card appearance="outlined" class="inbox-panel">
