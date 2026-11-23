@@ -1,5 +1,7 @@
+import { DestroyRef, inject } from "@angular/core";
 import { patchState, signalStore, withMethods, withState } from "@ngrx/signals";
-import { Effect } from "effect";
+import { isOperationId } from "../operation-id";
+import { OWNER_SESSION } from "../owner-access/owner-session";
 
 /** Browser-only allowlist; app counters are never provider allowances. */
 export interface Operation {
@@ -41,8 +43,6 @@ interface State {
   detailLoading: boolean;
   listFailure: { before: string | null } | null;
   detailFailure: "missing" | "unavailable" | null;
-  connected: boolean;
-  accessError: "invalid" | "unauthorized" | "forbidden" | null;
 }
 
 /** The request identity and target shared by the queue and reply checks. */
@@ -58,15 +58,21 @@ const initial: State = {
   detailLoading: false,
   listFailure: null,
   detailFailure: null,
-  connected: false,
-  accessError: null,
 };
-const uuid =
-  /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const timestamp =
+  /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
-/** Match the history API's canonical operation identifier. */
-export function isOperationId(value: string) {
-  return uuid.test(value);
+/** Accept the timestamp strings serialized by PostgreSQL, including UTC offsets. */
+function validTimestamp(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    !timestamp.test(value) ||
+    !Number.isFinite(Date.parse(value))
+  ) {
+    return false;
+  }
+  const date = value.slice(0, 10);
+  return new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
 }
 
 /** Deny malformed responses before render; Angular still escapes all text. */
@@ -83,8 +89,8 @@ function record(value: unknown): Operation {
       item.outcome,
     ) ||
     ![null, "bucket", "object", "observe", "cleanup"].includes(item.phase) ||
-    !Number.isFinite(Date.parse(item.startedAt)) ||
-    !Number.isFinite(Date.parse(item.expiresAt)) ||
+    !validTimestamp(item.startedAt) ||
+    !validTimestamp(item.expiresAt) ||
     [item.pendingUpload, item.cleanupRequested, item.objectRemoved].some(
       (flag) => typeof flag !== "boolean",
     )
@@ -137,85 +143,62 @@ function listResult(value: unknown, before: string | null): ListResult {
   };
 }
 
-/** Keep access in tab memory and serialize reads for the single-reader service. */
+/** Own history snapshots and serialize reads for the single-reader service. */
 export const HistoryStore = signalStore(
   withState(initial),
   withMethods((store) => {
-    let token = "";
-    let session = 0;
+    const owner = inject(OWNER_SESSION);
     let active = false;
     let inboxPage: ListResult | null = null;
     const pending: Partial<Record<Read["pane"], Read>> = {};
     const latest: Partial<Record<Read["pane"], Read>> = {};
 
-    /** Discard all protected state and pending work from this token session. */
-    const clearAccess = (accessError: State["accessError"] = null) => {
-      session++;
-      token = "";
-      inboxPage = null;
+    /** Drop queued reads and make results from dispatched reads obsolete. */
+    const discardReads = () => {
       delete pending.list;
       delete pending.detail;
       delete latest.list;
       delete latest.detail;
-      patchState(store, { ...initial, accessError });
     };
+    const unsubscribe = owner.onClear(() => {
+      inboxPage = null;
+      discardReads();
+      patchState(store, initial);
+    });
+    inject(DestroyRef).onDestroy(unsubscribe);
 
-    /** Apply access denial globally, even when the initiating view has changed. */
-    const read = async (job: Read, epoch: number, accessToken: string) => {
-      const current = () => epoch === session && latest[job.pane] === job;
+    /** Decode and apply only the latest read for the requested history pane. */
+    const read = async (job: Read) => {
+      const current = () => latest[job.pane] === job;
       const path =
         job.pane === "detail"
           ? `/api/history/${job.operation}`
           : `/api/history${job.before ? `?before=${encodeURIComponent(job.before)}` : ""}`;
       try {
-        const response = await Effect.runPromise(
-          Effect.tryPromise({
-            try: () =>
-              fetch(path, {
-                headers: { authorization: `Bearer ${accessToken}` },
-                cache: "no-store",
-                redirect: "error",
-                signal: AbortSignal.timeout(5000),
-              }),
-            catch: () => new Error("unavailable"),
-          }),
+        const result = await owner.read(
+          path,
+          (body) => {
+            if (job.pane === "list") {
+              return { list: listResult(body, job.before) };
+            }
+            const selected = record(body);
+            if (selected.operation !== job.operation) {
+              throw Error();
+            }
+            return {
+              detail: { record: selected, fetchedAt: new Date().toISOString() },
+            };
+          },
+          current,
         );
-        if (
-          epoch === session &&
-          (response.status === 401 || response.status === 403)
-        ) {
-          clearAccess(response.status === 401 ? "unauthorized" : "forbidden");
-        }
-        if (!current() || !response.ok) {
-          void response.body?.cancel().catch(() => {});
-        }
-        if (!current()) {
+        if (!current() || result.kind === "discarded") {
           return;
         }
-        if (job.pane === "detail" && response.status === 404) {
+        if (result.kind === "success") {
+          patchState(store, result.value);
+        } else if (job.pane === "detail" && result.kind === "missing") {
           patchState(store, { detail: null, detailFailure: "missing" });
-          return;
-        }
-        if (!response.ok) {
-          throw Error();
-        }
-        const result: unknown = await response.json();
-        if (!current()) {
-          return;
-        }
-        if (job.pane === "list") {
-          patchState(store, { list: listResult(result, job.before) });
         } else {
-          const selected = record(result);
-          if (selected.operation !== job.operation) {
-            throw Error();
-          }
-          patchState(store, {
-            detail: { record: selected, fetchedAt: new Date().toISOString() },
-          });
-        }
-      } catch {
-        if (current()) {
           patchState(
             store,
             job.pane === "list"
@@ -246,7 +229,7 @@ export const HistoryStore = signalStore(
         let job = pending.detail ?? pending.list;
         while (job) {
           delete pending[job.pane];
-          await read(job, session, token);
+          await read(job);
           job = pending.detail ?? pending.list;
         }
       } finally {
@@ -256,7 +239,7 @@ export const HistoryStore = signalStore(
 
     /** Replace queued work for this pane, keeping the other pane's request. */
     const enqueue = (job: Read) => {
-      if (!token) {
+      if (!owner.canRead()) {
         return;
       }
       latest[job.pane] = job;
@@ -291,6 +274,14 @@ export const HistoryStore = signalStore(
     /** Retain detail data only while reading the same operation. */
     const select = (operation: string | null) => {
       if (operation === store.operation()) {
+        if (
+          operation &&
+          !store.detail() &&
+          !store.detailFailure() &&
+          !store.detailLoading()
+        ) {
+          enqueue({ pane: "detail", operation });
+        }
         return;
       }
       if (operation) {
@@ -313,7 +304,7 @@ export const HistoryStore = signalStore(
 
     /** Enter the saved detail first, then fill in the list if it has no result. */
     const open = (operation: string | null) => {
-      if (!token) {
+      if (!owner.canRead()) {
         return;
       }
       select(operation);
@@ -323,19 +314,13 @@ export const HistoryStore = signalStore(
     };
 
     return {
-      /** Admit only a locally valid token and start the requested view. */
-      connect(value: string, operation: string | null) {
-        if (!/^[A-Za-z0-9_-]{32,128}$/.test(value)) {
-          patchState(store, { accessError: "invalid" });
-          return;
-        }
-        token = value;
-        patchState(store, { connected: true, accessError: null });
-        open(operation);
-      },
-      disconnect: () => clearAccess(),
       open,
       select,
+      /** Preserve settled views while discarding work from the departed screen. */
+      leave() {
+        discardReads();
+        patchState(store, { listLoading: false, detailLoading: false });
+      },
       refreshList: () =>
         enqueue({ pane: "list", before: store.list()?.before ?? null }),
       newest: () => enqueue({ pane: "list", before: null }),

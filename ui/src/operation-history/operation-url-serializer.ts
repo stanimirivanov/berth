@@ -5,7 +5,7 @@ import {
   UrlSegmentGroup,
   UrlTree,
 } from "@angular/router";
-import { isOperationId } from "./history-store";
+import { isOperationId } from "../operation-id";
 
 const detailPath = /^\/operations\/([^/?#]+)(?:[?#].*)?$/;
 const invalidOperation = "invalid-operation-link";

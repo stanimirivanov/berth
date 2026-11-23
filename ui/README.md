@@ -1,6 +1,6 @@
 # Angular operation history
 
-A private, read-only history screen using Angular 22, NgRx Signal Store and Effect.
+A private, read-only history screen using Angular 22 and NgRx Signal Store.
 No operation can be created, resumed, cleaned up or settled from this screen.
 The visible partial/no-go verdict remains independent of stored lifecycle outcomes.
 
@@ -48,6 +48,21 @@ loading text alongside progress.
 - Qualify added controls with the production CSP and bundle checks before
   release. Keep styles same-origin, Material motion disabled and Pages static.
 
+## Browser owner session
+
+History and the upcoming Inventory UI use the shell’s owner session. The
+session keeps one bearer token in tab memory and verifies it only after a
+current protected read decodes successfully. A failed first read leaves
+access unverified and can be retried. A detail 404 remains a History result.
+
+Each feature owns its snapshots, request identities and retries. Register a
+synchronous clear handler with the session to erase protected snapshots and
+queued reads on disconnect or denial. Check request identity before applying
+an awaited reply. History keeps its serial dispatch and saved-detail priority.
+Leaving History discards pending pane requests and preserves settled snapshots.
+The Inventory integration will keep the offering catalog visible regardless
+of protected access.
+
 ## Preview actual retained records
 
 Migration 008 from PR #88 must first be installed by the owner in the dedicated
@@ -83,9 +98,9 @@ Neon database. This PR installs nothing and makes no cloud requests during tests
   Concurrent reads in one service instance return unavailable rather than queue.
 
 A missing migration, invalid database credentials or service outage gives a generic
-unavailable state. A 401 clears the token and both panes, then prompts for a new
-token at the same URL. A 403 clears both panes and directs you to the Berth URL
-configured for the deployment. A detail 404 clears only the missing detail.
+unavailable state. A 401 clears the token and protected state, then prompts for
+a new token at the same URL. A 403 clears the same state and directs you to the
+Berth URL configured for the deployment. A detail 404 clears only the missing detail.
 Stored records remain readable after their execution expiry.
 
 ## Hosted boundary and limitations
