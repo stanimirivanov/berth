@@ -7,11 +7,12 @@ import ts from "typescript-ast";
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
   "src/trial/empty-control.ts": [],
+  "src/trial/retry-contract.ts": ["effect"],
   "src/trial/retry-api.ts": ["node:crypto"],
   "src/trial/retry-index.ts": [],
   "src/trial/retry-runtime.ts": ["node:crypto", "pg", "oci-common"],
   "src/trial/retry-reconciliation.ts": ["node:crypto"],
-  "src/providers/oci/retry-observation.ts": [],
+  "src/providers/oci/retry-observation.ts": ["effect"],
   "src/trial/history-api.ts": ["node:crypto"],
   "src/trial/history-runtime.ts": ["pg"],
   "src/trial/history-index.ts": [],
@@ -168,7 +169,10 @@ export function analyze(files) {
                 resolved,
               )) ||
             (file === "src/trial/retry-api.ts" &&
-              resolved === "src/trial/empty-control.ts") ||
+              [
+                "src/trial/empty-control.ts",
+                "src/trial/retry-contract.ts",
+              ].includes(resolved)) ||
             (file === "src/trial/retry-runtime.ts" &&
               [
                 "src/trial/retry-api.ts",
@@ -177,6 +181,7 @@ export function analyze(files) {
               ].includes(resolved)) ||
             (file === "src/trial/retry-reconciliation.ts" &&
               [
+                "src/trial/retry-contract.ts",
                 "src/trial/retry-api.ts",
                 "src/providers/oci/retry-observation.ts",
               ].includes(resolved)) ||

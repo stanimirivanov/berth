@@ -98,3 +98,38 @@ test("a retry session that expires during empty body inspection cannot start a c
   assert.equal((await api.fetch(request)).status, 401);
   assert.equal(dispatched, 0);
 });
+
+test("retry responses project only the public status fields", async () => {
+  const status = {
+    operation,
+    stage: "checking-provider",
+    scope: "after-expiry",
+    result: null,
+    reason: null,
+    ownerProcedure: null,
+    observedAt: null,
+    startedAt: "2026-11-23T12:00:00Z",
+    checks: { used: 1, limit: 2 },
+  } satisfies NonNullable<
+    Awaited<ReturnType<import("../src/trial/retry-api.js").RetryAction>>
+  >;
+  const api = retryApi(credential, async () => ({
+    ...status,
+    privateProviderId: "fixture-private",
+    checks: { ...status.checks, privateCounter: 8 },
+  }));
+  const signed = await api.fetch(
+    new Request(`${origin}/api/retry/session`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${credential}` },
+    }),
+  );
+  const { session } = await signed.json();
+  const result = await api.fetch(
+    new Request(`${origin}/api/retry/operations/${operation}`, {
+      headers: { authorization: `Bearer ${session}` },
+    }),
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), status);
+});

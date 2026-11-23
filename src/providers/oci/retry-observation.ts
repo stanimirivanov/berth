@@ -1,3 +1,5 @@
+import * as Schema from "effect/Schema";
+
 /** Fixed region, namespace and compartment authorized for the read-only OCI principal. */
 export interface RetryScope {
   region: string;
@@ -25,7 +27,14 @@ export type RetryObservation =
       observedAt: string;
       configurationMatches: boolean;
     }
-  | { kind: "not-found" | "absent" | "inconclusive" };
+  | {
+      kind:
+        | "not-found"
+        | "absent"
+        | "inconclusive"
+        | "ownership-conflict"
+        | "read-access-unavailable";
+    };
 
 /** The only network capabilities exposed to retry reconciliation are signed GETs. */
 export interface RetryObserver {
@@ -62,12 +71,34 @@ async function beforeAbort<T>(
   }
 }
 
-/** Restrict provider values to plain JSON objects before extracting observations. */
-function record(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw Error("Invalid provider observation");
-  return value as Record<string, unknown>;
-}
+/** Decode identity and exact configuration scalars without trusting provider JSON types. */
+const decodeBucket = Schema.decodeUnknownSync(
+  Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    namespace: Schema.String,
+    compartmentId: Schema.String,
+    etag: Schema.String,
+    freeformTags: Schema.optionalKey(
+      Schema.NullOr(
+        Schema.Struct({
+          "berth-operation": Schema.optionalKey(Schema.String),
+          "berth-marker": Schema.optionalKey(Schema.String),
+        }),
+      ),
+    ),
+    publicAccessType: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    storageTier: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    versioning: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    autoTiering: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    objectEventsEnabled: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+    replicationEnabled: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+    isReadOnly: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+    kmsKeyId: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    isBucketKeyEnabled: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+    objectLifecyclePolicyEtag: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  }),
+);
 
 /** Bound JSON and cancel an unconsumed response without waiting for its cancellation hook. */
 async function boundedJson(response: Response, signal: AbortSignal) {
@@ -96,11 +127,15 @@ function bucketObservation(
   value: unknown,
   response: Response,
 ): RetryObservation {
-  const bucket = record(value);
-  const tags = record(bucket.freeformTags);
+  let bucket: ReturnType<typeof decodeBucket>;
+  try {
+    bucket = decodeBucket(value);
+  } catch {
+    return { kind: "inconclusive" };
+  }
   const { id, name, namespace, compartmentId: compartment } = bucket;
-  const operation = tags["berth-operation"];
-  const marker = tags["berth-marker"];
+  const operation = bucket.freeformTags?.["berth-operation"];
+  const marker = bucket.freeformTags?.["berth-marker"];
   const etag = response.headers.get("etag");
   const requestId = response.headers.get("opc-request-id");
   const date = response.headers.get("date") ?? "";
@@ -109,13 +144,7 @@ function bucketObservation(
       ? Date.parse(date)
       : Number.NaN;
   if (
-    typeof id !== "string" ||
     !/^ocid1[.]bucket[.][A-Za-z0-9._-]{1,200}$/.test(id) ||
-    typeof name !== "string" ||
-    typeof namespace !== "string" ||
-    typeof compartment !== "string" ||
-    typeof operation !== "string" ||
-    typeof marker !== "string" ||
     !etag ||
     etag.length > 256 ||
     bucket.etag !== etag ||
@@ -124,6 +153,7 @@ function bucketObservation(
     !Number.isFinite(observedAt)
   )
     return { kind: "inconclusive" };
+  if (!operation || !marker) return { kind: "ownership-conflict" };
   return {
     kind: "present",
     id,
@@ -143,9 +173,9 @@ function bucketObservation(
       bucket.objectEventsEnabled === false &&
       bucket.replicationEnabled === false &&
       bucket.isReadOnly === false &&
-      !bucket.kmsKeyId &&
+      bucket.kmsKeyId == null &&
       bucket.isBucketKeyEnabled !== true &&
-      !bucket.objectLifecyclePolicyEtag,
+      bucket.objectLifecyclePolicyEtag == null,
   };
 }
 
@@ -200,6 +230,8 @@ export function retryObserver(
       );
       if (response.status !== 200 || response.headers.has("opc-next-page")) {
         void response.body?.cancel().catch(() => undefined);
+        if (response.status === 401 || response.status === 403)
+          return { kind: "read-access-unavailable" };
         return {
           kind:
             probe === "bucket" && response.status === 404

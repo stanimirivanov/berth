@@ -188,6 +188,25 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
     const mismatch = await seed("expired", true);
     const changedIdentity = await seed("expired", true);
     const drift = await seed("expired", true);
+    const queuedRemoval = await seed("expired", true);
+    const publishedRemoval = await seed("expired", true);
+    const newerRemoval = await seed("expired", true);
+    const deniedRead = await seed();
+    for (const fixture of [queuedRemoval, publishedRemoval, newerRemoval]) {
+      const identity = `ocid1.bucket.oc1..retryFixture${fixture.operation.replaceAll("-", "")}`;
+      await owner.query(
+        "INSERT INTO berth_inventory.executor_events VALUES($1,$2,$3,now()+CASE WHEN $4 THEN interval '10 seconds' ELSE interval '-2 minutes' END,'removed','{}')",
+        [
+          `fixture/removal/${fixture.operation}`,
+          fixture.operation,
+          identity,
+          fixture === newerRemoval,
+        ],
+      );
+    }
+    await owner.query("SELECT berth_inventory.publish_executor($1)", [
+      publishedRemoval.operation,
+    ]);
     const expiredCleanup = await seed();
     await owner.query(
       "INSERT INTO berth_inventory.executor_events VALUES('fixture/known',$1,'ocid1.bucket.oc1..previous',now(),'present','{}')",
@@ -217,9 +236,17 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
             ? Response.json([], { headers: { "opc-next-page": "fixture" } })
             : Response.json([]);
         pathsProbe = path.split("/").at(-1);
-        const saved = [late, mismatch, changedIdentity, drift].find(
-          (item) => item.bucket === pathsProbe,
-        );
+        if (pathsProbe === deniedRead.bucket)
+          return new Response(null, { status: 403 });
+        const saved = [
+          late,
+          mismatch,
+          changedIdentity,
+          drift,
+          queuedRemoval,
+          publishedRemoval,
+          newerRemoval,
+        ].find((item) => item.bucket === pathsProbe);
         if (!saved) return new Response(null, { status: 404 });
         const date = new Date().toUTCString();
         if (saved === late) {
@@ -323,6 +350,50 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
     assert.equal(
       (await followUp("start", paginated.operation))?.reason,
       "provider-check-inconclusive",
+    );
+
+    const denied = await followUp("start", deniedRead.operation);
+    assert.equal(denied?.reason, "read-access-unavailable");
+    assert.ok(denied?.ownerProcedure?.endsWith("#installation-prerequisites"));
+    for (const fixture of [queuedRemoval, publishedRemoval]) {
+      const contradictory = await followUp("start", fixture.operation);
+      assert.equal(contradictory?.reason, "ownership-conflict");
+      await owner.query("SELECT berth_inventory.publish_executor($1)", [
+        fixture.operation,
+      ]);
+      const admitted = (
+        await owner.query(
+          "SELECT source,kind,disposition FROM berth_inventory.evidence WHERE operation=$1",
+          [fixture.operation],
+        )
+      ).rows;
+      assert.deepEqual(admitted, [
+        { source: "executor", kind: "removed", disposition: "recorded" },
+      ]);
+    }
+    const historical = await followUp("start", newerRemoval.operation);
+    assert.equal(historical?.reason, "newer-removal-recorded");
+    const ordered = await owner.query(
+      "SELECT kind,disposition FROM berth_inventory.evidence WHERE operation=$1 ORDER BY observed_at",
+      [newerRemoval.operation],
+    );
+    assert.deepEqual(ordered.rows, [
+      { kind: "present", disposition: "recorded" },
+      { kind: "removed", disposition: "recorded" },
+    ]);
+    const privateDrift = await owner.query(
+      "SELECT provider_observation->'configurationMatches' AS matches FROM berth_retry.reconciliations WHERE operation=$1",
+      [drift.operation],
+    );
+    assert.deepEqual(privateDrift.rows, [{ matches: false }]);
+    const afterDriftAndRemoval = (
+      await owner.query("SELECT berth_inventory.inventory_page() AS value")
+    ).rows[0]?.value;
+    assert.deepEqual(
+      afterDriftAndRemoval.items.map(
+        (row: { operation: string }) => row.operation,
+      ),
+      [late.operation],
     );
 
     const claim = randomUUID();

@@ -2,9 +2,13 @@ import { randomUUID } from "node:crypto";
 import type {
   RetryObservation,
   RetryObserver,
-  RetryTarget,
 } from "../providers/oci/retry-observation.js";
-import type { RetryAction, RetryStatus } from "./retry-api.js";
+import type { RetryAction } from "./retry-api.js";
+import {
+  decodeRetryClaim,
+  decodeRetryReservation,
+  decodeRetryStatus,
+} from "./retry-contract.js";
 
 /** Parameterized database port. It cannot select or mutate trial tables under the retry role. */
 export interface RetryDatabase {
@@ -14,43 +18,50 @@ export interface RetryDatabase {
   ): Promise<{ rows: Record<string, unknown>[] }>;
 }
 
-/** Only a newly committed claim receives the private target and deadline. */
-interface BeginRetry {
-  status: RetryStatus;
-  target?: RetryTarget;
-  deadline?: string;
-}
-
-/** Claim once, commit every reservation before its GET, and finish without changing the old operation. */
+/** Claim once, commit every reservation before its GET, and account under the selected execution scope. */
 export function retryActions(
   db: RetryDatabase,
   provider: RetryObserver,
 ): RetryAction {
   /** The installed functions own eligibility, metering and all sanitized result codes. */
-  async function call<T>(sql: string, args: unknown[]): Promise<T> {
-    return (await db.query(sql, args)).rows[0]?.result as T;
+  async function call(sql: string, args: unknown[]): Promise<unknown> {
+    const { rows } = await db.query(sql, args);
+    if (rows.length !== 1) throw Error("Retry database result unavailable");
+    return rows[0]?.result;
   }
 
   return async (action, operation) => {
     if (action === "status")
-      return call("SELECT berth_retry.status($1) AS result", [operation]);
+      return decodeRetryStatus(
+        await call("SELECT berth_retry.status($1) AS result", [operation]),
+      );
 
     const claim = randomUUID();
-    const pending = await call<BeginRetry | null>(
-      "SELECT berth_retry.begin($1,$2) AS result",
-      [operation, claim],
+    const pending = decodeRetryClaim(
+      await call("SELECT berth_retry.begin($1,$2) AS result", [
+        operation,
+        claim,
+      ]),
     );
-    if (!pending?.target || !pending.deadline) return pending?.status ?? null;
+    if (!pending) return null;
+    if (pending.status.operation !== operation)
+      throw Error("Retry claim mismatch");
+    if (pending.kind === "recorded") return pending.status;
     const deadline = Date.parse(pending.deadline);
     const target = pending.target;
+    if (target.bucket !== `berth-${operation.replaceAll("-", "")}`)
+      throw Error("Retry target mismatch");
 
     /** Return an inconclusive stop on provider failure while retaining the already charged read. */
     async function observe(
       probe: "bucket" | "list",
     ): Promise<RetryObservation | { kind: "reservation-refused" }> {
-      const allowed = await call<boolean>(
-        "SELECT berth_retry.reserve($1,$2,$3) AS result",
-        [operation, claim, probe],
+      const allowed = decodeRetryReservation(
+        await call("SELECT berth_retry.reserve($1,$2,$3) AS result", [
+          operation,
+          claim,
+          probe,
+        ]),
       );
       if (!allowed) return { kind: "reservation-refused" };
       try {
@@ -69,9 +80,8 @@ export function retryActions(
       proof = await observe("bucket");
       if (proof.kind === "not-found") proof = await observe("list");
     }
-    return call<RetryStatus>(
-      "SELECT berth_retry.finish($1,$2,$3::jsonb) AS result",
-      [
+    return decodeRetryStatus(
+      await call("SELECT berth_retry.finish($1,$2,$3::jsonb) AS result", [
         operation,
         claim,
         JSON.stringify(
@@ -79,7 +89,7 @@ export function retryActions(
             ? { ...proof, observedAt: new Date().toISOString() }
             : proof,
         ),
-      ],
+      ]),
     );
   };
 }

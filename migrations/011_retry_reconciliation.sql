@@ -27,7 +27,8 @@ CREATE TABLE berth_retry.reconciliations (
   finished_at timestamptz,
   result text CHECK (result IN ('owned-instance','safe-write-needed')),
   reason text,
-  observed_at timestamptz
+  observed_at timestamptz,
+  provider_observation jsonb CHECK (octet_length(provider_observation::text) <= 4096)
 );
 REVOKE ALL ON ALL TABLES IN SCHEMA berth_retry FROM PUBLIC, berth_runtime, berth_retry_action;
 
@@ -44,7 +45,7 @@ SET search_path = pg_catalog, pg_temp SET timezone = 'UTC' AS $$
     'result', r.result,
     'reason', coalesce(r.reason, CASE WHEN r.finished_at IS NULL
       AND statement_timestamp() >= r.deadline THEN 'check-interrupted' END),
-    'ownerProcedure', CASE WHEN r.reason = 'read-scope-unavailable'
+    'ownerProcedure', CASE WHEN r.reason IN ('read-scope-unavailable','read-access-unavailable')
       THEN 'https://github.com/stanimirivanov/berth/blob/main/docs/trial/retry-reconciliation.md#installation-prerequisites'
       WHEN r.reason IS NOT NULL OR
       (r.finished_at IS NULL AND statement_timestamp() >= r.deadline)
@@ -73,7 +74,7 @@ DECLARE
   now_at timestamptz := clock_timestamp();
 BEGIN
   SELECT * INTO r FROM berth_retry.reconciliations WHERE operation = p_operation;
-  IF FOUND THEN RETURN jsonb_build_object('status', berth_retry.summary(r)); END IF;
+  IF FOUND THEN RETURN jsonb_build_object('kind', 'recorded', 'status', berth_retry.summary(r)); END IF;
 
   SELECT * INTO t FROM berth_ledger.trials WHERE operation = p_operation;
   IF NOT FOUND OR p_claim IS NULL OR t.started_at > now_at
@@ -102,16 +103,16 @@ BEGIN
   -- Admission denials do not consume the one available provider check.
   IF r.reason IS NOT NULL THEN
     r.finished_at := now_at;
-    RETURN jsonb_build_object('status', berth_retry.summary(r));
+    RETURN jsonb_build_object('kind', 'recorded', 'status', berth_retry.summary(r));
   END IF;
 
   INSERT INTO berth_retry.reconciliations VALUES (r.*)
     ON CONFLICT (operation) DO NOTHING;
   IF NOT FOUND THEN
-    RETURN jsonb_build_object('status', berth_retry.status(p_operation));
+    RETURN jsonb_build_object('kind', 'recorded', 'status', berth_retry.status(p_operation));
   END IF;
   RETURN jsonb_build_object(
-    'status', berth_retry.summary(r), 'deadline', r.deadline,
+    'kind', 'claimed', 'status', berth_retry.summary(r), 'deadline', r.deadline,
     'target', jsonb_build_object('region',t.region,'namespace',t.namespace,'compartment',t.compartment,'bucket',t.bucket)
   );
 END $$;
@@ -167,6 +168,7 @@ DECLARE
   unresolved boolean;
   cleanup boolean;
   recorded text;
+  latest_removal timestamptz;
 BEGIN
   SELECT * INTO r FROM berth_retry.reconciliations
     WHERE operation = p_operation AND claim = p_claim FOR UPDATE;
@@ -202,6 +204,10 @@ BEGIN
   THEN r.reason := 'operation-changed';
   ELSIF kind = 'scope-unavailable' AND r.used = 0 THEN
     r.reason := 'read-scope-unavailable';
+  ELSIF kind = 'read-access-unavailable' AND r.used > 0 THEN
+    r.reason := 'read-access-unavailable';
+  ELSIF kind = 'ownership-conflict' AND r.used = 1 THEN
+    r.reason := 'ownership-conflict';
   ELSIF kind = 'reservation-refused' THEN
     r.reason := CASE WHEN r.scope = 'original-window' AND t.normal_used >= 160
       THEN 'normal-budget-exhausted' ELSE 'operation-changed' END;
@@ -221,29 +227,47 @@ BEGIN
     THEN r.reason := 'ownership-conflict';
     ELSE
       r.observed_at := provider_time;
-      BEGIN
-        recorded := berth_inventory.append_evidence(
-          p_operation, identity, provider_time, 'present', 'reconciliation',
-          'retry/' || r.claim::text, p_proof
-        );
-      EXCEPTION WHEN lock_not_available THEN
-        r.reason := 'evidence-unavailable';
-      END;
-      IF r.reason IS NULL THEN
-        CASE
-          WHEN recorded = 'conflict' THEN r.reason := 'ownership-conflict';
-          WHEN cleanup THEN r.reason := 'cleanup-started';
-          WHEN EXISTS (SELECT FROM berth_inventory.observations o
-            WHERE o.provider_id = identity AND o.kind = 'removed' AND o.observed_at >= provider_time
-          ) OR EXISTS (SELECT FROM berth_inventory.executor_events e
-            WHERE e.operation = p_operation AND e.provider_id = identity
-              AND e.kind = 'removed' AND e.observed_at >= provider_time
-          ) THEN r.reason := 'newer-removal-recorded';
-          WHEN p_proof->'configurationMatches' IS DISTINCT FROM 'true'::jsonb
-            THEN r.reason := 'bucket-configuration-drift';
-          WHEN unresolved THEN r.reason := 'unresolved-prior-write';
-          ELSE r.result := 'owned-instance';
-        END CASE;
+      r.provider_observation := p_proof;
+      -- Qualification precedes projection. Keep an unqualified observation in
+      -- the private retry record. Publish queued executor receipts through the
+      -- existing evidence writer before comparing their order with this read.
+      IF p_proof->'configurationMatches' IS DISTINCT FROM 'true'::jsonb THEN
+        r.reason := 'bucket-configuration-drift';
+      ELSE
+        BEGIN
+          PERFORM pg_advisory_xact_lock(hashtextextended(p_operation::text, 90310));
+          PERFORM berth_inventory.publish_executor(p_operation);
+          SELECT max(o.observed_at) INTO latest_removal
+          FROM berth_inventory.observations o
+          JOIN berth_inventory.instances i USING (provider_id)
+          WHERE i.operation = p_operation AND o.provider_id = identity AND o.kind = 'removed';
+          IF latest_removal <= provider_time OR (
+            latest_removal IS NULL AND EXISTS (
+              SELECT FROM berth_inventory.executor_events e
+              WHERE e.operation = p_operation AND e.provider_id = identity AND e.kind = 'removed'
+            )
+          ) THEN
+            r.reason := 'ownership-conflict';
+          ELSE
+            recorded := berth_inventory.append_evidence(
+              p_operation, identity, provider_time, 'present', 'reconciliation',
+              'retry/' || r.claim::text, p_proof
+            );
+            IF recorded <> 'conflict' AND latest_removal > provider_time THEN
+              r.reason := 'newer-removal-recorded';
+            END IF;
+          END IF;
+        EXCEPTION WHEN lock_not_available THEN
+          r.reason := 'evidence-unavailable';
+        END;
+        IF r.reason IS NULL THEN
+          CASE
+            WHEN recorded = 'conflict' THEN r.reason := 'ownership-conflict';
+            WHEN cleanup THEN r.reason := 'cleanup-started';
+            WHEN unresolved THEN r.reason := 'unresolved-prior-write';
+            ELSE r.result := 'owned-instance';
+          END CASE;
+        END IF;
       END IF;
     END IF;
   ELSIF kind = 'absent' AND provider_time IS NOT NULL AND r.used = 2 THEN
@@ -268,7 +292,8 @@ BEGIN
   END IF;
 
   UPDATE berth_retry.reconciliations SET finished_at = observed,
-    result = r.result, reason = r.reason, observed_at = r.observed_at
+    result = r.result, reason = r.reason, observed_at = r.observed_at,
+    provider_observation = r.provider_observation
     WHERE operation = p_operation RETURNING * INTO r;
   RETURN berth_retry.summary(r);
 END $$;

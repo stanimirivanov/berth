@@ -45,8 +45,10 @@ request IDs and raw provider errors.
 - Match the saved compartment, namespace, name, operation marker and known OCI
   identity before recording verified presence at the OCI response time. A
   pending write affecting another step, configuration drift, or cleanup
-  can still require attention. The check leaves the
-  original outcome, request budgets, expiry and cleanup reserve intact.
+  can still require attention. Preserve the original outcome, expiry and
+  cleanup reserve. Post-expiry checks leave the original request counters
+  intact. An unqualified provider observation stays private and does not
+  update the inventory projection.
 
 ## Installation prerequisites
 

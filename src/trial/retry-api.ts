@@ -6,18 +6,7 @@ import {
 } from "node:crypto";
 import { emptyControl } from "./empty-control.js";
 
-/** Public retry state carries no provider identity, credentials or raw responses. */
-export interface RetryStatus {
-  operation: string;
-  stage: "checking-provider" | "completed" | "needs-attention";
-  scope: "original-window" | "after-expiry";
-  result: "owned-instance" | "safe-write-needed" | null;
-  reason: string | null;
-  ownerProcedure: string | null;
-  observedAt: string | null;
-  startedAt: string;
-  checks: { used: number; limit: number };
-}
+import { decodeRetryStatus, type RetryStatus } from "./retry-contract.js";
 
 /** Only the start action may use the read-only provider; status reads go to SQL. */
 export type RetryAction = (
@@ -112,10 +101,11 @@ export function retryApi(
         return reply({ error: "unauthorized" }, 401);
       if (!operation) return reply({ error: "not-found" }, 404);
       try {
-        const status = await act(
-          request.method === "POST" ? "start" : "status",
-          operation,
+        const status = decodeRetryStatus(
+          await act(request.method === "POST" ? "start" : "status", operation),
         );
+        if (status && status.operation !== operation)
+          throw Error("Retry status mismatch");
         if (!status) return reply({ error: "not-found" }, 404);
         return reply(
           status,
