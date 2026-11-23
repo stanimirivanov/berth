@@ -48,3 +48,40 @@ test("the Pages CSP build rejects CSS it cannot hash and overlong header rules",
     /header line limit/,
   );
 });
+
+test("the Pages CSP build hashes literal CSS in the optimized Material component wrapper", () => {
+  const wrapped = `class Control {
+    static ɵcmp = (function () {
+      let constants = ["content"];
+      function template() {}
+      return define({ styles: ["berth-app{color:var(--%NS%ink)}"], encapsulation: 2, template, constants });
+    })();
+  }`;
+
+  assert.deepEqual(componentStyleHashes([wrapped]), [digest]);
+  for (const unsupported of [
+    wrapped.replace("function ()", "function (metadata)"),
+    wrapped.replace("function ()", "async function ()"),
+    wrapped.replace("function ()", "function* ()"),
+    wrapped.replace("encapsulation: 2", "encapsulation: 2, encapsulation: 2"),
+    wrapped.replace("encapsulation: 2", "encapsulation: 2, ...extra"),
+    wrapped.replace("encapsulation: 2", "encapsulation: 2, [key]: value"),
+    wrapped.replace("return define(", "return other() || define("),
+    wrapped.replace('["content"]', "inspect()"),
+    wrapped.replace(
+      "return define(",
+      "return (function (metadata) { return metadata; })(",
+    ),
+    wrapped.replace(
+      "template, constants });",
+      "template, constants }, extra);",
+    ),
+    wrapped.replace("return define(", "inspect(); return define("),
+    wrapped.replace("encapsulation: 2", "encapsulation: 0"),
+  ]) {
+    assert.throws(
+      () => componentStyleHashes([unsupported]),
+      /Unsupported Angular AOT|ViewEncapsulation.None/,
+    );
+  }
+});

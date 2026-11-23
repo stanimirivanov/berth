@@ -9,16 +9,95 @@ import ts from "typescript-ast";
  * @param {string} name
  */
 function field(object, name) {
+  let initializer;
   for (const property of object.properties) {
     if (
-      ts.isPropertyAssignment(property) &&
+      ts.isSpreadAssignment(property) ||
+      ts.isComputedPropertyName(property.name)
+    ) {
+      throw new Error("Unsupported Angular AOT component metadata.");
+    }
+    if (
       (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
       property.name.text === name
     ) {
-      return property.initializer;
+      if (initializer || !ts.isPropertyAssignment(property)) {
+        throw new Error("Unsupported Angular AOT component metadata.");
+      }
+      initializer = property.initializer;
     }
   }
-  return undefined;
+  return initializer;
+}
+
+/** Match the local templates and constant arrays emitted by the pinned optimizer.
+ * @param {ts.Statement} statement Wrapper statement before the return.
+ */
+function isOptimizerDeclaration(statement) {
+  return (
+    ts.isFunctionDeclaration(statement) ||
+    (ts.isVariableStatement(statement) &&
+      statement.declarationList.declarations.every(
+        ({ name, initializer }) =>
+          ts.isIdentifier(name) &&
+          initializer &&
+          ts.isArrayLiteralExpression(initializer),
+      ))
+  );
+}
+
+/** Read a direct definition or the optimizer's zero-argument declaration wrapper.
+ * @param {ts.Expression | undefined} initializer Component definition initializer.
+ * @returns {ts.ObjectLiteralExpression} AOT metadata read without executing code.
+ */
+function componentMetadata(initializer) {
+  let definition = initializer;
+  if (
+    definition &&
+    ts.isCallExpression(definition) &&
+    ts.isParenthesizedExpression(definition.expression) &&
+    ts.isFunctionExpression(definition.expression.expression)
+  ) {
+    const wrapper = definition.expression.expression;
+    const statements = wrapper.body.statements;
+    const result = statements.at(-1);
+    if (
+      definition.arguments.length ||
+      wrapper.parameters.length ||
+      wrapper.asteriskToken ||
+      wrapper.modifiers?.length ||
+      !result ||
+      !ts.isReturnStatement(result) ||
+      !statements.slice(0, -1).every(isOptimizerDeclaration)
+    ) {
+      throw new Error("Unsupported Angular AOT component wrapper.");
+    }
+    definition = result.expression;
+  }
+
+  if (
+    !definition ||
+    !ts.isCallExpression(definition) ||
+    definition.questionDotToken ||
+    definition.arguments.length !== 1
+  ) {
+    throw new Error("Unsupported Angular AOT component definition.");
+  }
+  const callee = definition.expression;
+  const metadata = definition.arguments[0];
+  if (
+    !(
+      ts.isIdentifier(callee) ||
+      (ts.isPropertyAccessExpression(callee) &&
+        !callee.questionDotToken &&
+        ts.isIdentifier(callee.expression))
+    ) ||
+    !metadata ||
+    !ts.isObjectLiteralExpression(metadata)
+  ) {
+    throw new Error("Unsupported Angular AOT component definition.");
+  }
+  return metadata;
 }
 
 /** Hash the exact decoded CSS strings in Angular's pinned AOT output.
@@ -44,14 +123,7 @@ export function componentStyleHashes(chunks) {
         ts.isIdentifier(node.name) &&
         node.name.text === "ɵcmp"
       ) {
-        const definition = node.initializer;
-        const metadata =
-          definition && ts.isCallExpression(definition)
-            ? definition.arguments[0]
-            : undefined;
-        if (!metadata || !ts.isObjectLiteralExpression(metadata)) {
-          throw new Error("Unsupported Angular AOT component definition.");
-        }
+        const metadata = componentMetadata(node.initializer);
         const styles = field(metadata, "styles");
         if (styles) {
           const encapsulation = field(metadata, "encapsulation");

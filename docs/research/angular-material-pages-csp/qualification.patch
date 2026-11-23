@@ -1,0 +1,538 @@
+diff --git a/ui/angular.json b/ui/angular.json
+index b9a19fa..02bb9e7 100644
+--- a/ui/angular.json
++++ b/ui/angular.json
+@@ -14,7 +14,7 @@
+             "index": "src/index.html",
+             "tsConfig": "tsconfig.json",
+             "outputPath": "dist/history",
+-            "styles": ["src/styles.css"],
++            "styles": ["src/styles.css", "src/material-qualification.scss"],
+             "assets": [
+               {
+                 "glob": "*",
+diff --git a/ui/material-qualification.config.ts b/ui/material-qualification.config.ts
+new file mode 100644
+index 0000000..f4254de
+--- /dev/null
++++ b/ui/material-qualification.config.ts
+@@ -0,0 +1,11 @@
++import { defineConfig } from "@playwright/test";
++
++export default defineConfig({
++  testDir: "./tests",
++  testMatch: "material-qualification.spec.ts",
++  workers: 1,
++  use: {
++    baseURL: process.env.BERTH_QUALIFICATION_ORIGIN ?? "http://127.0.0.1:4201",
++    browserName: "chromium",
++  },
++});
+diff --git a/ui/package.json b/ui/package.json
+index 0572535..47bf42e 100644
+--- a/ui/package.json
++++ b/ui/package.json
+@@ -14,9 +14,12 @@
+     "test": "playwright test"
+   },
+   "dependencies": {
++    "@angular/cdk": "22.3.0",
+     "@angular/common": "22.3.0",
+     "@angular/compiler": "22.3.0",
+     "@angular/core": "22.3.0",
++    "@angular/forms": "22.3.0",
++    "@angular/material": "22.3.0",
+     "@angular/platform-browser": "22.3.0",
+     "@angular/router": "22.3.0",
+     "@ngrx/signals": "22.0.1",
+diff --git a/ui/pnpm-lock.yaml b/ui/pnpm-lock.yaml
+index 8bd0bf8..b66bd0c 100644
+--- a/ui/pnpm-lock.yaml
++++ b/ui/pnpm-lock.yaml
+@@ -166,6 +166,9 @@ importers:
+
+   .:
+     dependencies:
++      '@angular/cdk':
++        specifier: 22.3.0
++        version: 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/forms@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2)
+       '@angular/common':
+         specifier: 22.3.0
+         version: 22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
+@@ -175,6 +178,12 @@ importers:
+       '@angular/core':
+         specifier: 22.3.0
+         version: 22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)
++      '@angular/forms':
++        specifier: 22.3.0
++        version: 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2)
++      '@angular/material':
++        specifier: 22.3.0
++        version: 22.3.0(6698d387d07f655357e9b1dd618f8319)
+       '@angular/platform-browser':
+         specifier: 22.3.0
+         version: 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))
+@@ -330,6 +339,15 @@ packages:
+       vitest:
+         optional: true
+
++  '@angular/cdk@22.3.0':
++    resolution: {integrity: sha512-5qLK4np1a26u/MgCgRzmP/E35DVK9lsMibT2yC22UiK5GCI7epT1bCy9PSmiTIMWNo4d7G2c6XxDWrwo0EmTCQ==}
++    peerDependencies:
++      '@angular/common': ^22.0.0 || ^23.0.0
++      '@angular/core': ^22.0.0 || ^23.0.0
++      '@angular/forms': ^22.0.0 || ^23.0.0
++      '@angular/platform-browser': ^22.0.0 || ^23.0.0
++      rxjs: ^6.5.3 || ^7.4.0
++
+   '@angular/cli@22.3.0':
+     resolution: {integrity: sha512-3nKo+5JvcMTJTI472WGV66x+rAgU5pTdbjJYgGT8CWi+7QCwhu5DCqNP8aWpfW4PcJeaRVul+P9yyLZfynT/ag==}
+     engines: {node: ^22.22.3 || ^24.15.0 || >=26.0.0, npm: ^6.11.0 || ^7.5.6 || >=8.0.0, yarn: '>= 1.13.0'}
+@@ -370,6 +388,25 @@ packages:
+       zone.js:
+         optional: true
+
++  '@angular/forms@22.3.0':
++    resolution: {integrity: sha512-FHl4I8sYf8ZilX5a5xuxy+fmwmlOlj8oMj5z3KxhgPIMODSrMSacfHVs3cwaxxRxnsUEKRxv6mZiWRgDg17kqA==}
++    engines: {node: ^22.22.3 || ^24.15.0 || >=26.0.0}
++    peerDependencies:
++      '@angular/common': 22.3.0
++      '@angular/core': 22.3.0
++      '@angular/platform-browser': 22.3.0
++      rxjs: ^6.5.3 || ^7.4.0
++
++  '@angular/material@22.3.0':
++    resolution: {integrity: sha512-ddyRNSJYhTCgCS8bpTGtIAC+mDMp+hTjhag3sZXDa+HdyQsasQ6yFaoYF6KXWwE9StEBxkuPavKok4vwweSNxQ==}
++    peerDependencies:
++      '@angular/cdk': 22.3.0
++      '@angular/common': ^22.0.0 || ^23.0.0
++      '@angular/core': ^22.0.0 || ^23.0.0
++      '@angular/forms': ^22.0.0 || ^23.0.0
++      '@angular/platform-browser': ^22.0.0 || ^23.0.0
++      rxjs: ^6.5.3 || ^7.4.0
++
+   '@angular/platform-browser@22.3.0':
+     resolution: {integrity: sha512-cbDtSz7gme4EmAnl+GcWLnAloPQRFHUTm/vUW9EDRR/ahO1xWY8Y4vtB9xtxppPIEcbsrAGQzyApXoKLr/cHDg==}
+     engines: {node: ^22.22.3 || ^24.15.0 || >=26.0.0}
+@@ -1489,6 +1526,9 @@ packages:
+     resolution: {integrity: sha512-SqnAJfBfDHuoUMDrhMIpkIYQiDI8mgJuQC8YcEzynbWG+eIsmuS17CgYKj69J7o/9ndEQU9lIi9nAEOYDlLVKQ==}
+     engines: {node: ^22.22.3 || ^24.15.0 || >=26.0.0, npm: ^6.11.0 || ^7.5.6 || >=8.0.0, yarn: '>= 1.13.0'}
+
++  '@standard-schema/spec@1.1.0':
++    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
++
+   '@tybys/wasm-util@0.10.5':
+     resolution: {integrity: sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA==}
+
+@@ -2799,6 +2839,16 @@ snapshots:
+       - vue-tsc
+       - yaml
+
++  '@angular/cdk@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/forms@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2)':
++    dependencies:
++      '@angular/common': 22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
++      '@angular/core': 22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)
++      '@angular/forms': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2)
++      '@angular/platform-browser': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))
++      parse5: 8.1.1
++      rxjs: 7.8.2
++      tslib: 2.8.1
++
+   '@angular/cli@22.3.0(chokidar@6.0.0)':
+     dependencies:
+       '@angular-devkit/architect': 0.2203.0(chokidar@6.0.0)
+@@ -2850,6 +2900,26 @@ snapshots:
+     optionalDependencies:
+       '@angular/compiler': 22.3.0
+
++  '@angular/forms@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2)':
++    dependencies:
++      '@angular/common': 22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
++      '@angular/core': 22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)
++      '@angular/platform-browser': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))
++      '@standard-schema/spec': 1.1.0
++      rxjs: 7.8.2
++      tslib: 2.8.1
++      zod: 4.6.7
++
++  '@angular/material@22.3.0(6698d387d07f655357e9b1dd618f8319)':
++    dependencies:
++      '@angular/cdk': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/forms@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2)
++      '@angular/common': 22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
++      '@angular/core': 22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)
++      '@angular/forms': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2)))(rxjs@7.8.2)
++      '@angular/platform-browser': 22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))
++      rxjs: 7.8.2
++      tslib: 2.8.1
++
+   '@angular/platform-browser@22.3.0(@angular/common@22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2))(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))':
+     dependencies:
+       '@angular/common': 22.3.0(@angular/core@22.3.0(@angular/compiler@22.3.0)(rxjs@7.8.2))(rxjs@7.8.2)
+@@ -3628,6 +3698,8 @@ snapshots:
+     transitivePeerDependencies:
+       - chokidar
+
++  '@standard-schema/spec@1.1.0': {}
++
+   '@tybys/wasm-util@0.10.5':
+     dependencies:
+       tslib: 2.8.1
+diff --git a/ui/src/main.ts b/ui/src/main.ts
+index 1b22b28..3ad9bcc 100644
+--- a/ui/src/main.ts
++++ b/ui/src/main.ts
+@@ -1,3 +1,4 @@
++import { MATERIAL_ANIMATIONS } from "@angular/material/core";
+ import { bootstrapApplication } from "@angular/platform-browser";
+ import { provideRouter, type UrlMatcher, UrlSerializer } from "@angular/router";
+ import { App } from "./app";
+@@ -15,6 +16,7 @@ const matchHistory: UrlMatcher = (segments) => {
+
+ bootstrapApplication(App, {
+   providers: [
++    { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+     { provide: UrlSerializer, useClass: OperationUrlSerializer },
+     provideRouter([
+       {
+diff --git a/ui/src/material-qualification.scss b/ui/src/material-qualification.scss
+new file mode 100644
+index 0000000..a544cd4
+--- /dev/null
++++ b/ui/src/material-qualification.scss
+@@ -0,0 +1,9 @@
++@use '@angular/material' as mat;
++
++:root {
++  @include mat.theme((
++    color: mat.$azure-palette,
++    typography: system-ui,
++    density: 0,
++  ));
++}
+diff --git a/ui/src/operation-history/operation-history.css b/ui/src/operation-history/operation-history.css
+index 462a60a..243da4c 100644
+--- a/ui/src/operation-history/operation-history.css
++++ b/ui/src/operation-history/operation-history.css
+@@ -41,15 +41,14 @@ berth-operation-history {
+     gap: 0.75rem;
+     flex-wrap: wrap;
+   }
+-  input {
+-    border: 1px solid var(--muted);
+-    border-radius: 0.25rem;
+-    padding: 0.625rem;
+-    font: inherit;
+-    min-width: 0;
++  .access-row {
++    align-items: flex-start;
++  }
++  mat-form-field {
+     flex: 1;
++    min-width: min(100%, 18rem);
+   }
+-  button {
++  button:not([mat-flat-button]) {
+     cursor: pointer;
+     padding: 0.625rem 1rem;
+     min-height: 2.75rem;
+diff --git a/ui/src/operation-history/operation-history.html b/ui/src/operation-history/operation-history.html
+index a050105..04eedaa 100644
+--- a/ui/src/operation-history/operation-history.html
++++ b/ui/src/operation-history/operation-history.html
+@@ -21,21 +21,24 @@
+         <p role="alert" class="error">Enter a valid history token.</p>
+       }
+       <form (submit)="connect($event)">
+-        <label for="token">History access token</label>
+         <div class="access-row">
+-          <input
+-            #tokenInput
+-            id="token"
+-            type="password"
+-            autocomplete="off"
+-            [value]="token"
+-            (input)="token = tokenInput.value"
+-            maxlength="128"
+-            spellcheck="false"
+-          />
+-          <button type="submit">Load history</button>
++          <mat-form-field appearance="outline">
++            <mat-label>History access token</mat-label>
++            <input
++              #tokenInput
++              matInput
++              id="token"
++              type="password"
++              autocomplete="off"
++              [value]="token"
++              (input)="token = tokenInput.value"
++              maxlength="128"
++              spellcheck="false"
++            />
++            <mat-hint>Kept in memory for this tab. No database or cloud credentials.</mat-hint>
++          </mat-form-field>
++          <button mat-flat-button type="submit">Load history</button>
+         </div>
+-        <small>Kept in memory for this tab. No database or cloud credentials.</small>
+       </form>
+     } @else {
+       <p>History access connected</p>
+@@ -56,6 +59,7 @@
+         }
+         @if (store.listLoading()) {
+           <p role="status">Loading operation history…</p>
++          <mat-progress-bar mode="indeterminate" aria-label="Loading operation history" />
+         }
+         @if (store.listFailure(); as failure) {
+           <p role="alert" class="error">
+@@ -113,6 +117,7 @@
+           <button type="button" (click)="store.refreshDetail()" [disabled]="detailLoading()">Refresh detail</button>
+           @if (detailLoading()) {
+             <p role="status">Loading operation details…</p>
++            <mat-progress-bar mode="indeterminate" aria-label="Loading operation details" />
+           }
+           @if (detailFailure()) {
+             <p role="alert" class="error">
+diff --git a/ui/src/operation-history/operation-history.ts b/ui/src/operation-history/operation-history.ts
+index 35238fe..b6683b1 100644
+--- a/ui/src/operation-history/operation-history.ts
++++ b/ui/src/operation-history/operation-history.ts
+@@ -14,6 +14,10 @@ import {
+   viewChildren,
+ } from "@angular/core";
+ import { toSignal } from "@angular/core/rxjs-interop";
++import { MatButtonModule } from "@angular/material/button";
++import { MatFormFieldModule } from "@angular/material/form-field";
++import { MatInputModule } from "@angular/material/input";
++import { MatProgressBarModule } from "@angular/material/progress-bar";
+ import { ActivatedRoute, RouterLink } from "@angular/router";
+ import { activeExpiry, attentionReasons, ownerProcedures } from "./attention";
+ import { HistoryStore, isOperationId, type Operation } from "./history-store";
+@@ -21,7 +25,14 @@ import { HistoryStore, isOperationId, type Operation } from "./history-store";
+ /** Read-only history screen. The shell holds accepted access in tab memory. */
+ @Component({
+   selector: "berth-operation-history",
+-  imports: [DatePipe, RouterLink],
++  imports: [
++    DatePipe,
++    RouterLink,
++    MatButtonModule,
++    MatFormFieldModule,
++    MatInputModule,
++    MatProgressBarModule,
++  ],
+   changeDetection: ChangeDetectionStrategy.OnPush,
+   templateUrl: "./operation-history.html",
+   styleUrl: "./operation-history.css",
+diff --git a/ui/tests/material-qualification.spec.ts b/ui/tests/material-qualification.spec.ts
+new file mode 100644
+index 0000000..65c2db3
+--- /dev/null
++++ b/ui/tests/material-qualification.spec.ts
+@@ -0,0 +1,206 @@
++import { createHash } from "node:crypto";
++import { expect, test } from "@playwright/test";
++
++const defaultMotion = process.env.BERTH_QUALIFICATION_DEFAULT_MOTION === "1";
++const operation = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
++const record = {
++  operation,
++  startedAt: "2026-11-20T06:50:00Z",
++  expiresAt: "2026-11-20T10:50:00Z",
++  outcome: "succeeded",
++  phase: "cleanup",
++  pendingUpload: false,
++  cleanupRequested: true,
++  objectRemoved: true,
++  verdict: "partial",
++  budgets: {
++    normal: { used: 15, limit: 160 },
++    cleanup: { used: 14, limit: 40 },
++    monitoring: { used: 0, limit: 20 },
++    neon: { used: 7, limit: 100 },
++  },
++  unresolved: { requests: 0, mutations: 0 },
++};
++
++/** Collect only CSP directive names and element names for the synthetic run. */
++test("Material history access and progress obey the native static CSP", async ({
++  page,
++}) => {
++  await page.addInitScript(() => {
++    const evidence = document.createElement("template");
++    evidence.id = "qualification-evidence";
++    document.addEventListener("DOMContentLoaded", () =>
++      document.head.append(evidence),
++    );
++    document.addEventListener("securitypolicyviolation", (event) => {
++      evidence.content.append(`${event.effectiveDirective}\n`);
++    });
++  });
++  const detailReply = Promise.withResolvers<void>();
++  const injected = new Set<string>();
++  const reads: string[] = [];
++  const externalRequests: string[] = [];
++  const pageErrors: string[] = [];
++  page.on("pageerror", (error) => pageErrors.push(error.message));
++  await page.route(
++    (url) => url.hostname !== "127.0.0.1",
++    (route) => route.abort(),
++  );
++  page.on("request", (request) => {
++    const url = new URL(request.url());
++    if (url.hostname !== "127.0.0.1") externalRequests.push(url.origin);
++  });
++  await page.route("**/api/history**", async (route) => {
++    const path = new URL(route.request().url()).pathname;
++    reads.push(path);
++    expect(route.request().headers().authorization).toBe(
++      `Bearer ${"h".repeat(40)}`,
++    );
++    if (path.endsWith(operation)) {
++      await detailReply.promise;
++      await route.fulfill({ json: record });
++    } else {
++      await route.fulfill({ json: { items: [record], next: null } });
++    }
++  });
++
++  const url = `/operations/${operation}`;
++  const document = await page.goto(url);
++  expect(document?.status()).toBe(200);
++  await expect(page).toHaveURL(url);
++  const policy = document?.headers()["content-security-policy"] ?? "";
++  expect(policy).toContain("style-src 'self' 'sha256-");
++  expect(policy).not.toMatch(/unsafe-inline|unsafe-hashes|nonce-/);
++  const evidence = page.locator("#qualification-evidence");
++  const input = page.getByLabel("History access token");
++  const detail = page.getByRole("region", { name: "Selected operation" });
++  const button = page.getByRole("button", { name: "Load history" });
++
++  try {
++    expect(reads).toEqual([]);
++    await expect(input).toBeVisible();
++    await expect(input).toHaveAttribute("type", "password");
++    await expect(button).toHaveCSS("display", "flex");
++    const background = await button.evaluate(
++      (element) => getComputedStyle(element).backgroundColor,
++    );
++    expect(background).toBe("rgb(0, 92, 187)");
++    await input.focus();
++    await expect(input).toBeFocused();
++    await input.fill("h".repeat(40));
++    await expect(page.locator("mat-form-field")).toHaveCSS("display", "flex");
++    await expect(input).toHaveAccessibleDescription(
++      /Kept in memory for this tab/,
++    );
++    for (const text of await page.locator("style").allTextContents()) {
++      if (text) injected.add(text);
++    }
++    const bounds = await button.boundingBox();
++    expect(bounds).not.toBeNull();
++    if (!bounds) throw Error("Missing Material button bounds.");
++    await page.mouse.move(
++      bounds.x + bounds.width / 2,
++      bounds.y + bounds.height / 2,
++    );
++    await page.mouse.down();
++    const formStyles = await page
++      .locator(".access [style]")
++      .evaluateAll((nodes) =>
++        nodes.map((node) => ({
++          tag: node.localName,
++          styles: node.getAttribute("style"),
++        })),
++      );
++    await page.mouse.up();
++    const progress = page.getByRole("progressbar", {
++      name: "Loading operation details",
++    });
++    await expect(progress).toBeVisible();
++    await expect(detail.getByRole("status")).toHaveText(
++      "Loading operation details…",
++    );
++    const animatedBar = progress.locator(".mdc-linear-progress__primary-bar");
++    if (defaultMotion) {
++      await expect(animatedBar).toHaveCSS(
++        "animation-name",
++        /.+indeterminate.+/,
++      );
++    } else {
++      await expect(progress).toHaveCSS("height", "4px");
++      await expect(animatedBar).toHaveCSS("animation-duration", "0s");
++    }
++    const progressStyles = await progress
++      .locator("[style]")
++      .evaluateAll((nodes) =>
++        nodes.map((node) => ({
++          tag: node.localName,
++          styles: node.getAttribute("style"),
++        })),
++      );
++    for (const text of await page.locator("style").allTextContents()) {
++      if (text) injected.add(text);
++    }
++    await expect.poll(() => reads).toEqual([`/api/history/${operation}`]);
++    console.log(JSON.stringify({ background, formStyles, progressStyles }));
++  } finally {
++    detailReply.resolve();
++  }
++
++  await expect(
++    page.getByText("succeeded", { exact: true }).last(),
++  ).toBeVisible();
++  await expect
++    .poll(() => reads)
++    .toEqual([`/api/history/${operation}`, "/api/history"]);
++  const linked = await page
++    .locator('link[rel="stylesheet"]')
++    .evaluateAll((nodes) =>
++      nodes.map((node) => (node as HTMLLinkElement).href),
++    );
++  expect(linked).toHaveLength(1);
++  expect(new URL(linked[0]).origin).toBe(new URL(page.url()).origin);
++  for (const text of await page.locator("style").allTextContents()) {
++    if (text) injected.add(text);
++  }
++  for (const style of injected) {
++    const digest = createHash("sha256").update(style).digest("base64");
++    expect(policy).toContain(`'sha256-${digest}'`);
++  }
++  expect(injected.size).toBeGreaterThan(3);
++  expect(externalRequests).toEqual([]);
++  expect(pageErrors).toEqual([]);
++  const directives = () =>
++    evidence.evaluate(
++      (node) => (node as HTMLTemplateElement).content.textContent,
++    );
++  if (defaultMotion) {
++    await expect.poll(directives).toBe("style-src-elem\n");
++    expect(
++      await page
++        .locator('style[type="text/css"]')
++        .evaluateAll((nodes) =>
++          nodes.some(
++            (node) => !node.textContent && !(node as HTMLStyleElement).sheet,
++          ),
++        ),
++    ).toBe(true);
++  } else {
++    expect(await directives()).toBe("");
++  }
++  const beforeNegative = await directives();
++
++  await page.evaluate(() => {
++    const injected = document.createElement("style");
++    injected.textContent = "html { outline: 13px solid red !important }";
++    document.head.append(injected);
++  });
++  await expect.poll(directives).toBe(`${beforeNegative}style-src-elem\n`);
++  await expect(page.locator("html")).not.toHaveCSS("outline-width", "13px");
++  console.log(
++    JSON.stringify({
++      linkedStylesheets: linked.length,
++      injectedStyles: injected.size,
++      policyLength: policy.length,
++    }),
++  );
++});
