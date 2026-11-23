@@ -47,6 +47,8 @@
     "test:recovery-db": "pnpm run build && node --test --test-concurrency=1 dist/tests/integration/recovery.test.js dist/tests/integration/security.test.js",
     "build:live-executor": "pnpm run build && node dist/scripts/build-live-executor.js",
     "inventory:record-owner": "pnpm run build && node dist/scripts/inventory-owner-receipt.js",
+    "test:retry-db": "pnpm run build && node --test dist/tests/integration/retry.test.js",
+    "build:retry": "pnpm run build && node dist/scripts/build-retry.js",
     "test:inventory-db": "pnpm run build && node --test dist/tests/integration/inventory.test.js",
     "test:admission-db": "pnpm run build && node --test dist/tests/integration/admission.test.js",
     "lint:spacing": "eslint scripts tests src tools neon.ts eslint.config.mjs",

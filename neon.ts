@@ -66,3 +66,11 @@ export const historyFunction = {
   name: "Berth read-only operation history",
   source: "./src/trial/history-index.ts",
 };
+
+/** Isolated retry owner action, built locally and deployed only under separate authorization. */
+export const retryFunction = {
+  ...probeFunction,
+  slug: "berthretry140",
+  name: "Berth bounded retry reconciliation",
+  source: "./src/trial/retry-index.ts",
+};
