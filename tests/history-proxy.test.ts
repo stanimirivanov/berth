@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { historyApi } from "../src/trial/history-api.js";
+import { historyApi } from "../src/application/history/api.js";
 import { onRequest as nestedMiss } from "../ui/functions/api/history/[[rest]].js";
 import { onRequest as detail } from "../ui/functions/api/history/[operation].js";
 import { onRequest as list } from "../ui/functions/api/history/index.js";

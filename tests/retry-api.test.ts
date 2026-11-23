@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retryApi } from "../src/trial/retry-api.js";
+import { retryApi } from "../src/application/retry/api.js";
 
 const credential = `berth-retry-owner-v1.${"x".repeat(43)}`;
 const operation = "62ebd914-6089-4e41-81a4-75081cb1cef3";
@@ -111,7 +111,7 @@ test("retry responses project only the public status fields", async () => {
     startedAt: "2026-11-23T12:00:00Z",
     checks: { used: 1, limit: 2 },
   } satisfies NonNullable<
-    Awaited<ReturnType<import("../src/trial/retry-api.js").RetryAction>>
+    Awaited<ReturnType<import("../src/application/retry/api.js").RetryAction>>
   >;
   const api = retryApi(credential, async () => ({
     ...status,

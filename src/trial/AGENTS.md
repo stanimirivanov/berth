@@ -75,16 +75,7 @@ See docs/trial/live-executor.md and docs/trial/hosted-admission.md.
 persist reservations; never call it persistence-free in the live contract.
 Build with `build:live-executor` and run `test:admission-db` on disposable Postgres.
 
-`history-api.ts` owns a separate authenticated read-only history interface without
-execution-window admission. `history-runtime.ts` may reach only restricted SQL
-identity checks and the allowlisted history store, inside a read-only transaction.
-`history-index.ts` is its import-inert root; no OCI imports, execution routes or
-schedules. Never reuse the live trial token or inject provider credentials here.
-
-`retry-index.ts` composes the isolated owner action handler and runtime. The
-retry API owns sign-in and bounded routes. `retry-reconciliation.ts` owns
-separate request accounting and can call only the read-only OCI observer.
-Migration 011 owns eligibility and durable status. Preserve the read-only
-history authority and the original operation's execution fence. Use
-`test:retry-db` and `build:retry`. See
-[bounded retry reconciliation](../../docs/trial/retry-reconciliation.md).
+History, Inventory and Retry are application capabilities. See the
+[application guide](../application/AGENTS.md). The retained trial ledger is
+available through its named adapter. Keep trial execution and qualification
+outside application code.

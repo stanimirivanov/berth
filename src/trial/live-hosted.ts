@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { emptyControl } from "./empty-control.js";
+import { emptyControl } from "../http/empty-control.js";
 import { liveEnvironment } from "./live-environment.js";
 import { scheduledHandler } from "./scheduled.js";
 

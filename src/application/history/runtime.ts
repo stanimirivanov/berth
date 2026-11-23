@@ -1,10 +1,10 @@
 import { Client, type ClientConfig } from "pg";
 import {
-  assertExecutorPrivileges,
-  restrictedConnection,
-} from "./executor-security.js";
-import { executorStore } from "./executor-store.js";
-import type { HistoryRead } from "./history-api.js";
+  prepareRetainedHistoryReader,
+  retainedHistoryConnection,
+  retainedHistoryLedger,
+} from "../retained-trial-ledger/history.js";
+import type { HistoryRead } from "./api.js";
 
 /** Restricted invocation connection; tests replace only the database I/O boundary. */
 export interface HistoryDatabase {
@@ -34,7 +34,7 @@ export function historyReader(
     )
       throw Error("History unavailable");
     const db = database({
-      connectionString: restrictedConnection(env),
+      connectionString: retainedHistoryConnection(env),
       connectionTimeoutMillis: 3000,
       query_timeout: 5000,
       statement_timeout: 2000,
@@ -43,12 +43,11 @@ export function historyReader(
     busy = true;
     try {
       await db.connect();
-      await db.query("BEGIN READ ONLY");
-      await assertExecutorPrivileges(db);
-      const store = executorStore(db);
+      await prepareRetainedHistoryReader(db);
+      const store = retainedHistoryLedger(db);
       return operation
-        ? await store.historyDetail(operation)
-        : await store.history(before, limit);
+        ? await store.detail(operation)
+        : await store.list(before, limit);
     } finally {
       try {
         await db.end();

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retryActions } from "../src/trial/retry-reconciliation.js";
+import { retainedRetryLedger } from "../src/application/retained-trial-ledger/retry.js";
+import { retryActions } from "../src/application/retry/reconciliation.js";
 
 const operation = "62ebd914-6089-4e41-81a4-75081cb1cef3";
 const target = {
@@ -25,7 +26,7 @@ function fixture(reservation: unknown, bucket = target.bucket) {
     checks: { used: 0, limit: 2 },
   };
   const action = retryActions(
-    {
+    retainedRetryLedger({
       async query(sql) {
         const command = /berth_retry\.(\w+)/.exec(sql)?.[1];
         calls.push(command ?? "unknown");
@@ -42,7 +43,7 @@ function fixture(reservation: unknown, bucket = target.bucket) {
               : null;
         return { rows: [{ result }] };
       },
-    },
+    }),
     {
       supports: () => true,
       async observe(scope) {

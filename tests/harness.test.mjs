@@ -377,69 +377,117 @@ test("live admission owns metering and cannot import credentials from administra
 });
 
 test("history boundaries permit only the read composition and reject provider or execution coupling", () => {
+  const adapter = "src/application/retained-trial-ledger/";
   const sources = {
-    "src/trial/history-api.ts":
-      "/** Fixed private reads. */ export const api = {};",
-    "src/trial/history-runtime.ts":
-      "/** Restricted reader. */ export const read = {};",
-    "src/trial/history-index.ts":
-      'import "./history-api.js"; import "./history-runtime.js";',
+    "src/application/history/index.ts":
+      'import "./api.js"; import "./runtime.js";',
+    "src/application/history/api.ts": "",
+    "src/application/history/contract.ts": 'import "effect/Schema";',
+    "src/application/history/runtime.ts":
+      'import type { HistoryRead } from "./api.js"; import "../retained-trial-ledger/history.js";',
+    [`${adapter}history.ts`]:
+      'import "../../trial/executor-security.js"; import "../history/contract.js"; import "./sql.js";',
+    [`${adapter}inventory.ts`]:
+      'import "../inventory/contract.js"; import "./sql.js"; const query = "SELECT berth_inventory.inventory_page($1,$2)";',
+    [`${adapter}retry.ts`]: 'import "../retry/contract.js"; import "./sql.js";',
+    [`${adapter}sql.ts`]: "",
+    "src/application/inventory/contract.ts": 'import "effect/Schema";',
+    "src/application/retry/contract.ts": "",
+    "src/trial/executor-security.ts": "",
+    "src/trial/executor-store.ts": "",
+    "src/trial/executor.ts": "",
+    "src/trial/live-runtime.ts": "",
+    "src/providers/oci/client.ts": "",
   };
   assert.deepEqual(analyze(sources), []);
-  for (const name of [
-    "executor.ts",
-    "live-runtime.ts",
-    "../providers/oci/client.ts",
-  ]) {
+  for (const [file, text] of /** @type {[string, string][]} */ ([
+    ["src/application/history/index.ts", 'import "../../trial/executor.js";'],
+    [
+      "src/application/history/index.ts",
+      'import "../../trial/live-runtime.js";',
+    ],
+    [
+      "src/application/history/index.ts",
+      'import "../../providers/oci/client.js";',
+    ],
+    [
+      "src/application/history/runtime.ts",
+      "const query = `SELECT BERTH_USAGE.report($1)`;",
+    ],
+    [
+      "src/application/history/runtime.ts",
+      'const query = `SELECT "berth_executor".history_page($1,$2)`;',
+    ],
+
+    [
+      "src/application/history/runtime.ts",
+      'import "../../trial/executor-store.js";',
+    ],
+    [
+      "src/application/history/runtime.ts",
+      'import "../retained-trial-ledger/retry.js";',
+    ],
+    [
+      "src/application/inventory/contract.ts",
+      'import "../retained-trial-ledger/retry.js";',
+    ],
+    [`${adapter}inventory.ts`, 'import "../../trial/executor-store.js";'],
+    [
+      "src/application/history/runtime.ts",
+      'const query = "SELECT berth_executor.history_page($1,$2)";',
+    ],
+    ["src/trial/executor-store.ts", 'import "../application/history/api.js";'],
+  ])) {
     assert.ok(
-      analyze({
-        ...sources,
-        "src/trial/history-index.ts": `import "./${name}";`,
-      }).some((error) => error.rule === "architecture"),
+      analyze({ ...sources, [file]: text }).some(
+        (error) => error.rule === "architecture",
+      ),
+      file,
     );
   }
 });
 
 test("retry boundaries permit the read-only observer and reject executor coupling", () => {
   const sources = {
-    "src/trial/empty-control.ts": "",
-    "src/trial/live-hosted.ts": 'import "./empty-control.js";',
-    "src/trial/retry-api.ts":
-      'import "./empty-control.js"; import "./retry-contract.js";',
-    "src/trial/retry-contract.ts": 'import "effect/Schema";',
-    "src/trial/retry-index.ts":
-      'import "./retry-api.js"; import "./retry-runtime.js";',
-    "src/trial/retry-runtime.ts":
-      'import "./retry-reconciliation.js"; import type { RetryAction } from "./retry-api.js"; import "../providers/oci/retry-observation.js";',
-    "src/trial/retry-reconciliation.ts":
-      'import "../providers/oci/retry-observation.js"; import type { RetryAction } from "./retry-api.js"; import "./retry-contract.js";',
+    "src/http/empty-control.ts": "",
+    "src/trial/live-hosted.ts": 'import "../http/empty-control.js";',
+    "src/application/retry/api.ts":
+      'import "../../http/empty-control.js"; import "./contract.js";',
+    "src/application/retry/contract.ts":
+      'import "effect/Schema"; import type { RetryObservation } from "../../providers/oci/retry-observation.js";',
+    "src/application/retry/index.ts":
+      'import "./api.js"; import "./runtime.js";',
+    "src/application/retry/runtime.ts":
+      'import "./reconciliation.js"; import type { RetryAction } from "./api.js"; import "../retained-trial-ledger/retry.js"; import "../../providers/oci/retry-observation.js";',
+    "src/application/retry/reconciliation.ts":
+      'import type { RetryLedger } from "./contract.js"; import type { RetryAction } from "./api.js"; import type { RetryObserver } from "../../providers/oci/retry-observation.js";',
+    "src/application/retained-trial-ledger/retry.ts":
+      'import "../retry/contract.js"; import "./sql.js";',
+    "src/application/retained-trial-ledger/sql.ts": "",
     "src/providers/oci/retry-observation.ts": 'import "effect/Schema";',
     "src/providers/oci/client.ts": "",
     "src/trial/executor.ts": "",
   };
   assert.deepEqual(analyze(sources), []);
-  assert.ok(
-    analyze({
-      ...sources,
-      "src/trial/retry-contract.ts": 'import "./executor.js";',
-    }).some((error) => error.rule === "architecture"),
-  );
-  assert.ok(
-    analyze({
-      ...sources,
-      "src/trial/live-hosted.ts": 'import "./retry-contract.js";',
-    }).some((error) => error.rule === "architecture"),
-  );
-  assert.ok(
-    analyze({
-      ...sources,
-      "src/trial/retry-runtime.ts": 'import "./executor.js";',
-    }).some((error) => error.rule === "architecture"),
-  );
-  assert.ok(
-    analyze({
-      ...sources,
-      "src/providers/oci/retry-observation.ts": 'import "./client.js";',
-    }).some((error) => error.rule === "architecture"),
-  );
+  for (const [file, text] of /** @type {[string, string][]} */ ([
+    ["src/application/retry/contract.ts", 'import "../../trial/executor.js";'],
+    ["src/trial/live-hosted.ts", 'import "../application/retry/contract.js";'],
+    ["src/application/retry/runtime.ts", 'import "../../trial/executor.js";'],
+    [
+      "src/application/retry/runtime.ts",
+      'import "../retained-trial-ledger/sql.js";',
+    ],
+    [
+      "src/application/retry/reconciliation.ts",
+      'import "../retained-trial-ledger/retry.js";',
+    ],
+    ["src/providers/oci/retry-observation.ts", 'import "./client.js";'],
+  ])) {
+    assert.ok(
+      analyze({ ...sources, [file]: text }).some(
+        (error) => error.rule === "architecture",
+      ),
+      file,
+    );
+  }
 });

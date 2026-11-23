@@ -4,9 +4,9 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
-import { emptyControl } from "./empty-control.js";
+import { emptyControl } from "../../http/empty-control.js";
 
-import { decodeRetryStatus, type RetryStatus } from "./retry-contract.js";
+import { decodeRetryStatus, type RetryStatus } from "./contract.js";
 
 /** Only the start action may use the read-only provider; status reads go to SQL. */
 export type RetryAction = (

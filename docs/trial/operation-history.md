@@ -1,9 +1,9 @@
 # Read-only operation history — issue #87
 
-This first backend slice exposes stored evidence through `executorStore.history`
-and `historyDetail`. It adds no HTTP route, UI, provider call, lease acquisition,
-counter mutation or deployment. Historical **partial/no-go** feasibility remains;
-even a stored `succeeded` outcome does not prove all live validation criteria.
+Operation History reads stored evidence through the application-owned
+retained trial ledger adapter. Historical **partial/no-go** feasibility
+remains. A stored `succeeded` outcome does not prove all live validation
+criteria.
 
 ## Install and consume
 
@@ -13,13 +13,14 @@ even a stored `succeeded` outcome does not prove all live validation criteria.
 - Use a restricted `berth_runtime` connection with a session statement timeout
   established **before** queries and a client/network deadline. The shared SQL
   port assumes bounded connections; function-local settings alone are not a hard
-  end-to-end deadline. Existing hosted routes do not expose these functions.
-- `executorStore(db).history()` returns `{ items, next }`, default 20 records,
+  end-to-end deadline. The History HTTP handler uses this adapter within a
+  read-only transaction.
+- `retainedHistoryLedger(db).list()` returns `{ items, next }`, default 20 records,
   maximum 50. Rows sort by start timestamp descending, then operation UUID
   descending. Pass `next` as the next call's `before` cursor. The cursor is the
   last included operation only when another row exists. Unknown/malformed cursors
   and invalid limits fail closed; there is no silent restart or offset scan.
-- `historyDetail(operation)` returns the same allowlisted record, or null when
+- `retainedHistoryLedger(db).detail(operation)` returns the same allowlisted record, or null when
   absent. Neither method checks execution expiry or creation headroom. There is
   no new execution authorization or cleanup bypass.
 - An empty page is `{ items: [], next: null }`. Missing executor work produces a
@@ -44,8 +45,8 @@ order and per-operation request counts.
 Pagination is a browsing view, not a cross-request immutable snapshot: later
 outcome/counter changes may appear on later reads. New records may appear ahead of
 an existing cursor. Summaries do not claim provider absence or settle unknown
-mutations. Authentication, HTTP accounting and durable history retention policy
-remain future integration work; do not expose this SQL port directly to clients.
+mutations. The History HTTP handler owns authentication. Keep this SQL adapter
+server-side. See [ADR 0010](../adr/0010-separate-application-from-trial-execution.md).
 
 ## Verification
 

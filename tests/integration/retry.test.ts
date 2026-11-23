@@ -3,9 +3,10 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
+import { retainedRetryLedger } from "../../src/application/retained-trial-ledger/retry.js";
+import { retryActions } from "../../src/application/retry/reconciliation.js";
+import { retryRuntime } from "../../src/application/retry/runtime.js";
 import { retryObserver } from "../../src/providers/oci/retry-observation.js";
-import { retryActions } from "../../src/trial/retry-reconciliation.js";
-import { retryRuntime } from "../../src/trial/retry-runtime.js";
 
 const scope = {
   compartment: "ocid1.compartment.oc1..fixture",
@@ -105,7 +106,7 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
         : Response.json([]);
     };
     const act = retryActions(
-      runtime,
+      retainedRetryLedger(runtime),
       retryObserver(scope, { async signHttpRequest() {} }, fetcher),
     );
     assert.equal(await act("status", operation), null);
@@ -284,7 +285,7 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
       },
     );
     let pathsProbe: string | undefined;
-    const followUp = retryActions(runtime, fixtures);
+    const followUp = retryActions(retainedRetryLedger(runtime), fixtures);
     const peer = new Client({ ...settings, user: "berth_retry_runtime" });
     await peer.connect();
     try {
@@ -294,7 +295,7 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
           reachedProvider.promise,
           firstRequest.then(() => assert.fail("Expected a provider check")),
         ]);
-        const concurrent = retryActions(peer, fixtures);
+        const concurrent = retryActions(retainedRetryLedger(peer), fixtures);
         assert.equal(
           (await concurrent("start", late.operation))?.stage,
           "checking-provider",

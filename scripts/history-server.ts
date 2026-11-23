@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
-import { historyApi } from "../src/trial/history-api.js";
-import { historyReader } from "../src/trial/history-runtime.js";
+import { historyApi } from "../src/application/history/api.js";
+import { historyReader } from "../src/application/history/runtime.js";
 
 const api = historyApi(
   process.env.BERTH_HISTORY_TOKEN ?? "",
