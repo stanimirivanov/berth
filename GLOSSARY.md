@@ -50,6 +50,15 @@ _Avoid_: Run, when the word could mean one execution or delivery.
 The owner's approval for one operation, binding its target, credential identity,
 execution window, policy and reviewed evidence.
 
+**Retry proposal**
+A short-lived description of the exact target, remaining provider writes and
+limits the owner can approve after reconciliation.
+
+**Retry authorization**
+The owner's approval for specific remaining provider writes linked to an
+expired operation. It has its own target scope, execution window and request
+limits.
+
 **Execution window**
 The fixed period in which the operation may perform authorized cloud work.
 
