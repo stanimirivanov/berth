@@ -31,6 +31,26 @@ async function openHistory(page: Page) {
     .click();
 }
 
+/** Observe CSP events before visiting the production shell. */
+async function observeCspViolations(page: Page) {
+  const violations: string[] = [];
+  await page.exposeFunction(
+    "recordHistoryCspViolation",
+    (directive: string) => {
+      violations.push(directive);
+    },
+  );
+  await page.addInitScript(() => {
+    const browser = window as Window & {
+      recordHistoryCspViolation: (directive: string) => Promise<void>;
+    };
+    document.addEventListener("securitypolicyviolation", (event) => {
+      void browser.recordHistoryCspViolation(event.effectiveDirective);
+    });
+  });
+  return violations;
+}
+
 test("the shell marks the active page and opens the existing history access screen", async ({
   page,
 }) => {
@@ -350,7 +370,8 @@ test("history has loading, empty, unavailable and unauthorized states without le
   await expect(page.getByText("No recorded operations.")).toBeVisible();
   const fetchedAt = page
     .getByRole("region", { name: "Recorded operations" })
-    .locator("time[datetime]");
+    .getByText(/^Last fetched/)
+    .locator("time");
   const successfulRead = await fetchedAt.getAttribute("datetime");
   status = 503;
   await page.getByRole("button", { name: "Refresh history" }).click();
@@ -466,7 +487,7 @@ test("a failed older-page read keeps the successful page and retries the same cu
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
   const list = page.getByRole("region", { name: "Recorded operations" });
-  const fetchedAt = list.locator("time[datetime]");
+  const fetchedAt = list.getByText(/^Last fetched/).locator("time");
   await expect(fetchedAt).toHaveAttribute("datetime", /Z$/);
   const successfulRead = await fetchedAt.getAttribute("datetime");
   const older = list.getByRole("button", { name: "Older operations" });
@@ -592,7 +613,7 @@ test("detail refresh retains its timestamp on failure and clears only detail on 
   const list = page.getByRole("region", { name: "Recorded operations" });
   const detail = page.getByRole("region", { name: "Selected operation" });
   await expect(list.getByRole("link", { name: second })).toBeVisible();
-  const fetchedAt = detail.locator("time[datetime]");
+  const fetchedAt = detail.getByText(/^Last fetched/).locator("time");
   await expect(fetchedAt).toHaveAttribute("datetime", /Z$/);
   const successfulRead = await fetchedAt.getAttribute("datetime");
   detailStatus = 503;
@@ -671,6 +692,7 @@ for (const status of [401, 403]) {
 test("the Review inbox groups attention separately and leads detail with every reason", async ({
   page,
 }) => {
+  const violations = await observeCspViolations(page);
   const expired = { ...item(first), outcome: "active" };
   const resolved = {
     ...item(second),
@@ -693,7 +715,22 @@ test("the Review inbox groups attention separately and leads detail with every r
   await expect(attention.getByText("active", { exact: true })).toBeVisible();
   await expect(other.getByText("failed", { exact: true })).toBeVisible();
   await expect(other.getByRole("link", { name: first })).toHaveCount(0);
-  await attention.getByRole("link", { name: first }).click();
+  const operation = attention
+    .getByRole("navigation", { name: "Needs attention" })
+    .getByRole("link", { name: first, exact: true });
+  await expect(
+    other
+      .getByRole("navigation", { name: "Other operations" })
+      .getByRole("link"),
+  ).toHaveCount(1);
+  await expect(
+    operation.getByText(/Phase: cleanup · Unresolved mutations: 1/),
+  ).toBeVisible();
+  await expect(operation).toHaveAccessibleDescription(/active.*Phase: cleanup/);
+  await expect(operation).toHaveAttribute("href", `/operations/${first}`);
+  await operation.focus();
+  await operation.press("Enter");
+  await expect(operation).toHaveAttribute("aria-current", "page");
   await expect(page).toHaveURL(`/operations/${first}`);
   const detail = page.getByRole("region", { name: "Selected operation" });
   await expect(detail.getByRole("listitem")).toHaveText([
@@ -720,6 +757,17 @@ test("the Review inbox groups attention separately and leads detail with every r
   const listBounds = await page
     .getByRole("region", { name: "Recorded operations" })
     .boundingBox();
+  await expect(detail.locator("mat-card")).toHaveCSS(
+    "border-top-style",
+    "solid",
+  );
+  await expect(
+    detail.getByRole("button", { name: "Refresh detail" }),
+  ).toHaveCSS("border-top-width", "1px");
+  await expect(
+    page.getByRole("button", { name: "Older operations" }),
+  ).toBeDisabled();
+  expect(violations).toEqual([]);
   const detailBounds = await detail.boundingBox();
   expect(listBounds).not.toBeNull();
   expect(detailBounds).not.toBeNull();
@@ -757,7 +805,21 @@ test("mobile detail returns keyboard focus to its row on the retained older page
     name: "Operation details",
   });
   const inbox = page.getByRole("region", { name: "Recorded operations" });
-  await row.focus();
+  await page.setViewportSize({ width: 320, height: 820 });
+  const summary = row.getByText(/Phase: cleanup · Unresolved mutations: 1/);
+  await expect(summary).toHaveCSS("white-space", "normal");
+  expect(
+    await summary.evaluate(
+      (element) =>
+        element.scrollWidth <= element.clientWidth &&
+        element.scrollHeight <= element.clientHeight,
+    ),
+  ).toBe(true);
+  await page.setViewportSize({ width: 375, height: 820 });
+  await row.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(row).toBeFocused();
+  await expect(row).toHaveCSS("outline-width", "3px");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(`/operations/${second}`);
   await expect(detailHeading).toBeFocused();
@@ -864,22 +926,8 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
   page,
 }) => {
   const reads: string[] = [];
-  const violations: string[] = [];
+  const violations = await observeCspViolations(page);
   const detailReply = Promise.withResolvers<void>();
-  await page.exposeFunction(
-    "recordHistoryCspViolation",
-    (directive: string) => {
-      violations.push(directive);
-    },
-  );
-  await page.addInitScript(() => {
-    const browser = window as Window & {
-      recordHistoryCspViolation: (directive: string) => Promise<void>;
-    };
-    document.addEventListener("securitypolicyviolation", (event) => {
-      void browser.recordHistoryCspViolation(event.effectiveDirective);
-    });
-  });
   await page.route("**/api/history**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     reads.push(path);

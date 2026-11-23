@@ -37,146 +37,150 @@
             />
             <mat-hint>Kept in memory for this tab. No database or cloud credentials.</mat-hint>
           </mat-form-field>
-          <button mat-flat-button class="access-submit" type="submit">Load history</button>
+          <button mat-flat-button type="submit">Load history</button>
         </div>
       </form>
     } @else {
       <p>History access connected</p>
       <div class="actions">
-        <button type="button" class="secondary" (click)="disconnect()">Disconnect</button>
+        <button mat-button type="button" (click)="disconnect()">Disconnect</button>
       </div>
     }
   </section>
   @if (store.connected()) {
     <div class="inbox-layout" [class.has-detail]="showDetail()">
       <section class="inbox" [attr.aria-busy]="store.listLoading()" aria-label="Recorded operations">
-        <div class="section-heading">
-          <h2 #inboxHeading tabindex="-1">Review inbox</h2>
-          <button type="button" (click)="store.refreshList()" [disabled]="store.listLoading()">Refresh history</button>
-        </div>
-        @if (store.list(); as list) {
-          <p><small>Last fetched <time [attr.datetime]="list.fetchedAt">{{ list.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
-        }
-        @if (store.listLoading()) {
-          <p role="status">Loading operation history…</p>
-          <mat-progress-bar mode="indeterminate" aria-label="Loading operation history" />
-        }
-        @if (store.listFailure(); as failure) {
-          <p role="alert" class="error">
-            History is unavailable. Retry when the read service is available.
-            @if (store.list()) { Displayed data may be out of date. }
-          </p>
-          <div class="actions">
-            <button type="button" (click)="store.retryList()">Retry</button>
-            @if (failure.before !== null) {
-              <button type="button" class="secondary" (click)="store.newest()">Go to newest</button>
-            }
+        <mat-card appearance="outlined" class="inbox-panel">
+          <div class="section-heading">
+            <h2 #inboxHeading tabindex="-1">Review inbox</h2>
+            <button mat-stroked-button type="button" (click)="store.refreshList()" [disabled]="store.listLoading()">Refresh history</button>
           </div>
-        }
-        @if (emptyList()) {
-          <p role="status" class="empty">No recorded operations.</p>
-        }
-        @if (store.list(); as list) {
-          @for (group of groups(); track group.label) {
-            @if (group.items.length) {
-              <section [attr.aria-label]="group.label">
-                <h3>{{ group.label }}</h3>
-                <ul class="operations">
-                  @for (item of group.items; track item.operation) {
-                    <li>
-                      <div>
-                        <span class="status">{{ item.outcome }}</span>
-                        <time>{{ item.startedAt | date: 'medium' : 'UTC' }}</time>
-                      </div>
-                      <a #operationRow class="operation-id" [id]="item.operation"
-                        href="/operations/{{ item.operation }}" [routerLink]="['/operations', item.operation]"
-                        [attr.aria-current]="operation() === item.operation ? 'page' : null">
-                        {{ item.operation }}
-                      </a>
-                      <p>Phase: {{ item.phase ?? 'Not recorded' }} · Unresolved mutations: {{ item.unresolved.mutations }}</p>
-                    </li>
-                  }
-                </ul>
-              </section>
-            }
+          @if (store.list(); as list) {
+            <p><small>Last fetched <time [attr.datetime]="list.fetchedAt">{{ list.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
           }
-          <nav class="history-pagination" aria-label="History pagination">
-            <button type="button" class="secondary" (click)="store.newest()" [disabled]="store.listLoading()">
-              Newest operations
-            </button>
-            <button type="button" (click)="store.older()" [disabled]="store.listLoading() || !list.next">
-              Older operations
-            </button>
-          </nav>
-        }
+          @if (store.listLoading()) {
+            <p role="status">Loading operation history…</p>
+            <mat-progress-bar mode="indeterminate" aria-label="Loading operation history" />
+          }
+          @if (store.listFailure(); as failure) {
+            <p role="alert" class="error">
+              History is unavailable. Retry when the read service is available.
+              @if (store.list()) { Displayed data may be out of date. }
+            </p>
+            <div class="actions">
+              <button mat-stroked-button type="button" (click)="store.retryList()">Retry</button>
+              @if (failure.before !== null) {
+                <button mat-button type="button" (click)="store.newest()">Go to newest</button>
+              }
+            </div>
+          }
+          @if (emptyList()) {
+            <p role="status" class="empty">No recorded operations.</p>
+          }
+          @if (store.list(); as list) {
+            @for (group of groups(); track group.label) {
+              @if (group.items.length) {
+                <section [attr.aria-label]="group.label">
+                  <h3>{{ group.label }}</h3>
+                  <mat-nav-list class="operations" [attr.aria-label]="group.label">
+                    @for (item of group.items; track item.operation) {
+                      <a #operationRow mat-list-item lines="3" class="operation-row" [id]="item.operation"
+                        href="/operations/{{ item.operation }}" [routerLink]="['/operations', item.operation]"
+                        [activated]="operation() === item.operation"
+                        [attr.aria-labelledby]="item.operation + '-title'"
+                        attr.aria-describedby="{{ item.operation }}-state {{ item.operation }}-summary">
+                        <span matListItemTitle class="operation-id" [id]="item.operation + '-title'">{{ item.operation }}</span>
+                        <span matListItemLine class="operation-summary" [id]="item.operation + '-state'">
+                          <strong class="status">{{ item.outcome }}</strong>
+                          <time [attr.datetime]="item.startedAt">{{ item.startedAt | date: 'medium' : 'UTC' }}</time>
+                        </span>
+                        <span matListItemLine class="operation-summary" [id]="item.operation + '-summary'">Phase: {{ item.phase ?? 'Not recorded' }} · Unresolved mutations: {{ item.unresolved.mutations }}</span>
+                      </a>
+                    }
+                  </mat-nav-list>
+                </section>
+              }
+            }
+            <nav class="history-pagination" aria-label="History pagination">
+              <button mat-button type="button" (click)="store.newest()" [disabled]="store.listLoading()">
+                Newest operations
+              </button>
+              <button mat-button type="button" (click)="store.older()" [disabled]="store.listLoading() || !list.next">
+                Older operations
+              </button>
+            </nav>
+          }
+        </mat-card>
       </section>
       @if (showDetail()) {
         <section class="details" aria-label="Selected operation" [attr.aria-busy]="detailLoading()">
-          <a href="/operations" routerLink="/operations">Back to inbox</a>
-          <h2 #detailHeading tabindex="-1">Operation details</h2>
-          <button type="button" (click)="store.refreshDetail()" [disabled]="detailLoading()">Refresh detail</button>
-          @if (detailLoading()) {
-            <p role="status">Loading operation details…</p>
-            <mat-progress-bar mode="indeterminate" aria-label="Loading operation details" />
-          }
-          @if (detailFailure()) {
-            <p role="alert" class="error">
-              {{ detailFailure() === 'missing' ? 'Operation not found.' : 'Operation details are unavailable.' }}
-              @if (detail()) { Displayed data may be out of date. }
-            </p>
-            <button type="button" (click)="store.refreshDetail()">Retry</button>
-          }
-          @if (detail(); as detail) {
-            @let selected = detail.record;
-            @if (reasons().length) {
-              <section class="attention-reasons" aria-label="Attention reasons">
-                <h3>Needs attention</h3>
-                <ul>
-                  @for (reason of reasons(); track reason.message) {
-                    <li>{{ reason.message }}</li>
-                  }
-                </ul>
-                <div class="owner-procedures">
-                  @for (link of recoveryLinks(); track link.url) {
-                    <a href="{{ link.url }}" rel="noreferrer">{{ link.label }}</a>
-                  }
-                </div>
-              </section>
+          <mat-card appearance="outlined" class="detail-panel">
+            <a href="/operations" routerLink="/operations">Back to inbox</a>
+            <h2 #detailHeading tabindex="-1">Operation details</h2>
+            <button mat-stroked-button type="button" (click)="store.refreshDetail()" [disabled]="detailLoading()">Refresh detail</button>
+            @if (detailLoading()) {
+              <p role="status">Loading operation details…</p>
+              <mat-progress-bar mode="indeterminate" aria-label="Loading operation details" />
             }
-            <p><small>Last fetched <time [attr.datetime]="detail.fetchedAt">{{ detail.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
-            <p class="mono">{{ selected.operation }}</p>
-            <h3>Recorded lifecycle state</h3>
-            <dl>
-              <dt>Lifecycle outcome</dt>
-              <dd>{{ selected.outcome }}</dd>
-              <dt>Phase</dt>
-              <dd>{{ selected.phase ?? 'Not recorded' }}</dd>
-              <dt>Cleanup requested</dt>
-              <dd>{{ selected.cleanupRequested ? 'Yes' : 'No' }}</dd>
-              <dt>Upload unresolved</dt>
-              <dd>{{ selected.pendingUpload ? 'Yes' : 'No' }}</dd>
-              <dt>Object removal recorded</dt>
-              <dd>{{ selected.objectRemoved ? 'Yes' : 'No' }}</dd>
-            </dl>
-            <h3>Execution window (UTC)</h3>
-            <dl>
-              <dt>Started</dt>
-              <dd>{{ selected.startedAt | date: 'medium' : 'UTC' }}</dd>
-              <dt>Expires</dt>
-              <dd>{{ selected.expiresAt | date: 'medium' : 'UTC' }}</dd>
-            </dl>
-            <h3>Unresolved work</h3>
-            <p>Unresolved mutations: {{ selected.unresolved.mutations }}</p>
-            <p>Unresolved requests: {{ selected.unresolved.requests }}</p>
-            <h3>Application request budgets</h3>
-            <p>Spent / limit. These are not provider billing totals.</p>
-            <dl>
-              @for (meter of meters; track meter.key) {
-                <dt>{{ meter.label }}</dt>
-                <dd>{{ selected.budgets[meter.key].used }} / {{ selected.budgets[meter.key].limit }}</dd>
+            @if (detailFailure()) {
+              <p role="alert" class="error">
+                {{ detailFailure() === 'missing' ? 'Operation not found.' : 'Operation details are unavailable.' }}
+                @if (detail()) { Displayed data may be out of date. }
+              </p>
+              <button mat-stroked-button type="button" (click)="store.refreshDetail()">Retry</button>
+            }
+            @if (detail(); as detail) {
+              @let selected = detail.record;
+              @if (reasons().length) {
+                <section class="attention-reasons" aria-label="Attention reasons">
+                  <h3>Needs attention</h3>
+                  <ul>
+                    @for (reason of reasons(); track reason.message) {
+                      <li>{{ reason.message }}</li>
+                    }
+                  </ul>
+                  <div class="owner-procedures">
+                    @for (link of recoveryLinks(); track link.url) {
+                      <a href="{{ link.url }}" rel="noreferrer">{{ link.label }}</a>
+                    }
+                  </div>
+                </section>
               }
-            </dl>
-          }
+              <p><small>Last fetched <time [attr.datetime]="detail.fetchedAt">{{ detail.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
+              <p class="mono">{{ selected.operation }}</p>
+              <h3>Recorded lifecycle state</h3>
+              <dl>
+                <dt>Lifecycle outcome</dt>
+                <dd>{{ selected.outcome }}</dd>
+                <dt>Phase</dt>
+                <dd>{{ selected.phase ?? 'Not recorded' }}</dd>
+                <dt>Cleanup requested</dt>
+                <dd>{{ selected.cleanupRequested ? 'Yes' : 'No' }}</dd>
+                <dt>Upload unresolved</dt>
+                <dd>{{ selected.pendingUpload ? 'Yes' : 'No' }}</dd>
+                <dt>Object removal recorded</dt>
+                <dd>{{ selected.objectRemoved ? 'Yes' : 'No' }}</dd>
+              </dl>
+              <h3>Execution window (UTC)</h3>
+              <dl>
+                <dt>Started</dt>
+                <dd>{{ selected.startedAt | date: 'medium' : 'UTC' }}</dd>
+                <dt>Expires</dt>
+                <dd>{{ selected.expiresAt | date: 'medium' : 'UTC' }}</dd>
+              </dl>
+              <h3>Unresolved work</h3>
+              <p>Unresolved mutations: {{ selected.unresolved.mutations }}</p>
+              <p>Unresolved requests: {{ selected.unresolved.requests }}</p>
+              <h3>Application request budgets</h3>
+              <p>Spent / limit. These are not provider billing totals.</p>
+              <dl>
+                @for (meter of meters; track meter.key) {
+                  <dt>{{ meter.label }}</dt>
+                  <dd>{{ selected.budgets[meter.key].used }} / {{ selected.budgets[meter.key].limit }}</dd>
+                }
+              </dl>
+            }
+          </mat-card>
         </section>
       }
     </div>

@@ -8,6 +8,7 @@
   --accent: #135d58;
   --warn: #fff4d7;
   --error: #8a2424;
+  --focus: #97530c;
   font:
     16px / 1.5 system-ui,
     sans-serif;
@@ -38,6 +39,6 @@ p {
   margin: 0.5rem 0 1rem;
 }
 :focus-visible {
-  outline: 3px solid #97530c;
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
