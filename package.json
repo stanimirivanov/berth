@@ -46,6 +46,7 @@
     "test:usage-db": "pnpm run build && node --test dist/tests/integration/usage.test.js",
     "test:recovery-db": "pnpm run build && node --test --test-concurrency=1 dist/tests/integration/recovery.test.js dist/tests/integration/security.test.js",
     "build:live-executor": "pnpm run build && node dist/scripts/build-live-executor.js",
+    "test:inventory-db": "pnpm run build && node --test dist/tests/integration/inventory.test.js",
     "test:admission-db": "pnpm run build && node --test dist/tests/integration/admission.test.js",
     "lint:spacing": "eslint scripts tests src tools neon.ts eslint.config.mjs",
     "security:temporary-audit": "pnpm run secrets && node dist/scripts/temporary-audit.js",
