@@ -1,21 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executorStore } from "../src/trial/executor-store.js";
+import { retainedHistoryLedger } from "../src/application/retained-trial-ledger/history.js";
 
 test("operation history uses only parameterized read functions and redacts database failures", async () => {
   const queries: { text: string; values: unknown[] | undefined }[] = [];
   const page = { items: [], next: null };
-  const store = executorStore({
+  const store = retainedHistoryLedger({
     async query(text, values) {
       queries.push({ text, values });
       return {
-        rows: [{ result: text.includes("history_page") ? page : null }],
+        rows: [
+          {
+            result: text.includes("history_page")
+              ? { ...page, privateState: "fixture" }
+              : null,
+          },
+        ],
       };
     },
   });
-  assert.deepEqual(await store.history(), page);
-  assert.equal(await store.historyDetail("fixture-operation"), null);
-  await store.history("fixture-cursor", 3);
+  assert.deepEqual(await store.list(), page);
+  assert.equal(await store.detail("fixture-operation"), null);
+  await store.list("fixture-cursor", 3);
   assert.deepEqual(queries, [
     {
       text: "SELECT berth_executor.history_page($1,$2) AS result",
@@ -30,17 +36,17 @@ test("operation history uses only parameterized read functions and redacts datab
       values: ["fixture-cursor", 3],
     },
   ]);
-  const rejected = executorStore({
+  const rejected = retainedHistoryLedger({
     async query() {
       throw Error("private-db-detail");
     },
   });
   await assert.rejects(
-    rejected.history(),
+    rejected.list(),
     /^Error: Executor state unavailable; reconcile without retry$/,
   );
   await assert.rejects(
-    rejected.historyDetail("fixture-operation"),
+    rejected.detail("fixture-operation"),
     /^Error: Executor state unavailable; reconcile without retry$/,
   );
 });

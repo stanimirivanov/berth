@@ -6,16 +6,22 @@ import ts from "typescript-ast";
 
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
-  "src/trial/empty-control.ts": [],
-  "src/trial/retry-contract.ts": ["effect"],
-  "src/trial/retry-api.ts": ["node:crypto"],
-  "src/trial/retry-index.ts": [],
-  "src/trial/retry-runtime.ts": ["node:crypto", "pg", "oci-common"],
-  "src/trial/retry-reconciliation.ts": ["node:crypto"],
+  "src/http/empty-control.ts": [],
+  "src/application/retry/contract.ts": ["effect"],
+  "src/application/retry/api.ts": ["node:crypto"],
+  "src/application/retry/index.ts": [],
+  "src/application/retry/runtime.ts": ["node:crypto", "pg", "oci-common"],
+  "src/application/retry/reconciliation.ts": ["node:crypto"],
   "src/providers/oci/retry-observation.ts": ["effect"],
-  "src/trial/history-api.ts": ["node:crypto"],
-  "src/trial/history-runtime.ts": ["pg"],
-  "src/trial/history-index.ts": [],
+  "src/application/history/contract.ts": ["effect"],
+  "src/application/inventory/contract.ts": ["effect"],
+  "src/application/retained-trial-ledger/sql.ts": [],
+  "src/application/retained-trial-ledger/history.ts": [],
+  "src/application/retained-trial-ledger/inventory.ts": [],
+  "src/application/retained-trial-ledger/retry.ts": [],
+  "src/application/history/api.ts": ["node:crypto"],
+  "src/application/history/runtime.ts": ["pg"],
+  "src/application/history/index.ts": [],
   "src/trial/live-admission.ts": ["node:crypto"],
   "src/providers/oci/readiness.ts": ["oci-common"],
   "src/trial/executor-security.ts": [],
@@ -54,6 +60,53 @@ const runtimePackages = {
     "pg",
   ],
 };
+
+/** Application imports are explicit, including type-only dependencies across its capability interfaces. */
+const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
+  "src/application/retry/index.ts": [
+    "src/application/retry/api.ts",
+    "src/application/retry/runtime.ts",
+  ],
+  "src/application/retry/api.ts": [
+    "src/http/empty-control.ts",
+    "src/application/retry/contract.ts",
+  ],
+  "src/application/retry/contract.ts": [
+    "src/providers/oci/retry-observation.ts",
+  ],
+  "src/application/retry/runtime.ts": [
+    "src/application/retry/api.ts",
+    "src/application/retry/reconciliation.ts",
+    "src/providers/oci/retry-observation.ts",
+    "src/application/retained-trial-ledger/retry.ts",
+  ],
+  "src/application/retry/reconciliation.ts": [
+    "src/application/retry/contract.ts",
+    "src/application/retry/api.ts",
+    "src/providers/oci/retry-observation.ts",
+  ],
+  "src/application/history/index.ts": [
+    "src/application/history/api.ts",
+    "src/application/history/runtime.ts",
+  ],
+  "src/application/history/runtime.ts": [
+    "src/application/history/api.ts",
+    "src/application/retained-trial-ledger/history.ts",
+  ],
+  "src/application/retained-trial-ledger/history.ts": [
+    "src/application/history/contract.ts",
+    "src/application/retained-trial-ledger/sql.ts",
+    "src/trial/executor-security.ts",
+  ],
+  "src/application/retained-trial-ledger/inventory.ts": [
+    "src/application/inventory/contract.ts",
+    "src/application/retained-trial-ledger/sql.ts",
+  ],
+  "src/application/retained-trial-ledger/retry.ts": [
+    "src/application/retry/contract.ts",
+    "src/application/retained-trial-ledger/sql.ts",
+  ],
+});
 
 /** Reject private indexed paths before reading content; this is not a secret scanner.
  * @param {string} name
@@ -164,38 +217,7 @@ export function analyze(files) {
         if (
           file.startsWith("src/") &&
           !(
-            (file === "src/trial/retry-index.ts" &&
-              ["src/trial/retry-api.ts", "src/trial/retry-runtime.ts"].includes(
-                resolved,
-              )) ||
-            (file === "src/trial/retry-api.ts" &&
-              [
-                "src/trial/empty-control.ts",
-                "src/trial/retry-contract.ts",
-              ].includes(resolved)) ||
-            (file === "src/trial/retry-runtime.ts" &&
-              [
-                "src/trial/retry-api.ts",
-                "src/trial/retry-reconciliation.ts",
-                "src/providers/oci/retry-observation.ts",
-              ].includes(resolved)) ||
-            (file === "src/trial/retry-reconciliation.ts" &&
-              [
-                "src/trial/retry-contract.ts",
-                "src/trial/retry-api.ts",
-                "src/providers/oci/retry-observation.ts",
-              ].includes(resolved)) ||
-            (file === "src/trial/history-index.ts" &&
-              [
-                "src/trial/history-api.ts",
-                "src/trial/history-runtime.ts",
-              ].includes(resolved)) ||
-            (file === "src/trial/history-runtime.ts" &&
-              [
-                "src/trial/executor-security.ts",
-                "src/trial/executor-store.ts",
-                "src/trial/history-api.ts",
-              ].includes(resolved)) ||
+            applicationImports[file]?.includes(resolved) ||
             (file === "src/trial/live-admission.ts" &&
               [
                 "src/trial/api.ts",
@@ -213,7 +235,7 @@ export function analyze(files) {
               resolved === "src/trial/executor-security.ts") ||
             (file === "src/trial/live-hosted.ts" &&
               [
-                "src/trial/empty-control.ts",
+                "src/http/empty-control.ts",
                 "src/trial/live-environment.ts",
                 "src/trial/scheduled.ts",
               ].includes(resolved)) ||
@@ -320,8 +342,8 @@ export function analyze(files) {
             resolved === "src/trial/deployment.ts" ||
             (file === "scripts/history-server.ts" &&
               [
-                "src/trial/history-api.ts",
-                "src/trial/history-runtime.ts",
+                "src/application/history/api.ts",
+                "src/application/history/runtime.ts",
               ].includes(resolved))
           )
         )
@@ -354,6 +376,20 @@ export function analyze(files) {
      * @param {ts.Node} node
      */
     function visit(node) {
+      if (
+        file.startsWith("src/application/") &&
+        !file.startsWith("src/application/retained-trial-ledger/") &&
+        (ts.isStringLiteralLike(node) ||
+          ts.isTemplateHead(node) ||
+          ts.isTemplateMiddle(node) ||
+          ts.isTemplateTail(node)) &&
+        /\bberth_[a-z0-9_]+"?\s*\./i.test(node.text)
+      )
+        fail(
+          node,
+          "architecture",
+          "Access retained trial SQL through the named adapter.",
+        );
       if (ts.isImportDeclaration(node))
         dependency(
           node,

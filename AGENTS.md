@@ -25,7 +25,8 @@ below for technical requirements and the owner's instructions for task scope.
 
 | Area | Scoped technical guide |
 | --- | --- |
-| Hosted trial and history service | [src/trial](src/trial/AGENTS.md) |
+| Application backend | [src/application](src/application/AGENTS.md) |
+| Hosted trial and recovery | [src/trial](src/trial/AGENTS.md) |
 | OCI provider | [src/providers/oci](src/providers/oci/AGENTS.md) |
 | Administrator and build commands | [scripts](scripts/AGENTS.md) |
 | Tests and fixtures | [tests](tests/AGENTS.md) |

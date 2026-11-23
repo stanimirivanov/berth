@@ -2219,9 +2219,11 @@ test("read-only operation history paginates retained evidence without exposing r
     await owner.query(
       await readFile("migrations/008_operation_history.sql", "utf8"),
     );
-    const { executorStore } = await import("../../src/trial/executor-store.js");
-    const store = executorStore(db);
-    const empty = await store.history();
+    const { retainedHistoryLedger } = await import(
+      "../../src/application/retained-trial-ledger/history.js"
+    );
+    const store = retainedHistoryLedger(db);
+    const empty = await store.list();
     assert.equal(empty.items.length, 1);
     assert.equal(
       empty.items[0]?.phase,
@@ -2272,23 +2274,23 @@ test("read-only operation history paginates retained evidence without exposing r
     const before = await snapshot();
     await db.query("BEGIN READ ONLY");
     try {
-      const first = await store.history(null, 2);
+      const first = await store.list(null, 2);
       assert.deepEqual(
         first.items.map((item) => item.operation),
         [ids[2], ids[1]],
       );
       assert.equal(first.next, ids[1]);
-      const second = await store.history(first.next, 2);
+      const second = await store.list(first.next, 2);
       assert.deepEqual(
         second.items.map((item) => item.operation),
         [ids[0], operation],
       );
       assert.equal(second.next, null);
-      assert.deepEqual(await store.history(operation), {
+      assert.deepEqual(await store.list(operation), {
         items: [],
         next: null,
       });
-      const detail = await store.historyDetail(ids[2] as string);
+      const detail = await store.detail(ids[2] as string);
       assert.ok(detail);
       assert.equal(detail.outcome, "needs-reconciliation");
       assert.equal(detail.phase, "cleanup");
@@ -2319,7 +2321,7 @@ test("read-only operation history paginates retained evidence without exposing r
           "verdict",
         ].sort(),
       );
-      assert.equal(await store.historyDetail(randomUUID()), null);
+      assert.equal(await store.detail(randomUUID()), null);
     } finally {
       await db.query("ROLLBACK");
     }
@@ -2327,8 +2329,8 @@ test("read-only operation history paginates retained evidence without exposing r
       await assert.rejects(
         db.query("SELECT berth_executor.history_page(null,$1)", [limit]),
       );
-    await assert.rejects(store.history(randomUUID()));
-    await assert.rejects(store.history("bad-cursor"));
+    await assert.rejects(store.list(randomUUID()));
+    await assert.rejects(store.list("bad-cursor"));
     await assert.rejects(
       db.query("SELECT berth_executor.history_record($1)", [ids[2]]),
       /permission denied/,

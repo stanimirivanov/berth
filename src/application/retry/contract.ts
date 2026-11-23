@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import type { RetryObservation } from "../../providers/oci/retry-observation.js";
 
 const operation = Schema.String.check(
   Schema.isPattern(
@@ -105,3 +106,28 @@ export const decodeRetryClaim = Schema.decodeUnknownSync(
 
 /** A durable reservation is a Boolean. Only the true branch permits dispatch. */
 export const decodeRetryReservation = Schema.decodeUnknownSync(Schema.Boolean);
+
+/** Normalized provider evidence with optional observation time, or a bounded local stop. */
+export type RetryProof =
+  | RetryObservation
+  | { kind: "scope-unavailable" | "reservation-refused" }
+  | { kind: "absent"; observedAt: string };
+
+/** The four durable operations used by reconciliation, in claim and reservation order. */
+export interface RetryLedger {
+  status(operation: string): Promise<RetryStatus | null>;
+  begin(
+    operation: string,
+    claim: string,
+  ): Promise<ReturnType<typeof decodeRetryClaim>>;
+  reserve(
+    operation: string,
+    claim: string,
+    probe: "bucket" | "list",
+  ): Promise<boolean>;
+  finish(
+    operation: string,
+    claim: string,
+    proof: RetryProof,
+  ): Promise<RetryStatus | null>;
+}

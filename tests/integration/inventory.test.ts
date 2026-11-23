@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
+import { retainedInventoryLedger } from "../../src/application/retained-trial-ledger/inventory.js";
 
 const observed = "2026-01-01T10:00:00+00:00";
 const unresolved = "2026-01-01T10:05:00+00:00";
@@ -30,11 +31,7 @@ async function operation(owner: Client) {
 
 /** Read the public inventory projection with a bounded keyset page. */
 async function page(client: Client, after: string | null = null, limit = 20) {
-  const result = await client.query(
-    "SELECT berth_inventory.inventory_page($1,$2) AS value",
-    [after, limit],
-  );
-  return result.rows[0]?.value;
+  return retainedInventoryLedger(client).page(after, limit);
 }
 
 test("retained inventory projects identity-bound presence and coverage through a restricted reader", async () => {

@@ -4,28 +4,6 @@ import type { ProbeReceipt } from "../providers/oci/trial-object.js";
 import type { LedgerClaim, LedgerDatabase, TrialRecord } from "./ledger.js";
 /** Closed durable phase vocabulary; terminal status comes from the ledger, not a local cache. */
 export type Phase = "bucket" | "object" | "observe" | "cleanup";
-/** Allowlisted historical evidence, not provider billing totals or live feasibility acceptance. */
-export interface OperationHistory {
-  operation: string;
-  startedAt: string;
-  expiresAt: string;
-  outcome: TrialRecord["outcome"];
-  phase: Phase | null;
-  pendingUpload: boolean;
-  cleanupRequested: boolean;
-  objectRemoved: boolean;
-  verdict: "partial";
-  budgets: Record<
-    "normal" | "cleanup" | "monitoring" | "neon",
-    { used: number; limit: number }
-  >;
-  unresolved: { requests: number; mutations: number };
-}
-/** Newest-first keyset page; next is the last included operation only when more rows exist. */
-export interface OperationHistoryPage {
-  items: OperationHistory[];
-  next: string | null;
-}
 /** One fixed operation checkpoint, owned by the same fence as all ledger requests. */
 export interface ExecutionSnapshot {
   trial: TrialRecord;
@@ -125,18 +103,6 @@ export function executorStore(db: LedgerDatabase) {
       call("SELECT berth_inventory.publish_executor($1) AS result", [
         operation,
       ]),
-    /** Read at most 50 retained summaries; SQL validates cursor/limit, without execution expiry gating. */
-    history: (before: string | null = null, limit = 20) =>
-      call<OperationHistoryPage>(
-        "SELECT berth_executor.history_page($1,$2) AS result",
-        [before, limit],
-      ),
-    /** Read one allowlisted record or null; never claim, resume, settle or refund work. */
-    historyDetail: (operation: string) =>
-      call<OperationHistory | null>(
-        "SELECT berth_executor.history_detail($1) AS result",
-        [operation],
-      ),
     /** Atomic claim and durable delivery deduplication under the operation row lock. */
     open: (operation: string, owner: string, delivery: string) =>
       call<OpenExecution>("SELECT berth_executor.open($1,$2,$3) AS result", [

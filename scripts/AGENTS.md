@@ -15,5 +15,5 @@ Run the relevant existing setup/doctor tests; CI also runs the disposable loopba
 PostgreSQL integration suite without any Neon or OCI secrets.
 
 `history-server.ts` is the narrow loopback-only preview exception: it may compose
-`history-api.ts` and `history-runtime.ts`, never the live executor or an OCI port.
+`src/application/history/api.ts` and `src/application/history/runtime.ts`, never the live executor or an OCI port.
 It serves the built UI and private read API at one origin; no credential-file reads.
