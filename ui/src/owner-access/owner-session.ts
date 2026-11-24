@@ -11,7 +11,7 @@ type AccessStatus =
   | "forbidden";
 
 /** An outcome safe to hand to the feature that issued the read. */
-type OwnerRead<T> =
+export type OwnerRead<T> =
   | { kind: "success"; value: T }
   | { kind: "missing" | "unavailable" | "discarded" };
 

@@ -30,7 +30,8 @@ import { ActivatedRoute, RouterLink } from "@angular/router";
 import { isOperationId } from "../operation-id";
 import { OWNER_SESSION } from "../owner-access/owner-session";
 import { activeExpiry, attentionReasons, ownerProcedures } from "./attention";
-import { HistoryStore, type Operation } from "./history-store";
+import type { Operation } from "./history-reader";
+import { HistoryStore } from "./history-store";
 
 /** Read-only history screen. The shell holds accepted access in tab memory. */
 @Component({

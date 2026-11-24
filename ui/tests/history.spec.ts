@@ -1,26 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
-
-const first = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const second = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const item = (operation: string) => ({
-  operation,
-  startedAt: "2026-11-20T06:50:00Z",
-  expiresAt: "2026-11-20T10:50:00Z",
-  outcome: "needs-reconciliation",
-  phase: "cleanup",
-  pendingUpload: true,
-  cleanupRequested: true,
-  objectRemoved: false,
-  verdict: "partial",
-  budgets: {
-    normal: { used: 15, limit: 160 },
-    cleanup: { used: 14, limit: 40 },
-    monitoring: { used: 0, limit: 20 },
-    neon: { used: 7, limit: 100 },
-  },
-  unresolved: { requests: 1, mutations: 1 },
-});
+import { first, item, second } from "./history-fixture";
 
 /** Open the history screen through the application's main navigation. */
 async function openHistory(page: Page) {
