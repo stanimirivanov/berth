@@ -12,8 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { runDoctor } from "../scripts/oci-doctor.js";
-import { observedOciResponses } from "./fixtures/oci-observed.js";
+import { runDoctor } from "../scripts/oci-doctor.ts";
+import { observedOciResponses } from "./fixtures/oci-observed.ts";
 
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const fingerprint = createHash("md5")

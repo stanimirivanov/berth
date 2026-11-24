@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { emptyControl } from "../http/empty-control.js";
-import { liveEnvironment } from "./live-environment.js";
-import { scheduledHandler } from "./scheduled.js";
+import { emptyControl } from "../http/empty-control.ts";
+import { liveEnvironment } from "./live-environment.ts";
+import { scheduledHandler } from "./scheduled.ts";
 
 /** Closed control vocabulary; requests never choose operations or provider targets. */
 export type LiveAction = "evidence" | "usage" | "cleanup" | "scheduled";

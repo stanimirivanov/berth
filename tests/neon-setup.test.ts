@@ -8,7 +8,7 @@ import {
   privatePath,
   runSetup,
   validateTarget,
-} from "../scripts/neon-setup.js";
+} from "../scripts/neon-setup.ts";
 
 test("secret files must be private, regular files outside the checkout", async () => {
   const directory = await mkdtemp(join(tmpdir(), "berth-secret-test-"));

@@ -12,10 +12,10 @@ import {
   type BucketDeletionEvidence,
   bucketProvider,
   OciBucket,
-} from "../providers/oci/bucket.js";
-import type { BucketClient, BucketIntent } from "../providers/oci/client.js";
-import type { executorStore } from "./executor-store.js";
-import type { LedgerClaim } from "./ledger.js";
+} from "../providers/oci/bucket.ts";
+import type { BucketClient, BucketIntent } from "../providers/oci/client.ts";
+import type { executorStore } from "./executor-store.ts";
+import type { LedgerClaim } from "./ledger.ts";
 
 /** Actual Alchemy plan/apply against a single bucket state fenced by the ledger generation. */
 export async function bucketLifecycle(

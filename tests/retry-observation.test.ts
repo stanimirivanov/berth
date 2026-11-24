@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retryObserver } from "../src/providers/oci/retry-observation.js";
+import { retryObserver } from "../src/providers/oci/retry-observation.ts";
 
 const scope = {
   region: "eu-frankfurt-1",

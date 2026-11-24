@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { HttpRequest } from "oci-common";
 import { models } from "oci-objectstorage";
-import { makeBucket } from "../src/providers/oci/bucket.js";
+import { makeBucket } from "../src/providers/oci/bucket.ts";
 import {
   BucketFailure,
   bucketClient,
   safeBucketSdk,
-} from "../src/providers/oci/client.js";
-import { dispatcher, FakeOci, intent } from "./fakes/oci.js";
+} from "../src/providers/oci/client.ts";
+import { dispatcher, FakeOci, intent } from "./fakes/oci.ts";
 
 test("real SDK requests opt-in bucket metadata through read and conditional teardown", async () => {
   const fake = new FakeOci(),

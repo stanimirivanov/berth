@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recoverySites } from "./fakes/recovery-shard.js";
+import { recoverySites } from "./fakes/recovery-shard.ts";
 
 test("recovery shards form a deterministic disjoint complete partition", () => {
   const sites = Array.from({ length: 173 }, (_, n) => `boundary-${n}`);

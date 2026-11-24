@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { qualifyFunctions } from "../scripts/functions-headroom.js";
-import { makeTrialApi } from "../src/trial/api.js";
-import type { TrialIntent, TrialRecord } from "../src/trial/ledger.js";
-import { config, evidence, now } from "./fakes/admission.js";
+import { qualifyFunctions } from "../scripts/functions-headroom.ts";
+import { makeTrialApi } from "../src/trial/api.ts";
+import type { TrialIntent, TrialRecord } from "../src/trial/ledger.ts";
+import { config, evidence, now } from "./fakes/admission.ts";
 
 const token = "a".repeat(40);
 
@@ -420,7 +420,7 @@ test("exception preview and submit disclose partial feasibility without invented
 });
 
 test("live exception refuses deployment without durable migration qualification", async () => {
-  const { liveAdmissionApi } = await import("../src/trial/live-admission.js");
+  const { liveAdmissionApi } = await import("../src/trial/live-admission.ts");
   const startedAt = Date.now() - 1000,
     expiresAt = startedAt + 14400000;
   const e = {
@@ -484,7 +484,7 @@ test("live exception refuses deployment without durable migration qualification"
 });
 
 test("live preview rejects owner evidence drift away from a consumed exception", async () => {
-  const { liveAdmissionApi } = await import("../src/trial/live-admission.js");
+  const { liveAdmissionApi } = await import("../src/trial/live-admission.ts");
   const startedAt = Date.now() - 1000;
   const e = {
     ...config,

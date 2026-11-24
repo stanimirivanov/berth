@@ -1,7 +1,7 @@
 import type { PersistedState } from "alchemy/State/State";
-import type { BucketAttributes } from "../providers/oci/bucket.js";
-import type { ProbeReceipt } from "../providers/oci/trial-object.js";
-import type { LedgerClaim, LedgerDatabase, TrialRecord } from "./ledger.js";
+import type { BucketAttributes } from "../providers/oci/bucket.ts";
+import type { ProbeReceipt } from "../providers/oci/trial-object.ts";
+import type { LedgerClaim, LedgerDatabase, TrialRecord } from "./ledger.ts";
 /** Closed durable phase vocabulary; terminal status comes from the ledger, not a local cache. */
 export type Phase = "bucket" | "object" | "observe" | "cleanup";
 /** One fixed operation checkpoint, owned by the same fence as all ledger requests. */

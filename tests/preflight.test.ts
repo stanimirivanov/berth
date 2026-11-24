@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createProposal } from "../src/providers/oci/client.js";
-import { probeIntent } from "../src/providers/oci/trial-object.js";
+import { createProposal } from "../src/providers/oci/client.ts";
+import { probeIntent } from "../src/providers/oci/trial-object.ts";
 import {
   preflight,
   proposal,
   trialWindow,
   validateConfiguration,
-} from "../src/trial/preflight.js";
-import { config, evidence, now } from "./fakes/admission.js";
+} from "../src/trial/preflight.ts";
+import { config, evidence, now } from "./fakes/admission.ts";
 
 test("headroom accepts exact bounds and rejects stale unknown or insufficient allowances", () => {
   assert.deepEqual(preflight(config, evidence, now), []);

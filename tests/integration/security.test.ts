@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { assertExecutorPrivileges } from "../../src/trial/executor-hosted.js";
+import { assertExecutorPrivileges } from "../../src/trial/executor-hosted.ts";
 
 test("runtime startup rejects direct, column, inherited, schema and SET ROLE privilege drift before any write", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);

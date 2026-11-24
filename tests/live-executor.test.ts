@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import test from "node:test";
-import { liveEnvironment } from "../src/trial/live-environment.js";
-import { makeLiveHandler } from "../src/trial/live-hosted.js";
+import { liveEnvironment } from "../src/trial/live-environment.ts";
+import { makeLiveHandler } from "../src/trial/live-hosted.ts";
 
 const now = Date.now();
 const key = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -132,7 +132,7 @@ test("live handler routes only fixed authenticated actions and redacts failures"
 });
 
 test("live execution checks SQL identity and exact admitted target/window before opening execution", async () => {
-  const { executeLive } = await import("../src/trial/live-runtime.js");
+  const { executeLive } = await import("../src/trial/live-runtime.ts");
   const e = liveEnvironment(env);
   const trial = {
     operation: e.operation,
@@ -203,7 +203,7 @@ test("live execution checks SQL identity and exact admitted target/window before
 });
 
 test("live execution refuses broad SQL privileges before reading the ledger", async () => {
-  const { executeLive } = await import("../src/trial/live-runtime.js");
+  const { executeLive } = await import("../src/trial/live-runtime.ts");
   let queries = 0,
     closed = false;
   await assert.rejects(
@@ -226,7 +226,7 @@ test("live execution refuses broad SQL privileges before reading the ledger", as
 });
 
 test("live transports sign the fixed OCI identity and enforce the creation deadline", async () => {
-  const { liveTransports } = await import("../src/trial/live-runtime.js");
+  const { liveTransports } = await import("../src/trial/live-runtime.ts");
   const e = liveEnvironment(env);
   const requests: { url: string; authorization: string }[] = [];
   const transports = liveTransports(e, async (url, init) => {
@@ -318,7 +318,7 @@ test("live schedule forwards one gateway delivery without accepting manual beare
 
 test("live build descriptor keeps the schedule disabled and the synthetic root separate", async () => {
   const { liveFunction, liveSchedule, executorFunction } = await import(
-    "../neon.js"
+    "../neon.ts"
   );
   assert.equal(liveFunction.source, "./src/trial/live-index.ts");
   assert.notEqual(liveFunction.source, executorFunction.source);

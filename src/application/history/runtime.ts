@@ -3,8 +3,8 @@ import {
   prepareRetainedHistoryReader,
   retainedHistoryConnection,
   retainedHistoryLedger,
-} from "../retained-trial-ledger/history.js";
-import type { HistoryRead } from "./api.js";
+} from "../retained-trial-ledger/history.ts";
+import type { HistoryRead } from "./api.ts";
 
 /** Restricted invocation connection; tests replace only the database I/O boundary. */
 export interface HistoryDatabase {

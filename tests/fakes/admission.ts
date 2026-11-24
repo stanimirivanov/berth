@@ -1,7 +1,7 @@
 import type {
   Headroom,
   TrialConfiguration,
-} from "../../src/trial/preflight.js";
+} from "../../src/trial/preflight.ts";
 export const config: TrialConfiguration = {
   compartment: "ocid1.compartment.oc1..fixture",
   namespace: "fixture",

@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { open, realpath } from "node:fs/promises";
 import { isAbsolute, relative, sep } from "node:path";
-import { OciSetupError } from "./oci-access.js";
+import { OciSetupError } from "./oci-access.ts";
 
 export async function readPrivateText(path: string): Promise<string> {
   if (!isAbsolute(path))

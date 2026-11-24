@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { makeTrialApi } from "./api.js";
-import { executorStore } from "./executor-store.js";
-import { type LedgerDatabase, makeLedger } from "./ledger.js";
-import type { liveEnvironment } from "./live-environment.js";
-import { preflight } from "./preflight.js";
+import { makeTrialApi } from "./api.ts";
+import { executorStore } from "./executor-store.ts";
+import { type LedgerDatabase, makeLedger } from "./ledger.ts";
+import type { liveEnvironment } from "./live-environment.ts";
+import { preflight } from "./preflight.ts";
 
 /** Owner-prepared identity plus explicit independent service ceilings. */
 export function admissionBinding(e: ReturnType<typeof liveEnvironment>) {

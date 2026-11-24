@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { buildFunctionBundle } from "@neon/config-runtime/v1";
-import { executorFunction } from "../neon.js";
+import { executorFunction } from "../neon.ts";
 
 const zip = await buildFunctionBundle(executorFunction);
 await writeFile("dist/executor.zip", zip);

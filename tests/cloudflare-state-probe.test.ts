@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { makeStateProbe, runStatePhase } from "../src/trial/state-probe.js";
+import { makeStateProbe, runStatePhase } from "../src/trial/state-probe.ts";
 
 test("state probe authenticates and expires before protected work", async () => {
   let calls = 0;

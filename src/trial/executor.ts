@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type BucketAttributes, makeBucket } from "../providers/oci/bucket.js";
+import { type BucketAttributes, makeBucket } from "../providers/oci/bucket.ts";
 import {
   BucketFailure,
   type BucketObservation,
@@ -7,17 +7,17 @@ import {
   bucketClient,
   type ObjectSdk,
   objectClient,
-} from "../providers/oci/client.js";
-import { makeTrialObject, probeIntent } from "../providers/oci/trial-object.js";
-import type { UsageTransport } from "../providers/oci/usage.js";
-import { bucketLifecycle } from "./executor-resources.js";
+} from "../providers/oci/client.ts";
+import { makeTrialObject, probeIntent } from "../providers/oci/trial-object.ts";
+import type { UsageTransport } from "../providers/oci/usage.ts";
+import { bucketLifecycle } from "./executor-resources.ts";
 import {
   type ExecutionSnapshot,
   executorStore,
   type Phase,
-} from "./executor-store.js";
-import { type LedgerDatabase, makeLedger, type TrialAction } from "./ledger.js";
-import { collectUsage, usageStore } from "./warnings.js";
+} from "./executor-store.ts";
+import { type LedgerDatabase, makeLedger, type TrialAction } from "./ledger.ts";
+import { collectUsage, usageStore } from "./warnings.ts";
 
 /** Fixed cadence/deadlines; one minute work plus five-minute delivery margin fits each slot. */
 export const timing = {
@@ -80,7 +80,7 @@ export interface ExecutorOptions {
   sdk: (
     signal: AbortSignal,
     session: {
-      claim: import("./ledger.js").LedgerClaim;
+      claim: import("./ledger.ts").LedgerClaim;
       creationDeadline: number;
       snapshot: ExecutionSnapshot;
       store: ReturnType<typeof executorStore>;

@@ -65,6 +65,72 @@ test("runtime cycles fail while type-only cycles do not", () => {
   );
 });
 
+test("application imports use the owned TypeScript source path", () => {
+  const owner = "src/application/history/index.ts";
+  const files = {
+    "src/application/history/api.ts": "",
+    "src/trial/executor.ts": "",
+  };
+  assert.deepEqual(analyze({ ...files, [owner]: 'import "./api.ts";' }), []);
+  assert.deepEqual(analyze({ ...files, [owner]: 'import "./api.js";' }), []);
+  assert.ok(
+    analyze({ ...files, [owner]: 'import "../../trial/executor.js";' }).some(
+      (finding) => finding.file === owner && finding.rule === "architecture",
+    ),
+  );
+  assert.ok(
+    analyze({ ...files, [owner]: 'import "../../trial/executor.ts";' }).some(
+      (finding) => finding.file === owner && finding.rule === "architecture",
+    ),
+  );
+});
+
+test("repository import spelling covers backend tests without imposing production ownership", () => {
+  const testFile = "tests/integration/example.test.ts";
+  const productionFile = "scripts/main.ts";
+  const sources = {
+    "tests/fakes/example.ts": "",
+    "scripts/fixture.ts": "",
+    "tests/harness.test.mjs": 'import "../tools/harness.mjs";',
+  };
+  const options = { requireTsExtensions: true };
+  assert.deepEqual(
+    analyze(
+      {
+        ...sources,
+        [testFile]:
+          'import "../fakes/example.ts"; import "node:assert/strict";',
+        [productionFile]: 'import "./fixture.ts";',
+      },
+      options,
+    ),
+    [],
+  );
+  const findings = analyze(
+    {
+      ...sources,
+      [testFile]: [
+        'import "../fakes/example.js";',
+        'export * from "../fakes/example";',
+        'type Example = import("../fakes/example.js").Example;',
+        'void import("../fakes/example.js");',
+      ].join("\n"),
+      [productionFile]: 'import "./fixture.js";',
+    },
+    options,
+  );
+  assert.deepEqual(
+    findings.map(({ file, line, rule }) => [file, line, rule]),
+    [
+      [testFile, 1, "import-extension"],
+      [testFile, 2, "import-extension"],
+      [testFile, 3, "import-extension"],
+      [testFile, 4, "import-extension"],
+      [productionFile, 1, "import-extension"],
+    ],
+  );
+});
+
 test("quality sensor rejects disabled tests and real suppression comments, not fixture strings", () => {
   for (const text of [
     'test.skip("case",()=>{});',

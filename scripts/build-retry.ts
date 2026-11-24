@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { buildFunctionBundle } from "@neon/config-runtime/v1";
-import { retryFunction } from "../neon.js";
+import { retryFunction } from "../neon.ts";
 
 const bundle = await buildFunctionBundle(retryFunction);
 await writeFile("dist/retry.zip", bundle);

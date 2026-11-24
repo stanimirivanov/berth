@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { runCheckpoint } from "../../src/trial/checkpoint-run.js";
+import { runCheckpoint } from "../../src/trial/checkpoint-run.ts";
 
 test("hosted checkpoint resumes durable state, deduplicates delivery and tears down once", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);

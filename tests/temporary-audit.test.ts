@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { picomatchReport } from "./fakes/audit-report.js";
+import { picomatchReport } from "./fakes/audit-report.ts";
 
 // Process-boundary test: fake only registry/audit I/O; use real policy, clock, hashing and journal writes.
 test("temporary audit runner records native failure and rejects registry or report errors", async () => {

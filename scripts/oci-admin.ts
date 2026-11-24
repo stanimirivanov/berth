@@ -6,10 +6,10 @@ import {
   OciSetupError,
   parseOciConfig,
   policyStatements,
-} from "./oci-access.js";
+} from "./oci-access.ts";
 
-import { captureUserRejection, OciUserRejection } from "./oci-diagnostics.js";
-import type { Recovery, RecoveryPlan } from "./oci-recovery.js";
+import { captureUserRejection, OciUserRejection } from "./oci-diagnostics.ts";
+import type { Recovery, RecoveryPlan } from "./oci-recovery.ts";
 
 export interface AdminConfig {
   tenancyOcid: string;

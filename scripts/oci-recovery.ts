@@ -9,15 +9,15 @@ import {
 } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { OciSetupError } from "./oci-access.js";
+import { OciSetupError } from "./oci-access.ts";
 import {
   type AdminConfig,
   bootstrapOci,
   capabilities,
   userCreationBody,
-} from "./oci-admin.js";
-import { saveUserRejection } from "./oci-diagnostics.js";
-import { readPrivateText } from "./oci-files.js";
+} from "./oci-admin.ts";
+import { saveUserRejection } from "./oci-diagnostics.ts";
+import { readPrivateText } from "./oci-files.ts";
 
 export interface Recovery {
   compartmentOcid: string;

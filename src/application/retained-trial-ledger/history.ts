@@ -1,9 +1,9 @@
 import {
   assertExecutorPrivileges,
   restrictedConnection,
-} from "../../trial/executor-security.js";
-import { decodeHistoryDetail, decodeHistoryPage } from "../history/contract.js";
-import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.js";
+} from "../../trial/executor-security.ts";
+import { decodeHistoryDetail, decodeHistoryPage } from "../history/contract.ts";
+import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
 export { restrictedConnection as retainedHistoryConnection };
 

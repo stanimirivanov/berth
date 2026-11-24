@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import * as Effect from "effect/Effect";
-import { lifecycle } from "./fenced-lifecycle.js";
+import { lifecycle } from "./fenced-lifecycle.ts";
 import {
   claimState,
   makeFencedState,
   type StateDatabase,
-} from "./fenced-state.js";
+} from "./fenced-state.ts";
 
 /** Two-step synthetic proof only; an incomplete intent requires inspection, never replay. */
 export async function runCheckpoint(

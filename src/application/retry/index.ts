@@ -1,5 +1,5 @@
-import { retryApi } from "./api.js";
-import { retryRuntime } from "./runtime.js";
+import { retryApi } from "./api.ts";
+import { retryRuntime } from "./runtime.ts";
 
 /** Isolated owner reconciliation root. It has no schedule or provider mutation port. */
 export default retryApi(

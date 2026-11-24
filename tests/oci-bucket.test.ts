@@ -9,13 +9,13 @@ import {
   bucketProvider,
   makeBucket,
   OciBucket,
-} from "../src/providers/oci/bucket.js";
+} from "../src/providers/oci/bucket.ts";
 import {
   BucketFailure,
   bucketClient,
   safeBucketSdk,
-} from "../src/providers/oci/client.js";
-import { dispatcher, FakeOci, intent } from "./fakes/oci.js";
+} from "../src/providers/oci/client.ts";
+import { dispatcher, FakeOci, intent } from "./fakes/oci.ts";
 
 test("bucket plan is exact and create stamps ownership with no hidden retries", async () => {
   const fake = new FakeOci();

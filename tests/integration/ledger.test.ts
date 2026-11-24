@@ -3,12 +3,12 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { makeTrialApi } from "../../src/trial/api.js";
-import { makeLedger } from "../../src/trial/ledger.js";
+import { makeTrialApi } from "../../src/trial/api.ts";
+import { makeLedger } from "../../src/trial/ledger.ts";
 import {
   config as apiConfig,
   evidence as apiEvidence,
-} from "../fakes/admission.js";
+} from "../fakes/admission.ts";
 
 test("ledger serializes active trials, fences stale writers and preserves unknown dispatches", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);

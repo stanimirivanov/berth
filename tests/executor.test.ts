@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Client } from "pg";
-import { boundedObjectSdk } from "../src/providers/oci/client.js";
-import { nextPhase, timing } from "../src/trial/executor.js";
-import { syntheticSdk } from "../src/trial/executor-synthetic.js";
+import { boundedObjectSdk } from "../src/providers/oci/client.ts";
+import { nextPhase, timing } from "../src/trial/executor.ts";
+import { syntheticSdk } from "../src/trial/executor-synthetic.ts";
 
 test("creation ends at minute thirty and cleanup starts no later than hour three", () => {
   assert.equal(nextPhase("bucket", 0, 0, false), "bucket");
@@ -109,7 +109,7 @@ test("signing that crosses the creation cutoff cannot dispatch a write", async (
 
 test("hosted proof rejects owner URLs and unexpected cloud credentials", async () => {
   const { executorEnvironment } = await import(
-    "../src/trial/executor-hosted.js"
+    "../src/trial/executor-hosted.ts"
   );
   const env = {
     DATABASE_URL: "postgresql://berth_runtime:fixture@fixture.neon.tech/neondb",
@@ -149,7 +149,7 @@ test("hosted proof rejects owner URLs and unexpected cloud credentials", async (
 });
 
 test("hosted configuration failures expose only a fixed diagnostic code", async () => {
-  const { default: hosted } = await import("../src/trial/executor-hosted.js");
+  const { default: hosted } = await import("../src/trial/executor-hosted.ts");
   const oldExpiry = process.env.BERTH_EXECUTOR_EXPIRES_AT;
   const oldKey = process.env.OCI_PRIVATE_KEY;
   try {
@@ -171,7 +171,7 @@ test("hosted configuration failures expose only a fixed diagnostic code", async 
 });
 
 test("expired hosted root returns before parsing credentials or connecting", async () => {
-  const { default: hosted } = await import("../src/trial/executor-hosted.js");
+  const { default: hosted } = await import("../src/trial/executor-hosted.ts");
   const old = process.env.BERTH_EXECUTOR_EXPIRES_AT;
   try {
     process.env.BERTH_EXECUTOR_EXPIRES_AT = "0";
@@ -186,7 +186,7 @@ test("expired hosted root returns before parsing credentials or connecting", asy
 });
 
 test("hosted connection remains open until scheduled execution settles", async (t) => {
-  const { execute } = await import("../src/trial/executor-hosted.js");
+  const { execute } = await import("../src/trial/executor-hosted.ts");
   let closed = false;
   t.mock.method(Client.prototype, "connect", async () => {});
   t.mock.method(Client.prototype, "end", async () => {
@@ -213,7 +213,7 @@ test("hosted connection remains open until scheduled execution settles", async (
 });
 
 test("shared hosted deadline refuses another executor step before opening SQL", async () => {
-  const { runExecutor } = await import("../src/trial/executor.js");
+  const { runExecutor } = await import("../src/trial/executor.ts");
   let calls = 0;
   const result = await runExecutor(
     {

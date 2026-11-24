@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { makeCheckpointHandler } from "../src/trial/checkpoint-handler.js";
+import { makeCheckpointHandler } from "../src/trial/checkpoint-handler.ts";
 
 const token = "x".repeat(32);
 
@@ -128,7 +128,7 @@ test("checkpoint rejects oversized envelopes, queries and unknown routes without
 
 test("hosted credential boundary rejects either owner URL and unexpected service credentials", async () => {
   const { checkpointDatabaseUrl } = await import(
-    "../src/trial/checkpoint-index.js"
+    "../src/trial/checkpoint-index.ts"
   );
   const runtime =
     "postgresql://berth_runtime:fixture@ep-fixture.us-east-2.aws.neon.tech/neondb?sslmode=require";

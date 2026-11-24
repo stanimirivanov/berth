@@ -1,16 +1,16 @@
 import {
   assertExecutorPrivileges,
   restrictedConnection,
-} from "./executor-security.js";
+} from "./executor-security.ts";
 
-export { assertExecutorPrivileges } from "./executor-security.js";
+export { assertExecutorPrivileges } from "./executor-security.ts";
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Client } from "pg";
-import { runExecutor } from "./executor.js";
-import { executorStore } from "./executor-store.js";
-import { type SyntheticCloud, syntheticSdk } from "./executor-synthetic.js";
-import { scheduledHandler } from "./scheduled.js";
+import { runExecutor } from "./executor.ts";
+import { executorStore } from "./executor-store.ts";
+import { type SyntheticCloud, syntheticSdk } from "./executor-synthetic.ts";
+import { scheduledHandler } from "./scheduled.ts";
 
 /** Restricted proof-only connection; neither administrator nor OCI credentials are accepted. */
 export function executorEnvironment(env: Record<string, string | undefined>) {

@@ -6,7 +6,7 @@ import test from "node:test";
 import {
   captureUserRejection,
   saveUserRejection,
-} from "../scripts/oci-diagnostics.js";
+} from "../scripts/oci-diagnostics.ts";
 
 test("rejected-user detail is bounded and private, never part of the printable error", async () => {
   const dir = await mkdtemp(join(tmpdir(), "berth-rejection-"));

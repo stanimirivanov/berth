@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
-import { restrictedConnection } from "./executor-security.js";
+import { restrictedConnection } from "./executor-security.ts";
 
 /** Fixed live deployment, with no ambient OCI config, local file lookup or owner API token. */
 export function liveEnvironment(env: Record<string, string | undefined>) {

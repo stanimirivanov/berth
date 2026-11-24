@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Client } from "pg";
-import { prepareDatabase, verifyRuntime } from "../../scripts/neon-database.js";
+import { prepareDatabase, verifyRuntime } from "../../scripts/neon-database.ts";
 
 // Explicit opt-in command, never connects to Neon or accepts a remote URL.
 test("real PostgreSQL bootstrap, denial probes, repeat refusal and grant-drift detection", async () => {

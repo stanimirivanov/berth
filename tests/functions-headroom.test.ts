@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { qualifyFunctions } from "../scripts/functions-headroom.js";
+import { qualifyFunctions } from "../scripts/functions-headroom.ts";
 
 const now = Date.parse("2026-11-15T12:00:00Z");
 const input = {

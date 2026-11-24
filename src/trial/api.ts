@@ -4,7 +4,7 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
-import type { makeLedger } from "./ledger.js";
+import type { makeLedger } from "./ledger.ts";
 import {
   functionsAssessment,
   preflight,
@@ -12,7 +12,7 @@ import {
   type TrialConfiguration,
   trialWindow,
   validateConfiguration,
-} from "./preflight.js";
+} from "./preflight.ts";
 
 /** Private admission ports; no SDK, execution dispatch or credentials appear in responses. */
 export interface TrialApiOptions {

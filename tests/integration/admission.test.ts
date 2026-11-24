@@ -3,7 +3,7 @@ import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { makeLedger } from "../../src/trial/ledger.js";
+import { makeLedger } from "../../src/trial/ledger.ts";
 
 test("prepared admission refuses mutations, charges credential requests, admits once and preserves cleanup", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
@@ -67,7 +67,7 @@ test("prepared admission refuses mutations, charges credential requests, admits 
       JSON.stringify(evidence),
     ]);
     const { meterAdmission, verifyAdmission } = await import(
-      "../../src/trial/live-admission.js"
+      "../../src/trial/live-admission.ts"
     );
     const e = {
       ...binding,
@@ -83,7 +83,7 @@ test("prepared admission refuses mutations, charges credential requests, admits 
     };
     await meterAdmission(db, e);
     const { liveAdmissionApi: readinessApi } = await import(
-      "../../src/trial/live-admission.js"
+      "../../src/trial/live-admission.ts"
     );
     for (const invalid of [
       { ...evidence, iamReviewed: false },
@@ -177,7 +177,7 @@ test("prepared admission refuses mutations, charges credential requests, admits 
       ]),
     );
     const { liveAdmissionApi } = await import(
-      "../../src/trial/live-admission.js"
+      "../../src/trial/live-admission.ts"
     );
     const request = (path: string, body: unknown) =>
       new Request(`https://fixture/${path}`, {
@@ -371,8 +371,8 @@ test("one hosted delivery creates and uploads under one deadline and replay does
       "005_functions_exception",
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
-    const { FakeObjects } = await import("../fakes/oci.js"),
-      { executeLive } = await import("../../src/trial/live-runtime.js");
+    const { FakeObjects } = await import("../fakes/oci.ts"),
+      { executeLive } = await import("../../src/trial/live-runtime.ts");
     const cloud = new FakeObjects(),
       operation = randomUUID(),
       startedAt = Date.now() - 1000;
@@ -914,7 +914,7 @@ test("Free exception is owner-prepared once, preserves gates and durably reports
       privateKey: "unused",
     };
     const { liveAdmissionApi } = await import(
-      "../../src/trial/live-admission.js"
+      "../../src/trial/live-admission.ts"
     );
     const api = liveAdmissionApi(db, environment, async () => {
       throw Error("Cached receipt should avoid provider work");
@@ -1014,7 +1014,7 @@ test("Free exception is owner-prepared once, preserves gates and durably reports
     assert.equal(report.feasibility.verdict, "partial");
     assert.equal(report.feasibility.functionsAllowance, "unknown");
     assert.equal(report.feasibility.hardSpendingCap, false);
-    const { executeLive } = await import("../../src/trial/live-runtime.js");
+    const { executeLive } = await import("../../src/trial/live-runtime.ts");
     const live = await executeLive(environment, "evidence", undefined, {
       database: () => ({
         connect: async () => {},
@@ -1193,8 +1193,8 @@ test("legacy direct SQL admission cannot create via schedule but retains owned c
           .privateKey.export({ type: "pkcs8", format: "pem" })
           .toString(),
       };
-      const { executeLive } = await import("../../src/trial/live-runtime.js");
-      const { FakeObjects } = await import("../fakes/oci.js");
+      const { executeLive } = await import("../../src/trial/live-runtime.ts");
+      const { FakeObjects } = await import("../fakes/oci.ts");
       const cloud = new FakeObjects();
       const ports = {
         database: () => ({
@@ -1209,7 +1209,7 @@ test("legacy direct SQL admission cannot create via schedule but retains owned c
         },
       };
       if (owned) {
-        const { runExecutor } = await import("../../src/trial/executor.js");
+        const { runExecutor } = await import("../../src/trial/executor.ts");
         assert.equal(
           (
             await runExecutor(db, {
@@ -1330,7 +1330,7 @@ function freePolicyFixture(
 
 test("Free policy rejects fabricated quotas and stale plan evidence without blocking unknown Functions totals", async () => {
   const { preflight, functionsAssessment } = await import(
-    "../../src/trial/preflight.js"
+    "../../src/trial/preflight.ts"
   );
   const operation = randomUUID(),
     startedAt = Date.now() - 1000;
@@ -1568,7 +1568,7 @@ test("Free policy binds owner SQL authorization, rejects replay and preserves sp
       privateKey: "unused",
     };
     const { liveAdmissionApi } = await import(
-      "../../src/trial/live-admission.js"
+      "../../src/trial/live-admission.ts"
     );
     const api = liveAdmissionApi(db, environment, async () => {
       throw Error("Cached receipt only");
@@ -1645,7 +1645,7 @@ test("Free policy binds owner SQL authorization, rejects replay and preserves sp
       [operation],
     );
     const { meterAdmission } = await import(
-      "../../src/trial/live-admission.js"
+      "../../src/trial/live-admission.ts"
     );
     await assert.rejects(meterAdmission(db, environment));
     await meterAdmission(db, environment, "cleanup");
@@ -1791,7 +1791,7 @@ function boundedAllowanceFixture(
 
 test("bounded allowance exception accepts only listed unknowns and rejects known insufficient raw or normalized observations", async () => {
   const { preflight, functionsAssessment } = await import(
-    "../../src/trial/preflight.js"
+    "../../src/trial/preflight.ts"
   );
   const operation = randomUUID(),
     startedAt = Date.now() - 1000;
@@ -2024,7 +2024,7 @@ test("issue76 singleton binds exact owner preparation while malformed evidence l
       [operation],
     );
     const { liveAdmissionApi } = await import(
-      "../../src/trial/live-admission.js"
+      "../../src/trial/live-admission.ts"
     );
     const env = {
       compartment: String(original.compartment),
@@ -2220,7 +2220,7 @@ test("read-only operation history paginates retained evidence without exposing r
       await readFile("migrations/008_operation_history.sql", "utf8"),
     );
     const { retainedHistoryLedger } = await import(
-      "../../src/application/retained-trial-ledger/history.js"
+      "../../src/application/retained-trial-ledger/history.ts"
     );
     const store = retainedHistoryLedger(db);
     const empty = await store.list();

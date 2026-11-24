@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
-import { type BucketAttributes, makeBucket } from "./bucket.js";
+import { type BucketAttributes, makeBucket } from "./bucket.ts";
 import {
   BucketFailure,
   type BucketIntent,
   type ObjectClient,
   type ObjectObservation,
-} from "./client.js";
+} from "./client.ts";
 
 /** Public precommitted intent; never accepts arbitrary names, bytes or digests. */
 export interface ProbeIntent extends BucketIntent {
