@@ -65,6 +65,29 @@ test("runtime cycles fail while type-only cycles do not", () => {
   );
 });
 
+test("inline type imports and re-exports still form runtime cycles", () => {
+  const files = {
+    "scripts/a.ts": 'import { type B } from "./b.ts"; export type A = B;',
+    "scripts/b.ts": 'export { type A } from "./a.ts"; export type B = string;',
+  };
+  assert.ok(analyze(files).some((finding) => finding.rule === "cycle"));
+  assert.deepEqual(
+    analyze({
+      ...files,
+      "scripts/a.ts": 'import type { B } from "./b.ts"; export type A = B;',
+    }),
+    [],
+  );
+  assert.deepEqual(
+    analyze({
+      ...files,
+      "scripts/b.ts":
+        'export type { A } from "./a.ts"; export type B = string;',
+    }),
+    [],
+  );
+});
+
 test("application imports use the owned TypeScript source path", () => {
   const owner = "src/application/history/index.ts";
   const files = {
@@ -83,6 +106,25 @@ test("application imports use the owned TypeScript source path", () => {
       (finding) => finding.file === owner && finding.rule === "architecture",
     ),
   );
+});
+
+test("declaration-level type imports and re-exports still obey module ownership", () => {
+  const owner = "src/application/history/index.ts";
+  for (const declaration of [
+    'import type { Executor } from "../../trial/executor.ts";',
+    'export type { Executor } from "../../trial/executor.ts";',
+  ]) {
+    const findings = analyze({
+      [owner]: declaration,
+      "src/trial/executor.ts": "",
+    });
+    assert.ok(
+      findings.some(
+        (finding) => finding.file === owner && finding.rule === "architecture",
+      ),
+      declaration,
+    );
+  }
 });
 
 test("repository import spelling covers backend tests without imposing production ownership", () => {

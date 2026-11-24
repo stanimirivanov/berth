@@ -105,12 +105,15 @@ scope and CLI scaffold choice during code review.
 | tools/ | Offline source analysis, Git inventory and verification | Pinned parser, Node APIs, pinned scanner |
 
 The AST gate covers imports/re-exports, type imports and literal dynamic imports.
-Type-only edges obey boundaries but do not create runtime cycles. New src owners
-fail until registered. This is not proof of purity: ambient fetch, indirect loader
-aliases and behavior inside dependencies require tests/review. The scanner checks
-real comment tokens, not fixture strings. Test skip/focus detection and baseline
-retention cover conventional static node:test declarations, not arbitrary test
-factories or assertion semantics. Keep that limitation visible when extending tests.
+Declaration-level `import type` and `export type` obey ownership boundaries and
+are erased from the runtime graph. Inline-only `{ type T }` declarations can emit
+empty imports or re-exports, so the cycle check counts them as runtime edges.
+New src owners fail until registered. This is not proof of purity: ambient fetch,
+indirect loader aliases and behavior inside dependencies require tests/review.
+The scanner checks real comment tokens, not fixture strings. Test skip/focus
+detection and baseline retention cover conventional static node:test
+declarations, not arbitrary test factories or assertion semantics. Keep that
+limitation visible when extending tests.
 
 ## Commands and failure handling
 
