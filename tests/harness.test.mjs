@@ -65,6 +65,103 @@ test("runtime cycles fail while type-only cycles do not", () => {
   );
 });
 
+test("browser imports stay on the browser side of the server boundary", () => {
+  const files = {
+    "ui/src/main.ts": 'import "./feature"; import "@angular/core";',
+    "ui/src/feature.ts": "",
+    "ui/edge/proxy.ts": "",
+    "src/trial/deployment.ts": "",
+    "ui/functions/api/index.ts": 'export * from "../../edge/proxy.js";',
+  };
+  assert.deepEqual(analyze(files), []);
+  for (const source of [
+    'import "../edge/proxy";',
+    'import type { Handler } from "../functions/api/index.js";',
+    'export * from "../../src/trial/deployment.ts";',
+    'void import("../../scripts/history-server.js");',
+    'import "../../neon.js";',
+  ]) {
+    assert.ok(
+      analyze({ ...files, "ui/src/main.ts": source }).some(
+        (finding) =>
+          finding.file === "ui/src/main.ts" && finding.rule === "architecture",
+      ),
+      source,
+    );
+  }
+});
+
+test("browser and Pages cycles follow each runtime's local imports", () => {
+  const browser = {
+    "ui/src/feature.ts": 'import "./state";',
+    "ui/src/state/index.ts": 'void import("../feature");',
+  };
+  const pages = {
+    "ui/functions/api/index.ts": 'export * from "../../edge/proxy.js";',
+    "ui/edge/proxy.ts": 'import "../functions/api/index.js";',
+  };
+  for (const files of [browser, pages]) {
+    const findings = analyze(files);
+    assert.deepEqual(
+      findings.map((finding) => finding.rule),
+      ["cycle"],
+    );
+  }
+  assert.deepEqual(
+    analyze({
+      ...browser,
+      "ui/src/state/index.ts": 'import type { State } from "../feature";',
+      ...pages,
+      "ui/edge/proxy.ts":
+        'export type { Handler } from "../functions/api/index.js";',
+    }),
+    [],
+  );
+  assert.deepEqual(
+    analyze({
+      ...browser,
+      "ui/src/state/index.ts": 'import { type State } from "../feature";',
+    }),
+    [],
+  );
+  assert.deepEqual(
+    analyze({
+      ...browser,
+      "ui/src/state/index.ts": 'export {} from "../feature";',
+    }),
+    [],
+  );
+  assert.ok(
+    analyze({
+      ...pages,
+      "ui/edge/proxy.ts":
+        'export { type Handler } from "../functions/api/index.js";',
+    }).some((finding) => finding.rule === "cycle"),
+  );
+});
+
+test("browser declaration files stay outside the runtime graph", () => {
+  const files = {
+    "ui/src/main.ts": 'import "./helper.js";',
+    "ui/src/helper.d.ts": "export declare const version: string;",
+  };
+  assert.deepEqual(analyze(files), []);
+  assert.ok(
+    analyze({ ...files, "ui/src/helper.js": 'import "./main";' }).some(
+      (finding) => finding.rule === "cycle",
+    ),
+  );
+});
+
+test("Pages follows an explicit JavaScript file before TypeScript substitution", () => {
+  const findings = analyze({
+    "ui/functions/api/index.ts": 'export * from "../../edge/proxy.js";',
+    "ui/edge/proxy.ts": "",
+    "ui/edge/proxy.js": 'import "../functions/api/index.js";',
+  });
+  assert.ok(findings.some((finding) => finding.rule === "cycle"));
+});
+
 test("inline type imports and re-exports still form runtime cycles", () => {
   const files = {
     "scripts/a.ts": 'import { type B } from "./b.ts"; export type A = B;',

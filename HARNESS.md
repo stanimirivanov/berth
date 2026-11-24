@@ -103,9 +103,9 @@ scope and CLI scaffold choice during code review.
   Keep each feature's signal store and data-access adapter private. Page
   containers coordinate the feature and presentational components render from
   inputs and emit events. Share Owner access through its session interface.
-- **Verification sequence.** [#150](https://github.com/stanimirivanov/berth/issues/150)
-  adds Angular and Pages import boundary checks. Review feature-layer
-  boundaries and test behavior in the History refactor, then enforce those
+- **Verification sequence.** The harness checks Angular and Pages import
+  boundaries. Review feature-layer boundaries and test behavior in the
+  History refactor, then enforce those
   boundaries in CI in a separate follow-up.
 
 ## Ownership and effects
@@ -121,8 +121,19 @@ scope and CLI scaffold choice during code review.
 
 The AST gate covers imports/re-exports, type imports and literal dynamic imports.
 Declaration-level `import type` and `export type` obey ownership boundaries and
-are erased from the runtime graph. Inline-only `{ type T }` declarations can emit
-empty imports or re-exports, so the cycle check counts them as runtime edges.
+are erased from the runtime graph. The root compiler preserves inline-only
+`{ type T }` edges under `verbatimModuleSyntax`, including Pages modules loaded
+by the proxy tests. The Angular compiler erases these bindings in browser code.
+
+The web graph covers `ui/src/`, `ui/edge/` and `ui/functions/`. The harness
+prefers an exact source file, then uses TypeScript's bundler rules, including
+Angular extensionless imports and Pages `.js` specifiers for TypeScript.
+Browser imports of Pages code, backend code and server tooling fail the
+boundary check even for types. Pages routes may import the same-origin proxy.
+The graph uses the repository source inventory for local relative imports and
+explicit type syntax to distinguish erased edges. Builds still verify package
+resolution and bundling.
+
 New src owners fail until registered. This is not proof of purity: ambient fetch,
 indirect loader aliases and behavior inside dependencies require tests/review.
 The scanner checks real comment tokens, not fixture strings. Test skip/focus
