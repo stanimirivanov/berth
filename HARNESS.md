@@ -93,6 +93,21 @@ build. Inline template and style metadata are rejected.
 Review feature placement, template complexity, member visibility, selector
 scope and CLI scaffold choice during code review.
 
+## Application architecture
+
+- **Backend.** Follow [Ports and Adapters](docs/adr/0011-adopt-ports-and-adapters-for-the-application-backend.md).
+  Use cases own their ports. Wire concrete HTTP, PostgreSQL and OCI adapters
+  at entry points. The existing backend import allowlist runs in CI. Review
+  dependency direction against the ADR as the recorded follow-ups land.
+- **Angular.** Follow the [feature architecture](docs/adr/0012-organize-angular-around-feature-owned-state-and-data-access.md).
+  Keep each feature's signal store and data-access adapter private. Page
+  containers coordinate the feature and presentational components render from
+  inputs and emit events. Share Owner access through its session interface.
+- **Verification sequence.** [#150](https://github.com/stanimirivanov/berth/issues/150)
+  adds Angular and Pages import boundary checks. Review feature-layer
+  boundaries and test behavior in the History refactor, then enforce those
+  boundaries in CI in a separate follow-up.
+
 ## Ownership and effects
 
 | Owner | Owned state/effects | Allowed dependencies |
