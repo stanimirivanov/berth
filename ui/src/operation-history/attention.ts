@@ -1,4 +1,4 @@
-import type { Operation } from "./history-store";
+import type { Operation } from "./history-reader";
 
 const ownerRecovery =
   "https://github.com/stanimirivanov/berth/blob/main/docs/trial/owner-recovery.md";
