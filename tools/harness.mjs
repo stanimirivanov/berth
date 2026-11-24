@@ -124,6 +124,22 @@ export function privatePath(name) {
     );
 }
 
+const webSource = /^ui\/(?:src|edge|functions)\//;
+const serverSource =
+  /^(?:(?:src|scripts|tools|ui\/(?:edge|functions))(?:\/|$)|neon(?:\.[jt]s)?$)/;
+const declarationFile = /\.d\.[cm]?ts$/;
+
+/** Browser TypeScript erases empty named bindings and bindings with only inline types.
+ * @param {ts.Node | undefined} bindings
+ */
+function webTypeOnlyBindings(bindings) {
+  return (
+    !!bindings &&
+    (ts.isNamedImports(bindings) || ts.isNamedExports(bindings)) &&
+    bindings.elements.every((element) => element.isTypeOnly)
+  );
+}
+
 /** Check owned source text without executing it. Erased type references still obey boundaries.
  * Documentation proves attached prose, not its accuracy; aliasing and runtime effects need review.
  * @param {Record<string,string>} files
@@ -135,15 +151,21 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
   const errors = [];
   /** @type {Map<string,string[]>} */
   const graph = new Map();
+  /** @type {ts.ModuleResolutionHost} */
+  const webResolutionHost = {
+    fileExists: (name) =>
+      Object.hasOwn(files, name) && !declarationFile.test(name),
+    readFile: (name) => files[name],
+  };
   for (const [file, text] of Object.entries(files)) {
     const source = ts.createSourceFile(
       file,
       text,
       ts.ScriptTarget.Latest,
       true,
-      file.endsWith(".mjs") ? ts.ScriptKind.JS : ts.ScriptKind.TS,
     );
     if (
+      !source.isDeclarationFile &&
       ts
         .transpileModule(text, {
           fileName: file,
@@ -172,6 +194,9 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
       file.startsWith("src/") ||
       file.startsWith("scripts/") ||
       file === "neon.ts";
+    const browser = file.startsWith("ui/src/");
+    const web = webSource.test(file);
+    const browserTypeScript = browser && /\.(?:[cm]?ts|tsx)$/.test(file);
     const checkImportSpelling =
       requireTsExtensions &&
       file.endsWith(".ts") &&
@@ -200,7 +225,7 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
      */
     function dependency(node, target, typeOnly) {
       if (!target || !ts.isStringLiteralLike(target)) {
-        if (production)
+        if (production || web)
           fail(
             node,
             "architecture",
@@ -210,12 +235,36 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
       }
       const name = target.text;
       const relative = name.startsWith(".");
+      const localPath = relative
+        ? path.posix.join(path.posix.dirname(file), name.replaceAll("\\", "/"))
+        : null;
       if (checkImportSpelling && relative && !name.endsWith(".ts"))
         fail(
           node,
           "import-extension",
           "Use the explicit .ts extension for local backend source imports.",
         );
+      if (browser && localPath && serverSource.test(localPath))
+        fail(
+          node,
+          "architecture",
+          "Browser code must access server capabilities through the same-origin API.",
+        );
+      if (web && localPath && !typeOnly && !source.isDeclarationFile) {
+        const resolved = webResolutionHost.fileExists(localPath)
+          ? localPath
+          : ts.resolveModuleName(
+              name,
+              file,
+              {
+                moduleResolution: ts.ModuleResolutionKind.Bundler,
+                allowJs: true,
+              },
+              webResolutionHost,
+            ).resolvedModule?.resolvedFileName;
+        if (resolved && webSource.test(resolved))
+          graph.get(file)?.push(resolved);
+      }
       if (!production) return;
       if (relative) {
         const resolved = path.posix
@@ -404,10 +453,24 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
           "Access retained trial SQL through the named adapter.",
         );
       // verbatimModuleSyntax keeps inline-only type imports as empty runtime imports.
-      if (ts.isImportDeclaration(node))
-        dependency(node, node.moduleSpecifier, !!node.importClause?.isTypeOnly);
+      if (ts.isImportDeclaration(node)) {
+        const clause = node.importClause;
+        dependency(
+          node,
+          node.moduleSpecifier,
+          !!clause?.isTypeOnly ||
+            (browserTypeScript &&
+              !clause?.name &&
+              webTypeOnlyBindings(clause?.namedBindings)),
+        );
+      }
       if (ts.isExportDeclaration(node) && node.moduleSpecifier)
-        dependency(node, node.moduleSpecifier, node.isTypeOnly);
+        dependency(
+          node,
+          node.moduleSpecifier,
+          node.isTypeOnly ||
+            (browserTypeScript && webTypeOnlyBindings(node.exportClause)),
+        );
       if (ts.isImportTypeNode(node))
         dependency(
           node,
@@ -426,7 +489,7 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
         if (node.expression.kind === ts.SyntaxKind.ImportKeyword)
           dependency(node, node.arguments[0], false);
         if (
-          production &&
+          (production || web) &&
           ts.isIdentifier(node.expression) &&
           ["require", "createRequire"].includes(node.expression.text)
         )
@@ -598,7 +661,10 @@ export function checkRepository() {
   /** @type {Record<string,string>} */
   const files = {};
   for (const name of new Set(names))
-    if (/^(?:src|scripts|tests|tools)\/.*\.(?:ts|mjs)$|^neon\.ts$/.test(name)) {
+    if (
+      /^(?:src|scripts|tests|tools)\/.*\.(?:ts|mjs)$|^neon\.ts$/.test(name) ||
+      (webSource.test(name) && /\.(?:[cm]?[jt]s|tsx|jsx)$/.test(name))
+    ) {
       if (privatePath(name) || !lstatSync(name).isFile())
         throw Error(
           "source-inventory: private or unsupported source entry; inspect locally.",
