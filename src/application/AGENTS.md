@@ -2,9 +2,10 @@
 
 - History owns the authenticated retained operation read interface. Keep reads
   in the existing read-only transaction and preserve the public History routes.
-- Inventory owns its offering and presence projection. The reader uses its
-  existing restricted SQL capability. The hosted route and same-origin proxy
-  belong to issue #118.
+- Inventory owns its typed read port and offering and presence projection.
+  Its HTTP adapter uses the port. The retained adapter owns the restricted
+  database connection and role switch. See the
+  [Inventory API contract](../../docs/trial/managed-inventory-api.md).
 - Retry owns the owner action session, reconciliation and status. It uses the
   fixed read-only OCI observer. Keep provider credentials server-side.
 - Use the matching adapter under `retained-trial-ledger/` for all retained trial

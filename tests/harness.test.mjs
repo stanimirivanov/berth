@@ -655,6 +655,33 @@ test("live admission owns metering and cannot import credentials from administra
   );
 });
 
+test("Inventory HTTP uses its read port and leaves database wiring to its entry point", () => {
+  const files = {
+    "src/application/inventory/index.ts":
+      'import "./api.ts"; import "../retained-trial-ledger/inventory.ts";',
+    "src/application/inventory/api.ts":
+      'import "node:crypto"; import type { InventoryReader } from "./contract.ts";',
+    "src/application/inventory/contract.ts": 'import "effect/Schema";',
+    "src/application/retained-trial-ledger/inventory.ts":
+      'import "pg"; import "../inventory/contract.ts"; import "./sql.ts";',
+    "src/application/retained-trial-ledger/sql.ts": "",
+  };
+  assert.deepEqual(analyze(files), []);
+  for (const dependency of [
+    "pg",
+    "oci-common",
+    "../retained-trial-ledger/inventory.ts",
+  ]) {
+    assert.ok(
+      analyze({
+        ...files,
+        "src/application/inventory/api.ts": `import "${dependency}";`,
+      }).some((finding) => finding.rule === "architecture"),
+      dependency,
+    );
+  }
+});
+
 test("history boundaries permit only the read composition and reject provider or execution coupling", () => {
   const adapter = "src/application/retained-trial-ledger/";
   const sources = {

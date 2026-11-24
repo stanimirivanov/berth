@@ -15,9 +15,11 @@ const runtimePackages = {
   "src/providers/oci/retry-observation.ts": ["effect"],
   "src/application/history/contract.ts": ["effect"],
   "src/application/inventory/contract.ts": ["effect"],
+  "src/application/inventory/api.ts": ["node:crypto"],
+  "src/application/inventory/index.ts": [],
   "src/application/retained-trial-ledger/sql.ts": [],
   "src/application/retained-trial-ledger/history.ts": [],
-  "src/application/retained-trial-ledger/inventory.ts": [],
+  "src/application/retained-trial-ledger/inventory.ts": ["pg"],
   "src/application/retained-trial-ledger/retry.ts": [],
   "src/application/history/api.ts": ["node:crypto"],
   "src/application/history/runtime.ts": ["pg"],
@@ -92,6 +94,11 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
   "src/application/history/runtime.ts": [
     "src/application/history/api.ts",
     "src/application/retained-trial-ledger/history.ts",
+  ],
+  "src/application/inventory/api.ts": ["src/application/inventory/contract.ts"],
+  "src/application/inventory/index.ts": [
+    "src/application/inventory/api.ts",
+    "src/application/retained-trial-ledger/inventory.ts",
   ],
   "src/application/retained-trial-ledger/history.ts": [
     "src/application/history/contract.ts",

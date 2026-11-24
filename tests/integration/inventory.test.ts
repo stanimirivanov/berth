@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { retainedInventoryLedger } from "../../src/application/retained-trial-ledger/inventory.ts";
+import {
+  inventoryReader,
+  retainedInventoryLedger,
+} from "../../src/application/retained-trial-ledger/inventory.ts";
 
 const observed = "2026-01-01T10:00:00+00:00";
 const unresolved = "2026-01-01T10:05:00+00:00";
@@ -50,7 +53,15 @@ test("retained inventory projects identity-bound presence and coverage through a
   };
   const admin = new Client({ ...config, user: "postgres" });
   const owner = new Client({ ...config, user: "neondb_owner" });
-  const reader = new Client({ ...config, user: "berth_inventory_fixture" });
+  const runtime = { ...config, user: "berth_inventory_runtime" };
+  const reader = new Client(runtime);
+  const hosted = inventoryReader(
+    {
+      BERTH_INVENTORY_DATABASE_URL:
+        "postgresql://berth_inventory_runtime:fixture@ep-fixture.aws.neon.tech/neondb",
+    },
+    () => new Client(runtime),
+  );
 
   let ledgerInstalled = false;
   let inventoryInstalled = false;
@@ -77,13 +88,21 @@ test("retained inventory projects identity-bound presence and coverage through a
     });
 
     await admin.query(
-      "CREATE ROLE berth_inventory_fixture LOGIN PASSWORD 'berth-test-only'",
+      "CREATE ROLE berth_inventory_runtime LOGIN NOINHERIT PASSWORD 'berth-test-only'",
     );
     fixtureRoleCreated = true;
+    await assert.rejects(hosted.page(), /privilege boundary failed/);
     await admin.query(
-      "GRANT berth_inventory_reader TO berth_inventory_fixture",
+      "GRANT berth_inventory_reader TO berth_inventory_runtime WITH INHERIT FALSE, SET TRUE",
     );
+    assert.deepEqual(await hosted.page(), await page(owner));
+    await admin.query(
+      "GRANT berth_runtime TO berth_inventory_runtime WITH INHERIT FALSE, SET TRUE",
+    );
+    await assert.rejects(hosted.page(), /privilege boundary failed/);
+    await admin.query("REVOKE berth_runtime FROM berth_inventory_runtime");
     await reader.connect();
+    await reader.query("SET ROLE berth_inventory_reader");
     for (const limit of [0, 51]) {
       await assert.rejects(page(reader, null, limit), {
         message: "Invalid inventory limit",
@@ -143,6 +162,7 @@ test("retained inventory projects identity-bound presence and coverage through a
     );
 
     const firstPage = await page(reader, null, 1);
+    assert.deepEqual(await hosted.page(null, 1), firstPage);
     assert.deepEqual(firstPage, {
       offering: "oci-object-storage-bucket",
       coverage: "incomplete",
@@ -238,7 +258,7 @@ test("retained inventory projects identity-bound presence and coverage through a
       if (ledgerInstalled)
         await owner.query("DROP SCHEMA berth_ledger CASCADE");
       if (fixtureRoleCreated)
-        await admin.query("DROP ROLE berth_inventory_fixture");
+        await admin.query("DROP ROLE berth_inventory_runtime");
       if (inventoryInstalled)
         await admin.query("DROP ROLE berth_inventory_reader");
     } finally {

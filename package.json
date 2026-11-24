@@ -59,6 +59,7 @@
     "test:ui": "pnpm --dir ui test",
     "history:serve": "pnpm build && node dist/scripts/history-server.js",
     "build:history": "pnpm build && node dist/scripts/build-history.js",
+    "build:inventory": "pnpm build && node dist/scripts/build-inventory.js",
     "lint:ui": "biome check ui/src ui/tests ui/*.ts ui/*.json && eslint ui/src ui/tests ui/*.ts && pnpm run lint:history-edge && pnpm run lint:angular",
     "check:ui": "pnpm build:ui && pnpm build:history && pnpm test:ui && pnpm --dir ui audit --audit-level high",
     "lint:angular": "biome check ui/eslint.angular.mjs && eslint --config ui/eslint.angular.mjs \"ui/src/**/*.ts\" \"ui/src/**/*.html\"",
