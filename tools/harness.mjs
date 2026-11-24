@@ -128,6 +128,72 @@ const webSource = /^ui\/(?:src|edge|functions)\//;
 const serverSource =
   /^(?:(?:src|scripts|tools|ui\/(?:edge|functions))(?:\/|$)|neon(?:\.[jt]s)?$)/;
 const declarationFile = /\.d\.[cm]?ts$/;
+const angularFeaturePath = /^ui\/src\/(?<owner>[^/]+)\/(?<module>.+)$/;
+const angularPrivateLayer =
+  /(?:^(?:state|data-access)\/|(?:^|\/|-)(?:store|data-access|reader)(?:\.d)?(?:\.(?:[cm]?[jt]s|tsx|jsx))?$)/;
+const angularCompositionRoots = new Set(["ui/src/app.ts", "ui/src/main.ts"]);
+
+/** Identify ESM forwarding and direct exports of private imports.
+ * @param {ts.SourceFile} source
+ * @param {ts.Node} node
+ */
+function exportsAngularDependency(source, node) {
+  if (ts.isExportDeclaration(node)) return true;
+  if (ts.isImportTypeNode(node) || ts.isCallExpression(node)) {
+    const parent = node.parent;
+    if (ts.isExportAssignment(parent)) return true;
+    const declaration = ts.isVariableDeclaration(parent)
+      ? parent.parent.parent
+      : parent;
+    return (
+      (ts.isVariableStatement(declaration) ||
+        ts.isTypeAliasDeclaration(declaration)) &&
+      !!ts
+        .getModifiers(declaration)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    );
+  }
+  if (!ts.isImportDeclaration(node) || !node.importClause) return false;
+
+  const { name, namedBindings } = node.importClause;
+  const names = new Set(name ? [name.text] : []);
+  if (namedBindings) {
+    if (ts.isNamespaceImport(namedBindings)) names.add(namedBindings.name.text);
+    else
+      for (const binding of namedBindings.elements)
+        names.add(binding.name.text);
+  }
+
+  return source.statements.some((statement) => {
+    if (
+      ts.isExportAssignment(statement) &&
+      ts.isIdentifier(statement.expression)
+    )
+      return names.has(statement.expression.text);
+    if (
+      ts.isVariableStatement(statement) &&
+      ts
+        .getModifiers(statement)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    )
+      return statement.declarationList.declarations.some(
+        ({ initializer }) =>
+          initializer &&
+          ts.isIdentifier(initializer) &&
+          names.has(initializer.text),
+      );
+    if (
+      ts.isExportDeclaration(statement) &&
+      !statement.moduleSpecifier &&
+      statement.exportClause &&
+      ts.isNamedExports(statement.exportClause)
+    )
+      return statement.exportClause.elements.some((binding) =>
+        names.has((binding.propertyName ?? binding.name).text),
+      );
+    return false;
+  });
+}
 
 /** Browser TypeScript erases empty named bindings and bindings with only inline types.
  * @param {ts.Node | undefined} bindings
@@ -152,10 +218,15 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
   /** @type {Map<string,string[]>} */
   const graph = new Map();
   /** @type {ts.ModuleResolutionHost} */
+  const webTypeResolutionHost = {
+    fileExists: (name) => Object.hasOwn(files, name),
+    readFile: (name) => files[name],
+  };
+  /** @type {ts.ModuleResolutionHost} */
   const webResolutionHost = {
+    ...webTypeResolutionHost,
     fileExists: (name) =>
       Object.hasOwn(files, name) && !declarationFile.test(name),
-    readFile: (name) => files[name],
   };
   for (const [file, text] of Object.entries(files)) {
     const source = ts.createSourceFile(
@@ -195,6 +266,8 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
       file.startsWith("scripts/") ||
       file === "neon.ts";
     const browser = file.startsWith("ui/src/");
+    const feature = angularFeaturePath.exec(file)?.groups;
+    const featureModule = feature?.module ?? "";
     const web = webSource.test(file);
     const browserTypeScript = browser && /\.(?:[cm]?ts|tsx)$/.test(file);
     const checkImportSpelling =
@@ -250,8 +323,11 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
           "architecture",
           "Browser code must access server capabilities through the same-origin API.",
         );
-      if (web && localPath && !typeOnly && !source.isDeclarationFile) {
-        const resolved = webResolutionHost.fileExists(localPath)
+      if (web && localPath) {
+        const resolutionHost = typeOnly
+          ? webTypeResolutionHost
+          : webResolutionHost;
+        const resolved = resolutionHost.fileExists(localPath)
           ? localPath
           : ts.resolveModuleName(
               name,
@@ -260,9 +336,41 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
                 moduleResolution: ts.ModuleResolutionKind.Bundler,
                 allowJs: true,
               },
-              webResolutionHost,
+              resolutionHost,
             ).resolvedModule?.resolvedFileName;
-        if (resolved && webSource.test(resolved))
+        if (browser) {
+          const targetFeature = angularFeaturePath.exec(
+            resolved ?? localPath,
+          )?.groups;
+          if (
+            targetFeature?.module &&
+            angularPrivateLayer.test(targetFeature.module)
+          ) {
+            if (featureModule.startsWith("components/"))
+              fail(
+                node,
+                "ui-presentation",
+                "Presentational components receive feature data through inputs and emit events through outputs.",
+              );
+            else if (
+              (!angularPrivateLayer.test(featureModule) &&
+                exportsAngularDependency(source, node)) ||
+              (feature?.owner !== targetFeature.owner &&
+                !angularCompositionRoots.has(file))
+            )
+              fail(
+                node,
+                "ui-feature",
+                "Keep stores, readers and data access private to their feature and shell composition.",
+              );
+          }
+        }
+        if (
+          resolved &&
+          webSource.test(resolved) &&
+          !typeOnly &&
+          !source.isDeclarationFile
+        )
           graph.get(file)?.push(resolved);
       }
       if (!production) return;

@@ -103,10 +103,20 @@ scope and CLI scaffold choice during code review.
   Keep each feature's signal store and data-access adapter private. Page
   containers coordinate the feature and presentational components render from
   inputs and emit events. Share Owner access through its session interface.
-- **Verification sequence.** The harness checks Angular and Pages import
-  boundaries. Review feature-layer boundaries and test behavior in the
-  History refactor, then enforce those
-  boundaries in CI in a separate follow-up.
+- **Angular feature layers.** The harness checks resolved relative imports
+  under `ui/src/`. A feature is a top-level directory there. Keep private
+  modules in `state/` or `data-access/` within the feature, or use names such
+  as `history-store.ts`, `history-reader.ts` and `history-data-access.ts`.
+  Files named `store.ts`, `reader.ts` or `data-access.ts` are also private.
+  Only the owning feature and the app and bootstrap composition roots can
+  import these modules. Private barrels can re-export private modules.
+  Public barrels must keep private bindings out of direct re-exports and
+  export aliases. Review wrappers that expose private dependencies indirectly.
+- **Presentational components.** Place these in the feature's `components/`
+  directory. The harness rejects their dependencies on private state, reader
+  or data-access modules, including type imports. Put types used for inputs
+  and outputs in a presentation model or a pure contract outside the private
+  modules. Page containers may compose the store and presentation.
 
 ## Ownership and effects
 

@@ -140,6 +140,80 @@ test("browser and Pages cycles follow each runtime's local imports", () => {
   );
 });
 
+test("Angular features keep private modules inside their feature and shell composition", () => {
+  const files = {
+    "ui/src/app.ts":
+      'import "./history/history-store"; import "./history/data-access";',
+    "ui/src/history/history-store.ts": 'import "./history-reader";',
+    "ui/src/history/history-reader.ts": "",
+    "ui/src/history/data-access/index.ts": 'export * from "./implementation";',
+    "ui/src/history/data-access/implementation.ts": "",
+    "ui/src/history/state/index.d.ts": "export interface Token {}",
+    "ui/src/history/operation.ts": "",
+    "ui/src/owner-access/owner-session.ts": "",
+    "ui/src/infrastructure/page.ts":
+      'import type { Operation } from "../history/operation"; import "../owner-access/owner-session";',
+  };
+  assert.deepEqual(analyze(files), []);
+  for (const source of [
+    'import "../history/history-store";',
+    'import type { Reader } from "../history/history-reader.js";',
+    'void import("../history/data-access");',
+    'import type { Token } from "../history/state";',
+  ]) {
+    assert.ok(
+      analyze({ ...files, "ui/src/infrastructure/page.ts": source }).some(
+        (finding) => finding.rule === "ui-feature",
+      ),
+      source,
+    );
+  }
+  for (const barrel of [
+    'export * from "./history-store";',
+    'import { HistoryStore as Store } from "./history-store"; export { Store as History };',
+    'import * as Store from "./history-store"; export default Store;',
+    'import { HistoryStore } from "./history-store"; export const Store = HistoryStore;',
+    'export type Reader = import("./history-reader").Reader;',
+    'export const reader = import("./history-reader");',
+  ]) {
+    assert.ok(
+      analyze({ ...files, "ui/src/history/index.ts": barrel }).some(
+        (finding) => finding.rule === "ui-feature",
+      ),
+      barrel,
+    );
+  }
+});
+
+test("Angular presentational components depend on presentation types and inputs", () => {
+  const component = "ui/src/history/components/detail/detail.ts";
+  const files = {
+    [component]: 'import type { Operation } from "../../operation";',
+    "ui/src/history/operation.ts": "",
+    "ui/src/history/history-store.ts": "",
+    "ui/src/history/history-data-access.ts": "",
+    "ui/src/history/history-reader.ts": "",
+    "ui/src/history/state/index.d.ts": "export interface Token {}",
+    "ui/src/history/page.ts":
+      'import "./history-store"; import "./components/detail/detail";',
+  };
+  assert.deepEqual(analyze(files), []);
+  for (const source of [
+    'import "../../history-store";',
+    'void import("../../history-data-access");',
+    'type Reader = import("../../history-reader").HistoryReader;',
+    'import type { Token } from "../../state";',
+  ]) {
+    assert.ok(
+      analyze({ ...files, [component]: source }).some(
+        (finding) =>
+          finding.file === component && finding.rule === "ui-presentation",
+      ),
+      source,
+    );
+  }
+});
+
 test("browser declaration files stay outside the runtime graph", () => {
   const files = {
     "ui/src/main.ts": 'import "./helper.js";',
