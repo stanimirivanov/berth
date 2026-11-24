@@ -124,7 +124,7 @@ export function privatePath(name) {
     );
 }
 
-/** Check owned source text without executing it. Type-only edges still obey boundaries.
+/** Check owned source text without executing it. Erased type references still obey boundaries.
  * Documentation proves attached prose, not its accuracy; aliasing and runtime effects need review.
  * @param {Record<string,string>} files
  * @param {{requireTsExtensions?: boolean}} [options] Enforce source spelling for a repository scan.
@@ -403,21 +403,9 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
           "architecture",
           "Access retained trial SQL through the named adapter.",
         );
+      // verbatimModuleSyntax keeps inline-only type imports as empty runtime imports.
       if (ts.isImportDeclaration(node))
-        dependency(
-          node,
-          node.moduleSpecifier,
-          Boolean(
-            node.importClause?.isTypeOnly ||
-              (node.importClause?.namedBindings &&
-                ts.isNamedImports(node.importClause.namedBindings) &&
-                !node.importClause.name &&
-                node.importClause.namedBindings.elements.length > 0 &&
-                node.importClause.namedBindings.elements.every(
-                  (x) => x.isTypeOnly,
-                )),
-          ),
-        );
+        dependency(node, node.moduleSpecifier, !!node.importClause?.isTypeOnly);
       if (ts.isExportDeclaration(node) && node.moduleSpecifier)
         dependency(node, node.moduleSpecifier, node.isTypeOnly);
       if (ts.isImportTypeNode(node))
