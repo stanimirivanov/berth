@@ -127,9 +127,10 @@ export function privatePath(name) {
 /** Check owned source text without executing it. Type-only edges still obey boundaries.
  * Documentation proves attached prose, not its accuracy; aliasing and runtime effects need review.
  * @param {Record<string,string>} files
+ * @param {{requireTsExtensions?: boolean}} [options] Enforce source spelling for a repository scan.
  * @returns {{file:string,line:number,rule:string,message:string}[]}
  */
-export function analyze(files) {
+export function analyze(files, { requireTsExtensions = false } = {}) {
   /** @type {{file:string,line:number,rule:string,message:string}[]} */
   const errors = [];
   /** @type {Map<string,string[]>} */
@@ -171,6 +172,10 @@ export function analyze(files) {
       file.startsWith("src/") ||
       file.startsWith("scripts/") ||
       file === "neon.ts";
+    const checkImportSpelling =
+      requireTsExtensions &&
+      file.endsWith(".ts") &&
+      (production || file.startsWith("tests/"));
     /** Report a location and fixed corrective message, never source contents.
      * @param {ts.Node} node @param {string} rule @param {string} message
      */
@@ -194,26 +199,28 @@ export function analyze(files) {
      * @param {ts.Node} node @param {ts.Node|undefined} target @param {boolean} typeOnly
      */
     function dependency(node, target, typeOnly) {
-      if (!production) return;
       if (!target || !ts.isStringLiteralLike(target)) {
-        fail(
-          node,
-          "architecture",
-          "Use a literal ESM import; dynamic targets cannot be checked.",
-        );
-        return;
-      }
-      const name = target.text;
-      if (name.startsWith(".")) {
-        if (!name.endsWith(".ts")) {
+        if (production)
           fail(
             node,
             "architecture",
-            "Use the explicit .ts extension for local backend source imports.",
+            "Use a literal ESM import; dynamic targets cannot be checked.",
           );
-          return;
-        }
-        const resolved = path.posix.join(path.posix.dirname(file), name);
+        return;
+      }
+      const name = target.text;
+      const relative = name.startsWith(".");
+      if (checkImportSpelling && relative && !name.endsWith(".ts"))
+        fail(
+          node,
+          "import-extension",
+          "Use the explicit .ts extension for local backend source imports.",
+        );
+      if (!production) return;
+      if (relative) {
+        const resolved = path.posix
+          .join(path.posix.dirname(file), name)
+          .replace(/\.js$/, ".ts");
         if (!(resolved in files))
           fail(
             node,
@@ -610,7 +617,7 @@ export function checkRepository() {
         );
       files[name] = readFileSync(name, "utf8");
     }
-  return analyze(files);
+  return analyze(files, { requireTsExtensions: true });
 }
 
 if (

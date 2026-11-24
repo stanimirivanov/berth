@@ -30,10 +30,10 @@ test("documentation gate requires prose on contracts and nontrivial helpers", ()
 
 test("architecture checks all module syntax and rejects runtime administrator access", () => {
   for (const text of [
-    'import "../../scripts/oci-admin.ts";',
-    'export * from "../../scripts/oci-admin.ts";',
-    'type X = import("../../scripts/oci-admin.ts").X;',
-    'void import("../../scripts/oci-admin.ts");',
+    'import "../../scripts/oci-admin.js";',
+    'export * from "../../scripts/oci-admin.js";',
+    'type X = import("../../scripts/oci-admin.js").X;',
+    'void import("../../scripts/oci-admin.js");',
     "void import(name);",
     'const fs = require("node:fs");',
     'import "node:fs";',
@@ -53,14 +53,14 @@ test("architecture checks all module syntax and rejects runtime administrator ac
 
 test("runtime cycles fail while type-only cycles do not", () => {
   const files = {
-    "scripts/a.ts": 'import "./b.ts";',
-    "scripts/b.ts": 'import "./a.ts";',
+    "scripts/a.ts": 'import "./b.js";',
+    "scripts/b.ts": 'import "./a.js";',
   };
   assert.ok(analyze(files).some((x) => x.rule === "cycle"));
   assert.ok(
     !analyze({
-      "scripts/a.ts": 'import type {B} from "./b.ts";',
-      "scripts/b.ts": 'import type {A} from "./a.ts";',
+      "scripts/a.ts": 'import type {B} from "./b.js";',
+      "scripts/b.ts": 'import type {A} from "./a.js";',
     }).some((x) => x.rule === "cycle"),
   );
 });
@@ -72,8 +72,9 @@ test("application imports use the owned TypeScript source path", () => {
     "src/trial/executor.ts": "",
   };
   assert.deepEqual(analyze({ ...files, [owner]: 'import "./api.ts";' }), []);
+  assert.deepEqual(analyze({ ...files, [owner]: 'import "./api.js";' }), []);
   assert.ok(
-    analyze({ ...files, [owner]: 'import "./api.js";' }).some(
+    analyze({ ...files, [owner]: 'import "../../trial/executor.js";' }).some(
       (finding) => finding.file === owner && finding.rule === "architecture",
     ),
   );
@@ -81,6 +82,52 @@ test("application imports use the owned TypeScript source path", () => {
     analyze({ ...files, [owner]: 'import "../../trial/executor.ts";' }).some(
       (finding) => finding.file === owner && finding.rule === "architecture",
     ),
+  );
+});
+
+test("repository import spelling covers backend tests without imposing production ownership", () => {
+  const testFile = "tests/integration/example.test.ts";
+  const productionFile = "scripts/main.ts";
+  const sources = {
+    "tests/fakes/example.ts": "",
+    "scripts/fixture.ts": "",
+    "tests/harness.test.mjs": 'import "../tools/harness.mjs";',
+  };
+  const options = { requireTsExtensions: true };
+  assert.deepEqual(
+    analyze(
+      {
+        ...sources,
+        [testFile]:
+          'import "../fakes/example.ts"; import "node:assert/strict";',
+        [productionFile]: 'import "./fixture.ts";',
+      },
+      options,
+    ),
+    [],
+  );
+  const findings = analyze(
+    {
+      ...sources,
+      [testFile]: [
+        'import "../fakes/example.js";',
+        'export * from "../fakes/example";',
+        'type Example = import("../fakes/example.js").Example;',
+        'void import("../fakes/example.js");',
+      ].join("\n"),
+      [productionFile]: 'import "./fixture.js";',
+    },
+    options,
+  );
+  assert.deepEqual(
+    findings.map(({ file, line, rule }) => [file, line, rule]),
+    [
+      [testFile, 1, "import-extension"],
+      [testFile, 2, "import-extension"],
+      [testFile, 3, "import-extension"],
+      [testFile, 4, "import-extension"],
+      [productionFile, 1, "import-extension"],
+    ],
   );
 });
 
@@ -123,7 +170,7 @@ test("private indexed paths are blocked including nested and case variants", () 
 
 test("HTTP admission cannot reach the lifecycle adapter through a local import", () => {
   const errors = analyze({
-    "src/trial/runtime-probe.ts": 'import "./synthetic-lifecycle.ts";',
+    "src/trial/runtime-probe.ts": 'import "./synthetic-lifecycle.js";',
     "src/trial/synthetic-lifecycle.ts": "",
   });
   assert.ok(errors.some((error) => error.rule === "architecture"));
@@ -175,7 +222,7 @@ test("state probe may use Alchemy HTTP state but cannot import administrator too
   assert.ok(
     analyze({
       "src/trial/state-probe.ts":
-        "import { readPrivateText } from '../../scripts/oci-files.ts';",
+        "import { readPrivateText } from '../../scripts/oci-files.js';",
       "scripts/oci-files.ts": "export const x = 1;",
     }).some((x) => x.rule === "architecture"),
   );
@@ -199,11 +246,11 @@ test("fenced adapter permits only Alchemy and Effect imports", () => {
 test("hosted checkpoint owns admission, orchestration and composition edges", () => {
   const files = {
     "src/trial/checkpoint-index.ts":
-      "import './checkpoint-handler.ts'; import './checkpoint-run.ts'; import {Client} from 'pg';",
+      "import './checkpoint-handler.js'; import './checkpoint-run.js'; import {Client} from 'pg';",
     "src/trial/checkpoint-handler.ts":
       "import {createHash} from 'node:crypto';",
     "src/trial/checkpoint-run.ts":
-      "import './fenced-state.ts'; import './fenced-lifecycle.ts';",
+      "import './fenced-state.js'; import './fenced-lifecycle.js';",
     "src/trial/fenced-state.ts": "",
     "src/trial/fenced-lifecycle.ts": "import {Plan} from 'alchemy';",
   };
@@ -211,7 +258,7 @@ test("hosted checkpoint owns admission, orchestration and composition edges", ()
   assert.ok(
     analyze({
       ...files,
-      "src/trial/checkpoint-handler.ts": "import './checkpoint-run.ts';",
+      "src/trial/checkpoint-handler.ts": "import './checkpoint-run.js';",
     }).some((x) => x.rule === "architecture"),
   );
   assert.ok(
@@ -241,7 +288,7 @@ test("ledger SQL port cannot import providers or administrator tooling", () => {
 test("OCI provider owns only engine and budgeted SDK boundary", () => {
   const files = {
     "src/providers/oci/bucket.ts":
-      "import {Resource} from 'alchemy'; import './client.ts';",
+      "import {Resource} from 'alchemy'; import './client.js';",
     "src/providers/oci/client.ts":
       "import {NoRetryConfigurationDetails} from 'oci-common'; import type {requests} from 'oci-objectstorage';",
   };
@@ -252,7 +299,7 @@ test("OCI provider owns only engine and budgeted SDK boundary", () => {
   for (const [file, text] of /** @type {[string, string][]} */ ([
     ["src/providers/oci/bucket.ts", "import 'oci-objectstorage';"],
     ["src/providers/oci/client.ts", "import 'node:fs';"],
-    ["src/trial/runtime-probe.ts", "import '../providers/oci/client.ts';"],
+    ["src/trial/runtime-probe.ts", "import '../providers/oci/client.js';"],
   ]))
     assert.ok(
       analyze({ ...files, [file]: text }).some(
@@ -264,7 +311,7 @@ test("OCI provider owns only engine and budgeted SDK boundary", () => {
 test("trial object helper owns hashing and cannot bypass the SDK boundary", () => {
   const files = {
     "src/providers/oci/trial-object.ts":
-      "import 'node:crypto'; import 'node:stream'; import './client.ts'; import './bucket.ts';",
+      "import 'node:crypto'; import 'node:stream'; import './client.js'; import './bucket.js';",
     "src/providers/oci/client.ts": "",
     "src/providers/oci/bucket.ts": "",
   };
@@ -283,7 +330,7 @@ test("trial object helper owns hashing and cannot bypass the SDK boundary", () =
 test("trial admission cannot reach cloud SDKs or bypass preflight ownership", () => {
   const files = {
     "src/trial/api.ts":
-      "import 'node:crypto'; import './preflight.ts'; import type {TrialIntent} from './ledger.ts';",
+      "import 'node:crypto'; import './preflight.js'; import type {TrialIntent} from './ledger.js';",
     "src/trial/preflight.ts": "",
     "src/trial/ledger.ts": "",
   };
@@ -303,7 +350,7 @@ test("scheduled continuation separates admission, ledger state and OCI compositi
   const files = {
     "src/trial/scheduled.ts": "import 'node:crypto';",
     "src/trial/executor.ts":
-      "import 'node:crypto'; import './ledger.ts'; import './executor-store.ts'; import './executor-resources.ts';",
+      "import 'node:crypto'; import './ledger.js'; import './executor-store.js'; import './executor-resources.js';",
     "src/trial/ledger.ts": "",
     "src/trial/executor-store.ts": "",
     "src/trial/executor-resources.ts": "",
@@ -324,7 +371,7 @@ test("usage collector separates signed provider IO from durable warnings and adm
     "src/providers/oci/usage.ts":
       "import type {RequestSigner} from 'oci-common';",
     "src/trial/warnings.ts":
-      "import './ledger.ts'; import '../providers/oci/usage.ts';",
+      "import './ledger.js'; import '../providers/oci/usage.js';",
     "src/trial/ledger.ts": "",
   };
   assert.deepEqual(
@@ -341,13 +388,13 @@ test("usage collector separates signed provider IO from durable warnings and adm
 test("live roots allow reviewed transports but reject synthetic and administrator coupling", () => {
   const controls = {
     "src/trial/live-index.ts":
-      'import "./live-hosted.ts"; import "./live-runtime.ts";',
+      'import "./live-hosted.js"; import "./live-runtime.js";',
     "src/trial/live-environment.ts":
-      'import "node:crypto"; import "./executor-security.ts";',
+      'import "node:crypto"; import "./executor-security.js";',
     "src/trial/live-hosted.ts":
-      'import "./live-environment.ts"; import "./scheduled.ts";',
+      'import "./live-environment.js"; import "./scheduled.js";',
     "src/trial/live-runtime.ts":
-      'import "oci-common"; import "pg"; import "../providers/oci/client.ts"; import "./executor.ts";',
+      'import "oci-common"; import "pg"; import "../providers/oci/client.js"; import "./executor.js";',
     "src/trial/executor-security.ts":
       "/** Shared restricted SQL check. */ export const restricted = true;",
   };
@@ -362,9 +409,9 @@ test("live roots allow reviewed transports but reject synthetic and administrato
   );
   /** @type {[string, string][]} */
   const rejected = [
-    ["src/trial/live-index.ts", 'import "../../scripts/oci-admin-setup.ts";'],
+    ["src/trial/live-index.ts", 'import "../../scripts/oci-admin-setup.js";'],
     ["src/trial/live-hosted.ts", 'import "oci-common";'],
-    ["src/trial/live-runtime.ts", 'import "./executor-synthetic.ts";'],
+    ["src/trial/live-runtime.ts", 'import "./executor-synthetic.js";'],
     ["src/trial/executor-security.ts", 'import "node:fs";'],
   ];
   for (const [file, text] of rejected)
@@ -374,7 +421,7 @@ test("live roots allow reviewed transports but reject synthetic and administrato
 test("live admission owns metering and cannot import credentials from administrator scripts", () => {
   const files = {
     "src/trial/live-admission.ts":
-      'import "node:crypto"; import "./api.ts"; import "./ledger.ts";',
+      'import "node:crypto"; import "./api.js"; import "./ledger.js";',
     "src/trial/api.ts": "",
     "src/trial/ledger.ts": "",
     "src/providers/oci/readiness.ts":
@@ -384,7 +431,7 @@ test("live admission owns metering and cannot import credentials from administra
   assert.ok(
     analyze({
       ...files,
-      "src/trial/live-admission.ts": 'import "../../scripts/oci-setup.ts";',
+      "src/trial/live-admission.ts": 'import "../../scripts/oci-setup.js";',
     }).some((x) => x.rule === "architecture"),
   );
   assert.ok(
@@ -399,16 +446,16 @@ test("history boundaries permit only the read composition and reject provider or
   const adapter = "src/application/retained-trial-ledger/";
   const sources = {
     "src/application/history/index.ts":
-      'import "./api.ts"; import "./runtime.ts";',
+      'import "./api.js"; import "./runtime.js";',
     "src/application/history/api.ts": "",
     "src/application/history/contract.ts": 'import "effect/Schema";',
     "src/application/history/runtime.ts":
-      'import type { HistoryRead } from "./api.ts"; import "../retained-trial-ledger/history.ts";',
+      'import type { HistoryRead } from "./api.js"; import "../retained-trial-ledger/history.js";',
     [`${adapter}history.ts`]:
-      'import "../../trial/executor-security.ts"; import "../history/contract.ts"; import "./sql.ts";',
+      'import "../../trial/executor-security.js"; import "../history/contract.js"; import "./sql.js";',
     [`${adapter}inventory.ts`]:
-      'import "../inventory/contract.ts"; import "./sql.ts"; const query = "SELECT berth_inventory.inventory_page($1,$2)";',
-    [`${adapter}retry.ts`]: 'import "../retry/contract.ts"; import "./sql.ts";',
+      'import "../inventory/contract.js"; import "./sql.js"; const query = "SELECT berth_inventory.inventory_page($1,$2)";',
+    [`${adapter}retry.ts`]: 'import "../retry/contract.js"; import "./sql.js";',
     [`${adapter}sql.ts`]: "",
     "src/application/inventory/contract.ts": 'import "effect/Schema";',
     "src/application/retry/contract.ts": "",
@@ -420,14 +467,14 @@ test("history boundaries permit only the read composition and reject provider or
   };
   assert.deepEqual(analyze(sources), []);
   for (const [file, text] of /** @type {[string, string][]} */ ([
-    ["src/application/history/index.ts", 'import "../../trial/executor.ts";'],
+    ["src/application/history/index.ts", 'import "../../trial/executor.js";'],
     [
       "src/application/history/index.ts",
-      'import "../../trial/live-runtime.ts";',
+      'import "../../trial/live-runtime.js";',
     ],
     [
       "src/application/history/index.ts",
-      'import "../../providers/oci/client.ts";',
+      'import "../../providers/oci/client.js";',
     ],
     [
       "src/application/history/runtime.ts",
@@ -440,22 +487,22 @@ test("history boundaries permit only the read composition and reject provider or
 
     [
       "src/application/history/runtime.ts",
-      'import "../../trial/executor-store.ts";',
+      'import "../../trial/executor-store.js";',
     ],
     [
       "src/application/history/runtime.ts",
-      'import "../retained-trial-ledger/retry.ts";',
+      'import "../retained-trial-ledger/retry.js";',
     ],
     [
       "src/application/inventory/contract.ts",
-      'import "../retained-trial-ledger/retry.ts";',
+      'import "../retained-trial-ledger/retry.js";',
     ],
-    [`${adapter}inventory.ts`, 'import "../../trial/executor-store.ts";'],
+    [`${adapter}inventory.ts`, 'import "../../trial/executor-store.js";'],
     [
       "src/application/history/runtime.ts",
       'const query = "SELECT berth_executor.history_page($1,$2)";',
     ],
-    ["src/trial/executor-store.ts", 'import "../application/history/api.ts";'],
+    ["src/trial/executor-store.ts", 'import "../application/history/api.js";'],
   ])) {
     assert.ok(
       analyze({ ...sources, [file]: text }).some(
@@ -469,19 +516,19 @@ test("history boundaries permit only the read composition and reject provider or
 test("retry boundaries permit the read-only observer and reject executor coupling", () => {
   const sources = {
     "src/http/empty-control.ts": "",
-    "src/trial/live-hosted.ts": 'import "../http/empty-control.ts";',
+    "src/trial/live-hosted.ts": 'import "../http/empty-control.js";',
     "src/application/retry/api.ts":
-      'import "../../http/empty-control.ts"; import "./contract.ts";',
+      'import "../../http/empty-control.js"; import "./contract.js";',
     "src/application/retry/contract.ts":
-      'import "effect/Schema"; import type { RetryObservation } from "../../providers/oci/retry-observation.ts";',
+      'import "effect/Schema"; import type { RetryObservation } from "../../providers/oci/retry-observation.js";',
     "src/application/retry/index.ts":
-      'import "./api.ts"; import "./runtime.ts";',
+      'import "./api.js"; import "./runtime.js";',
     "src/application/retry/runtime.ts":
-      'import "./reconciliation.ts"; import type { RetryAction } from "./api.ts"; import "../retained-trial-ledger/retry.ts"; import "../../providers/oci/retry-observation.ts";',
+      'import "./reconciliation.js"; import type { RetryAction } from "./api.js"; import "../retained-trial-ledger/retry.js"; import "../../providers/oci/retry-observation.js";',
     "src/application/retry/reconciliation.ts":
-      'import type { RetryLedger } from "./contract.ts"; import type { RetryAction } from "./api.ts"; import type { RetryObserver } from "../../providers/oci/retry-observation.ts";',
+      'import type { RetryLedger } from "./contract.js"; import type { RetryAction } from "./api.js"; import type { RetryObserver } from "../../providers/oci/retry-observation.js";',
     "src/application/retained-trial-ledger/retry.ts":
-      'import "../retry/contract.ts"; import "./sql.ts";',
+      'import "../retry/contract.js"; import "./sql.js";',
     "src/application/retained-trial-ledger/sql.ts": "",
     "src/providers/oci/retry-observation.ts": 'import "effect/Schema";',
     "src/providers/oci/client.ts": "",
@@ -489,18 +536,18 @@ test("retry boundaries permit the read-only observer and reject executor couplin
   };
   assert.deepEqual(analyze(sources), []);
   for (const [file, text] of /** @type {[string, string][]} */ ([
-    ["src/application/retry/contract.ts", 'import "../../trial/executor.ts";'],
-    ["src/trial/live-hosted.ts", 'import "../application/retry/contract.ts";'],
-    ["src/application/retry/runtime.ts", 'import "../../trial/executor.ts";'],
+    ["src/application/retry/contract.ts", 'import "../../trial/executor.js";'],
+    ["src/trial/live-hosted.ts", 'import "../application/retry/contract.js";'],
+    ["src/application/retry/runtime.ts", 'import "../../trial/executor.js";'],
     [
       "src/application/retry/runtime.ts",
-      'import "../retained-trial-ledger/sql.ts";',
+      'import "../retained-trial-ledger/sql.js";',
     ],
     [
       "src/application/retry/reconciliation.ts",
-      'import "../retained-trial-ledger/retry.ts";',
+      'import "../retained-trial-ledger/retry.js";',
     ],
-    ["src/providers/oci/retry-observation.ts", 'import "./client.ts";'],
+    ["src/providers/oci/retry-observation.ts", 'import "./client.js";'],
   ])) {
     assert.ok(
       analyze({ ...sources, [file]: text }).some(

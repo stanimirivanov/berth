@@ -33,7 +33,10 @@ formatting, including its quote style, the ESLint rules, and the
 [declaration documentation contract](docs/comment-quality.md).
 
 Use explicit `.ts` extensions in relative imports and re-exports of backend
-TypeScript source. The compiler rewrites them to `.js` in Node ESM output.
+TypeScript source, including scripts and tests. The compiler rewrites them to
+`.js` in Node ESM output. The repository scan enforces this spelling while
+the architecture analyzer resolves legacy `.js` fixture imports to their
+TypeScript source paths.
 
 For `ui/src/`, also follow the [Angular style guide](https://angular.dev/style-guide).
 Group related files by feature. Keep bootstrap in `main.ts` and keep each
