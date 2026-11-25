@@ -73,7 +73,7 @@ test("the shell marks the active page and opens the existing history access scre
 test("the history detail route passes its operation identifier to the authenticated read", async ({
   page,
 }) => {
-  const path = `/operations/${first}`;
+  const path = `/operations/${first}?view=detail#record`;
   const requests: string[] = [];
   await page.route("**/api/history**", (route) => {
     requests.push(new URL(route.request().url()).pathname);
@@ -84,11 +84,12 @@ test("the history detail route passes its operation identifier to the authentica
       json:
         requests.at(-1) === "/api/history"
           ? { items: [item(second)], next: null }
-          : item(first),
+          : { ...item(first), startedAt: "2026-11-20T08:50:00+02:00" },
     });
   });
   const document = await page.goto(path);
   expect(document?.status()).toBe(200);
+  await expect(page).toHaveURL(path);
   await expect(page.getByLabel("History access token")).toBeVisible();
   await expect(page.getByRole("region", { name: "History access" })).toHaveCSS(
     "border-top-width",
@@ -103,6 +104,21 @@ test("the history detail route passes its operation identifier to the authentica
   await expect
     .poll(() => requests)
     .toEqual([`/api/history/${first}`, "/api/history"]);
+  const detail = page.getByRole("region", { name: "Selected operation" });
+  const started = detail.locator('time[datetime="2026-11-20T08:50:00+02:00"]');
+  const expires = detail.locator('time[datetime="2026-11-20T10:50:00Z"]');
+  await expect(started).toHaveText("Nov 20, 2026, 6:50:00 AM UTC");
+  await expect(expires).toHaveText("Nov 20, 2026, 10:50:00 AM UTC");
+  await expect(detail.getByText(/^Last fetched/).locator("time")).toHaveText(
+    / UTC$/,
+  );
+  const inbox = page.getByRole("region", { name: "Recorded operations" });
+  await expect(inbox.getByText(/^Last fetched/).locator("time")).toHaveText(
+    / UTC$/,
+  );
+  await expect(
+    inbox.getByRole("link", { name: second }).locator("time"),
+  ).toHaveText(/ UTC$/);
   await page.getByRole("button", { name: "Refresh detail" }).click();
   await expect
     .poll(() => requests)
@@ -139,7 +155,7 @@ test("malformed operation links explain the error without a history read", async
   for (const path of [
     "/operations/not-a-uuid",
     `/operations/not-a-uuid;operation=${first}`,
-    "/operations/%ZZ",
+    "/operations/%ZZ?view=raw&name=a%2Bb#record%20notes",
     "/operations/;invalid",
     `/operations/${first})`,
     `/operations/${first}()`,
@@ -150,14 +166,15 @@ test("malformed operation links explain the error without a history read", async
     expect(document?.status()).toBe(200);
     await expect(
       page.getByRole("heading", { name: "Invalid operation link" }),
-    ).toBeVisible();
+    ).toBeFocused();
     await expect(page.getByLabel("History access token")).toHaveCount(0);
-    expect(new URL(page.url()).pathname).toBe(path);
+    expect(page.url()).toBe(new URL(path, page.url()).href);
   }
-  await page
-    .getByRole("main")
-    .getByRole("link", { name: "Operation history" })
-    .click();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("main").getByRole("link", { name: "Operation history" }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.getByLabel("History access token")).toBeVisible();
   expect(requests).toEqual([]);
 
@@ -338,33 +355,70 @@ test("history has loading, empty, unavailable and unauthorized states without le
   page,
 }) => {
   let status = 200;
+  let empty = true;
+  const firstReply = Promise.withResolvers<void>();
   await page.route("**/api/history**", async (route) => {
-    await new Promise((r) => setTimeout(r, 100));
+    await firstReply.promise;
     await route.fulfill({
       status,
       json:
         status === 200
-          ? { items: [], next: null }
+          ? { items: empty ? [] : [item(first)], next: null }
           : { secret: "must-not-display" },
     });
   });
   await openHistory(page);
-  await page.getByLabel("History access token").fill("h".repeat(40));
-  await page.getByRole("button", { name: "Load history", exact: true }).click();
-  await expect(page.getByText("Loading operation history…")).toBeVisible();
-  await expect(page.getByText("No recorded operations.")).toBeVisible();
-  const fetchedAt = page
-    .getByRole("region", { name: "Recorded operations" })
-    .getByText(/^Last fetched/)
-    .locator("time");
+  const updates = page.locator("#history-list-updates[aria-live=polite]");
+  const errors = page.getByRole("alert", { name: "Review inbox errors" });
+  const originalUpdates = await updates.elementHandle();
+  const originalErrors = await errors.elementHandle();
+  const inbox = page.getByRole("region", { name: "Recorded operations" });
+  try {
+    await page.getByLabel("History access token").fill("h".repeat(40));
+    await page
+      .getByRole("button", { name: "Load history", exact: true })
+      .click();
+    await expect(inbox).toHaveAttribute("aria-busy", "true");
+    await expect(updates).toHaveText("Loading operation history…");
+    await expect(inbox.getByText("Loading operation history…")).toBeVisible();
+    expect(
+      await updates.evaluate((region) => region.closest("[aria-busy]")),
+    ).toBeNull();
+  } finally {
+    firstReply.resolve();
+  }
+  await expect(updates).toHaveText("No recorded operations.");
+  await expect(inbox.getByText("No recorded operations.")).toBeVisible();
+  const fetchedAt = inbox.getByText(/^Last fetched/).locator("time");
   const successfulRead = await fetchedAt.getAttribute("datetime");
   status = 503;
   await page.getByRole("button", { name: "Refresh history" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "History is unavailable.",
-  );
-  await expect(page.getByText("No recorded operations.")).toBeVisible();
+  await expect(errors).toContainText("History is unavailable.");
+  expect(
+    await errors.evaluate((region) => region.closest("[aria-busy]")),
+  ).toBeNull();
+  await expect(inbox.getByText("No recorded operations.")).toBeVisible();
   await expect(fetchedAt).toHaveAttribute("datetime", successfulRead ?? "");
+
+  status = 200;
+  empty = false;
+  await inbox.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(updates).toHaveText("Operation history updated.");
+  await expect(errors).toBeEmpty();
+  await expect(inbox.getByRole("link", { name: first })).toBeVisible();
+  expect(
+    await updates.evaluate(
+      (current, original) => current === original,
+      originalUpdates,
+    ),
+  ).toBe(true);
+  expect(
+    await errors.evaluate(
+      (current, original) => current === original,
+      originalErrors,
+    ),
+  ).toBe(true);
+
   status = 401;
   await page.getByRole("button", { name: "Refresh history" }).click();
   await expect(
@@ -384,15 +438,15 @@ test("returning to history preserves a failed first read until the owner retries
   await openHistory(page);
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "History is unavailable.",
-  );
+  await expect(
+    page.getByRole("alert", { name: "Review inbox errors" }),
+  ).toContainText("History is unavailable.");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await navigation.getByRole("link", { name: "Infrastructure" }).click();
   await navigation.getByRole("link", { name: "Operation history" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "History is unavailable.",
-  );
+  await expect(
+    page.getByRole("alert", { name: "Review inbox errors" }),
+  ).toContainText("History is unavailable.");
   expect(requests).toHaveLength(1);
 });
 
@@ -426,7 +480,11 @@ test("disconnect discards late responses and page reload requires access again",
   await openHistory(page);
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history", exact: true }).click();
-  await expect(page.getByText("Loading operation history…")).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Recorded operations" })
+      .getByText("Loading operation history…"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Disconnect" }).click();
   release?.();
   await expect(page.getByLabel("History access token")).toHaveValue("");
@@ -488,7 +546,9 @@ test("a failed older-page read keeps the successful page and retries the same cu
   } finally {
     held.resolve();
   }
-  await expect(list.getByRole("alert")).toContainText("may be out of date");
+  await expect(list.getByText(/History is unavailable/)).toContainText(
+    "may be out of date",
+  );
   await expect(firstRow).toBeVisible();
   await expect(fetchedAt).toHaveAttribute("datetime", successfulRead ?? "");
   await expect(detail.getByText(first)).toBeVisible();
@@ -499,7 +559,7 @@ test("a failed older-page read keeps the successful page and retries the same cu
   await expect(firstRow).toBeVisible();
   await older.click();
   await list.getByRole("button", { name: "Go to newest" }).click();
-  await expect(list.getByRole("alert")).toHaveCount(0);
+  await expect(list.getByText(/History is unavailable/)).toHaveCount(0);
   await expect(firstRow).toBeVisible();
   await expect(detail.getByText(first)).toBeVisible();
   expect(requests).toEqual([
@@ -560,7 +620,7 @@ test("a pending obsolete detail yields to the latest selection before the queued
   } finally {
     replacement.resolve();
   }
-  await expect(page.getByText("Operation not found.")).toBeVisible();
+  await expect(detail.getByText("Operation not found.")).toBeVisible();
   await expect(
     page.getByRole("link", { name: second, exact: true }),
   ).toBeVisible();
@@ -593,6 +653,10 @@ test("detail refresh retains its timestamp on failure and clears only detail on 
     );
   });
   await page.goto(`/operations/${first}`);
+  const updates = page.locator("#history-detail-updates[aria-live=polite]");
+  const errors = page.getByRole("alert", { name: "Operation detail errors" });
+  const originalUpdates = await updates.elementHandle();
+  const originalErrors = await errors.elementHandle();
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
   const list = page.getByRole("region", { name: "Recorded operations" });
@@ -600,18 +664,39 @@ test("detail refresh retains its timestamp on failure and clears only detail on 
   await expect(list.getByRole("link", { name: second })).toBeVisible();
   const fetchedAt = detail.getByText(/^Last fetched/).locator("time");
   await expect(fetchedAt).toHaveAttribute("datetime", /Z$/);
+  await expect(updates).toHaveText("Operation details updated.");
   const successfulRead = await fetchedAt.getAttribute("datetime");
   detailStatus = 503;
   await detail.getByRole("button", { name: "Refresh detail" }).click();
-  await expect(detail.getByRole("alert")).toContainText("may be out of date");
+  await expect(errors).toContainText("may be out of date");
+  expect(
+    await errors.evaluate((region) => region.closest("[aria-busy]")),
+  ).toBeNull();
   await expect(detail.getByText(first)).toBeVisible();
   await expect(fetchedAt).toHaveAttribute("datetime", successfulRead ?? "");
   detailStatus = 404;
   await detail.getByRole("button", { name: "Retry", exact: true }).click();
-  await expect(detail.getByRole("alert")).toHaveText("Operation not found.");
+  await expect(errors).toHaveText("Operation not found.");
   await expect(detail.getByText(first)).toHaveCount(0);
   await expect(fetchedAt).toHaveCount(0);
   await expect(list.getByRole("link", { name: second })).toBeVisible();
+
+  detailStatus = 200;
+  await detail.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(updates).toHaveText("Operation details updated.");
+  await expect(errors).toBeEmpty();
+  expect(
+    await updates.evaluate(
+      (current, original) => current === original,
+      originalUpdates,
+    ),
+  ).toBe(true);
+  expect(
+    await errors.evaluate(
+      (current, original) => current === original,
+      originalErrors,
+    ),
+  ).toBe(true);
 });
 
 for (const status of [401, 403]) {
@@ -650,7 +735,9 @@ for (const status of [401, 403]) {
     } finally {
       held.resolve();
     }
-    const alert = page.getByRole("alert");
+    const alert = page
+      .getByRole("region", { name: "History access" })
+      .getByRole("alert");
     if (status === 401) {
       await expect(alert).toContainText("Enter a valid history token");
       await expect(page.getByLabel("History access token")).toHaveValue("");
@@ -820,7 +907,9 @@ test("mobile detail returns keyboard focus to its row on the retained older page
   await page.goForward();
   await expect(page).toHaveURL(`/operations/${second}`);
   await expect(detailHeading).toBeFocused();
-  await page.getByRole("link", { name: "Back to inbox" }).click();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("link", { name: "Back to inbox" })).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL("/operations");
   await expect(row).toBeFocused();
   expect(requests.filter((path) => !path.endsWith(second))).toEqual([
@@ -839,8 +928,10 @@ test("mobile detail returns keyboard focus to its row on the retained older page
   await expect
     .poll(() => requests)
     .toEqual([`/api/history/${second}`, "/api/history"]);
-  await expect(detail.getByRole("alert")).toHaveText("Operation not found.");
-  await page.getByRole("link", { name: "Back to inbox" }).click();
+  await expect(detail.getByText("Operation not found.")).toBeVisible();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("link", { name: "Back to inbox" })).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("link", { name: first })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Review inbox" }),
@@ -937,6 +1028,9 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
   expect(pagesHeaders).toContain(`Content-Security-Policy: ${policy}\n`);
   const token = page.getByLabel("History access token");
   const detail = page.getByRole("region", { name: "Selected operation" });
+  const detailHeading = detail.getByRole("heading", {
+    name: "Operation details",
+  });
   try {
     expect(reads).toEqual([]);
     await expect(token).toHaveAttribute("type", "password");
@@ -949,9 +1043,16 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
     );
     await token.fill("h".repeat(40));
     await token.press("Enter");
-    await expect(detail.getByRole("status")).toHaveText(
+    await expect(detailHeading).toBeFocused();
+    await expect(detailHeading).toHaveAccessibleDescription(
       "Loading operation details…",
     );
+    const updates = page.locator("#history-detail-updates[aria-live=polite]");
+    await expect(detail).toHaveAttribute("aria-busy", "true");
+    await expect(updates).toHaveText("Loading operation details…");
+    expect(
+      await updates.evaluate((region) => region.closest("[aria-busy]")),
+    ).toBeNull();
     await expect(
       detail.getByRole("progressbar", { name: "Loading operation details" }),
     ).toHaveCSS("height", "4px");
@@ -961,6 +1062,7 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
   }
 
   await expect(detail.getByText(first, { exact: true })).toBeVisible();
+  await expect(detailHeading).not.toHaveAttribute("aria-describedby");
   await expect
     .poll(() => reads)
     .toEqual([`/api/history/${first}`, "/api/history"]);
@@ -992,9 +1094,9 @@ test("owner access stays unverified until a protected response decodes", async (
   const submit = page.getByRole("button", { name: "Load history" });
   await token.fill("invalid");
   await submit.click();
-  await expect(page.getByRole("alert")).toHaveText(
-    "Enter a valid history token.",
-  );
+  await expect(
+    page.getByRole("region", { name: "History access" }).getByRole("alert"),
+  ).toHaveText("Enter a valid history token.");
   expect(attempt).toBe(0);
 
   await token.fill("h".repeat(40));
@@ -1058,7 +1160,11 @@ test("leaving History discards the old detail and keeps access unverified on ret
     await expect(
       page.getByText("History access has not been verified."),
     ).toBeVisible();
-    await expect(page.getByText("Loading operation details…")).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Selected operation" })
+        .getByText("Loading operation details…"),
+    ).toBeVisible();
     await expect.poll(() => reads).toEqual([endpoint, endpoint]);
   } finally {
     pending.resolve();

@@ -78,7 +78,30 @@ export class OperationHistory {
   protected readonly emptyList = computed(
     () => this.store.list()?.items.length === 0,
   );
+  protected readonly listStatus = computed(() => {
+    if (this.store.listLoading()) {
+      return "Loading operation history…";
+    }
+    if (this.store.listFailure() || !this.store.list()) {
+      return "";
+    }
+    return this.emptyList()
+      ? "No recorded operations."
+      : "Operation history updated.";
+  });
+  protected readonly listError = computed(() => {
+    if (!this.store.listFailure()) {
+      return "";
+    }
+    const message =
+      "History is unavailable. Retry when the read service is available.";
+    return this.store.list()
+      ? `${message} Displayed data may be out of date.`
+      : message;
+  });
   protected readonly showDetail = computed(() => this.operation() !== null);
+  private readonly invalidHeading =
+    viewChild<ElementRef<HTMLElement>>("invalidHeading");
   private readonly inboxHeading =
     viewChild<ElementRef<HTMLElement>>("inboxHeading");
   private readonly detailHeading =
@@ -118,6 +141,30 @@ export class OperationHistory {
   protected readonly detail = computed(() => {
     const result = this.store.detail();
     return result?.record.operation === this.operation() ? result : null;
+  });
+  protected readonly detailStatus = computed(() => {
+    if (!this.showDetail() || !this.owner.canRead()) {
+      return "";
+    }
+    if (this.detailLoading()) {
+      return "Loading operation details…";
+    }
+    return this.detail() && !this.detailFailure()
+      ? "Operation details updated."
+      : "";
+  });
+  protected readonly detailError = computed(() => {
+    const failure = this.detailFailure();
+    if (failure === "missing") {
+      return "Operation not found.";
+    }
+    if (failure === "unavailable") {
+      const message = "Operation details are unavailable.";
+      return this.detail()
+        ? `${message} Displayed data may be out of date.`
+        : message;
+    }
+    return "";
   });
   protected readonly reasons = computed(() => {
     const detail = this.detail();
@@ -185,9 +232,10 @@ export class OperationHistory {
 
   /** Restore focus after route and pane state agree, including a regrouped row. */
   private restoreFocus() {
-    if (!this.owner.canRead() || this.invalidOperation()) {
+    if (this.invalidOperation() || !this.owner.canRead()) {
       this.previousFocusRoute = undefined;
       this.restoredRow = undefined;
+      this.invalidHeading()?.nativeElement.focus();
       return;
     }
     const operation = this.operation();
