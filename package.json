@@ -11,7 +11,9 @@
   "packageManager": "pnpm@12.16.1",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit && pnpm run typecheck:harness",
+    "typecheck": "tsc --noEmit && pnpm run typecheck:harness && pnpm run typecheck:pages && pnpm run typecheck:playwright",
+    "typecheck:pages": "pnpm --dir ui exec tsc -p tsconfig.pages.json",
+    "typecheck:playwright": "pnpm --dir ui exec tsc -p tsconfig.playwright.json",
     "lint": "biome check scripts tests src neon.ts package.json tsconfig.json biome.json && pnpm run lint:harness && pnpm run lint:spacing && pnpm run lint:ui",
     "test": "pnpm run build && node --test dist/tests/*.test.js && pnpm run test:harness",
     "test:smoke": "pnpm run build && node --test dist/tests/runtime-smoke.test.js",

@@ -21,11 +21,14 @@ async function observeCspViolations(page: Page) {
     },
   );
   await page.addInitScript(() => {
-    const browser = window as Window & {
-      recordHistoryCspViolation: (directive: string) => Promise<void>;
-    };
     document.addEventListener("securitypolicyviolation", (event) => {
-      void browser.recordHistoryCspViolation(event.effectiveDirective);
+      if (
+        !("recordHistoryCspViolation" in window) ||
+        typeof window.recordHistoryCspViolation !== "function"
+      ) {
+        throw Error("History CSP recorder is unavailable");
+      }
+      void window.recordHistoryCspViolation(event.effectiveDirective);
     });
   });
   return violations;
