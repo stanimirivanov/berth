@@ -2165,6 +2165,7 @@ test("read-only operation history paginates retained evidence without exposing r
     );
     const url =
       "postgresql://berth_runtime:fixture@ep-fixture.neon.tech/neondb";
+    const historyTransactionModes: unknown[] = [];
     const store = historyReader(
       { DATABASE_URL: url, DATABASE_URL_UNPOOLED: url },
       () => {
@@ -2179,9 +2180,13 @@ test("read-only operation history paginates retained evidence without exposing r
           connect: () => connection.connect(),
           end: () => connection.end(),
           async query(text, values) {
-            if (text.includes("AS restricted")) {
+            if (
+              /^\s*SELECT\s+berth_executor\.history_(?:page|detail)\s*\(/i.test(
+                text,
+              )
+            ) {
               const mode = await connection.query("SHOW transaction_read_only");
-              assert.equal(mode.rows[0]?.transaction_read_only, "on");
+              historyTransactionModes.push(mode.rows[0]?.transaction_read_only);
             }
             return connection.query(text, values);
           },
@@ -2291,6 +2296,15 @@ test("read-only operation history paginates retained evidence without exposing r
       );
     await assert.rejects(store.list(randomUUID()));
     await assert.rejects(store.list("bad-cursor"));
+    assert.equal(
+      historyTransactionModes.length,
+      8,
+      "probe the transaction mode for every History projection",
+    );
+    assert.ok(
+      historyTransactionModes.every((mode) => mode === "on"),
+      "every History projection must run in a read-only transaction",
+    );
     await assert.rejects(
       db.query("SELECT berth_executor.history_record($1)", [ids[2]]),
       /permission denied/,
