@@ -1,4 +1,14 @@
 berth-operation-history {
+  /* Keep Material controls in proportion to their scalable typography. */
+  --mat-button-filled-container-height: 2.5rem;
+  --mat-button-outlined-container-height: 2.5rem;
+  --mat-button-text-container-height: 2.5rem;
+  --mat-form-field-container-height: 3.5rem;
+  --mat-form-field-container-vertical-padding: 1rem;
+
+  h1 {
+    font-size: 2.5rem;
+  }
   .history-announcement {
     position: absolute;
     width: 1px;
@@ -92,6 +102,9 @@ berth-operation-history {
     color: var(--muted);
     font-size: 0.875rem;
   }
+  .operation-row[aria-current="page"] .operation-summary {
+    color: var(--ink);
+  }
   .operations .operation-row .operation-id[matListItemTitle],
   .operations .operation-row .operation-summary[matListItemLine] {
     overflow-wrap: anywhere;
@@ -123,6 +136,9 @@ berth-operation-history {
     flex-wrap: wrap;
   }
   @media (max-width: 767px) {
+    h1 {
+      font-size: 1.8rem;
+    }
     .inbox-layout.has-detail {
       grid-template-columns: minmax(0, 1fr);
     }
