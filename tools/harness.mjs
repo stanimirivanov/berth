@@ -521,17 +521,22 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
             "architecture",
             "Only the hosted composition root may import the handler and synthetic engine; never import admin tooling.",
           );
-        if (
+        if (file === "scripts/history-server.ts") {
+          if (
+            resolved !== "src/application/history/api.ts" &&
+            resolved !== "src/application/history/runtime.ts"
+          )
+            fail(
+              node,
+              "architecture",
+              "The History preview may import only its History API and runtime as local modules.",
+            );
+        } else if (
           file.startsWith("scripts/") &&
           !(
             resolved.startsWith("scripts/") ||
             resolved === "neon.ts" ||
-            resolved === "src/trial/deployment.ts" ||
-            (file === "scripts/history-server.ts" &&
-              [
-                "src/application/history/api.ts",
-                "src/application/history/runtime.ts",
-              ].includes(resolved))
+            resolved === "src/trial/deployment.ts"
           )
         )
           fail(
@@ -540,6 +545,17 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
             "Scripts may compose scripts, deployment configuration and the environment allowlist only.",
           );
         if (!typeOnly) graph.get(file)?.push(resolved);
+      } else if (
+        file === "scripts/history-server.ts" &&
+        (path.posix.isAbsolute(name) ||
+          path.win32.isAbsolute(name) ||
+          name.toLowerCase().startsWith("file:"))
+      ) {
+        fail(
+          node,
+          "architecture",
+          "Use relative paths for local imports in the History preview.",
+        );
       } else if (file.startsWith("src/")) {
         const allowed =
           runtimePackages[/** @type {keyof typeof runtimePackages} */ (file)] ??

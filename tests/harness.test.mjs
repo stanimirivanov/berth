@@ -51,6 +51,49 @@ test("architecture checks all module syntax and rejects runtime administrator ac
   );
 });
 
+test("History preview composes its read API and runtime without private-file helpers", () => {
+  const preview = "scripts/history-server.ts";
+  const composition = [
+    'import { readFile } from "node:fs/promises";',
+    'import { createServer } from "node:http";',
+    'import { resolve } from "node:path";',
+    'import { historyApi } from "../src/application/history/api.ts";',
+    'import { historyReader } from "../src/application/history/runtime.ts";',
+  ].join("\n");
+  const files = {
+    [preview]: composition,
+    "scripts/oci-files.ts": "",
+    "src/application/history/api.ts": "",
+    "src/application/history/runtime.ts": "",
+  };
+  assert.deepEqual(analyze(files), []);
+  const findings = analyze({
+    ...files,
+    [preview]: `${composition}\nimport { readPrivateText } from "./oci-files.ts";`,
+  });
+  assert.ok(
+    findings.some(
+      (finding) => finding.file === preview && finding.rule === "architecture",
+    ),
+  );
+});
+
+test("History preview requires relative paths for direct local imports", () => {
+  const preview = "scripts/history-server.ts";
+  const imports = [
+    "/fixtures/local-module.mjs",
+    "C:\\fixtures\\local-module.mjs",
+    "FiLe:///fixtures/local-module.mjs",
+  ]
+    .map((specifier) => `import ${JSON.stringify(specifier)};`)
+    .join("\n");
+  const findings = analyze({ [preview]: imports, "scripts/other.ts": imports });
+  assert.deepEqual(
+    findings.map(({ file, line, rule }) => ({ file, line, rule })),
+    [1, 2, 3].map((line) => ({ file: preview, line, rule: "architecture" })),
+  );
+});
+
 test("runtime cycles fail while type-only cycles do not", () => {
   const files = {
     "scripts/a.ts": 'import "./b.js";',
