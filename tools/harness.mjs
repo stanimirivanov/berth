@@ -75,6 +75,9 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/http/empty-control.ts",
     "src/application/retry/contract.ts",
   ],
+  "src/application/retry/continuation.ts": [
+    "src/application/retry/contract.ts",
+  ],
   "src/application/retry/contract.ts": [
     "src/providers/oci/retry-observation.ts",
   ],

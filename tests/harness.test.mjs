@@ -759,7 +759,8 @@ test("retry boundaries permit the read-only observer and reject executor couplin
     "src/trial/live-hosted.ts": 'import "../http/empty-control.js";',
     "src/application/retry/api.ts":
       'import "../../http/empty-control.js"; import "./contract.js"; import "./continuation.js";',
-    "src/application/retry/continuation.ts": 'import "effect/Schema";',
+    "src/application/retry/continuation.ts":
+      'import "effect/Schema"; import "./contract.js";',
     "src/application/retry/contract.ts":
       'import "effect/Schema"; import type { RetryObservation } from "../../providers/oci/retry-observation.js";',
     "src/application/retry/index.ts":

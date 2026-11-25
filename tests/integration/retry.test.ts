@@ -557,14 +557,25 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
         )
       ).rows[0]?.value;
     const beforeContinuation = await saved();
-    const prepare = (snapshot: object, id: string = continuation) =>
-      owner.query("SELECT berth_retry.prepare_continuation($1,$2,$3,$4,$5)", [
-        candidate.operation,
-        id,
-        new Date(starts),
-        binding,
-        snapshot,
-      ]);
+    const prepare = async (
+      snapshot: typeof evidence & { functionsKnownInsufficient?: boolean },
+      id: string = continuation,
+    ) =>
+      (
+        await owner.query(
+          "SELECT berth_retry.prepare_continuation($1,$2,$3,$4,$5) AS result",
+          [
+            candidate.operation,
+            id,
+            new Date(starts),
+            binding,
+            {
+              ...snapshot,
+              functionsPolicy: { ...snapshot.functionsPolicy, operation: id },
+            },
+          ],
+        )
+      ).rows[0]?.result;
     const view = async () =>
       (
         await runtime.query(
@@ -572,40 +583,88 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
           [candidate.operation],
         )
       ).rows[0]?.value;
-    assert.equal((await view()).reason, "preparation-required");
-    await assert.rejects(
-      prepare({ ...evidence, transferBytes: 1 }),
-      /Free allowance evidence/,
-    );
-    await assert.rejects(
-      prepare({ ...evidence, functionsKnownInsufficient: true }),
-      /Free allowance evidence/,
-    );
-    await assert.rejects(
-      prepare({ ...evidence, iamReviewed: false }),
-      /effective IAM evidence/,
-    );
-    await assert.rejects(
-      prepare({
-        ...evidence,
-        functionsPolicy: {
-          ...evidence.functionsPolicy,
-          manualRecoveryReady: false,
-        },
-      }),
-      /cleanup readiness evidence/,
-    );
-    await assert.rejects(
-      prepare({ ...evidence, checkedAt: starts - 86400000 }),
-    );
-    const obsolete = randomUUID();
-    await prepare(
+    const openContinuation = retryContinuationRuntime(
       {
-        ...evidence,
-        functionsPolicy: { ...evidence.functionsPolicy, operation: obsolete },
+        BERTH_RETRY_DATABASE_URL:
+          "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb",
       },
-      obsolete,
+      () => new Client({ ...settings, user: "berth_retry_runtime" }),
     );
+    assert.equal((await view()).reason, "preparation-required");
+    const currentApproval = async (id: string) =>
+      (
+        await runtime.query(
+          "SELECT berth_retry.approve_continuation($1,$2) AS value",
+          [candidate.operation, id],
+        )
+      ).rows[0]?.value;
+    const agedSource = await owner.query(
+      "SELECT observed_at::text AS observed_at FROM berth_retry.reconciliations WHERE operation=$1",
+      [candidate.operation],
+    );
+    await owner.query(
+      "UPDATE berth_retry.reconciliations SET observed_at=now()-interval '23 hours' WHERE operation=$1",
+      [candidate.operation],
+    );
+    const immediate = randomUUID();
+    assert.equal(await prepare(evidence, immediate), "prepared");
+    await assert.rejects(
+      owner.query("SELECT berth_retry.prepare_continuation($1,$2,$3,$4,$5)", [
+        candidate.operation,
+        randomUUID(),
+        new Date(starts + 45 * 60 * 1000),
+        binding,
+        evidence,
+      ]),
+      /reconciliation evidence is required through the creation cutoff/,
+    );
+    assert.equal((await view()).proposal, immediate);
+    await owner.query(
+      "UPDATE berth_retry.reconciliations SET observed_at=$2 WHERE operation=$1",
+      [candidate.operation, agedSource.rows[0]?.observed_at],
+    );
+    for (const [snapshot, reason] of [
+      [{ ...evidence, transferBytes: 1 }, "allowance-evidence-unqualified"],
+      [
+        { ...evidence, functionsKnownInsufficient: true },
+        "allowance-evidence-unqualified",
+      ],
+      [
+        { ...evidence, checkedAt: starts - 86400000 },
+        "allowance-evidence-unqualified",
+      ],
+      [{ ...evidence, iamReviewed: false }, "credential-evidence-unqualified"],
+      [
+        { ...evidence, iamCheckedAt: starts - 86400000 },
+        "credential-evidence-unqualified",
+      ],
+      [
+        {
+          ...evidence,
+          functionsPolicy: {
+            ...evidence.functionsPolicy,
+            manualRecoveryReady: false,
+          },
+        },
+        "cleanup-evidence-unqualified",
+      ],
+    ] as const) {
+      const previous = randomUUID();
+      assert.equal(await prepare(evidence, previous), "prepared");
+      assert.equal((await view()).proposal, previous);
+      assert.equal(await prepare(snapshot, randomUUID()), reason);
+      const stop = await view();
+      assert.equal(stop.reason, reason);
+      assert.equal(stop.proposal, undefined);
+      assert.deepEqual(await openContinuation(candidate.operation, null), stop);
+      assert.equal(await currentApproval(previous), null);
+    }
+    await assert.rejects(
+      runtime.query("SELECT * FROM berth_retry.preparation_stops"),
+      { code: "42501" },
+    );
+    const obsolete = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+    await prepare(evidence, obsolete);
     await owner.query(
       "UPDATE berth_retry.proposals SET approve_by=clock_timestamp()-interval '1 second' WHERE id=$1",
       [obsolete],
@@ -622,6 +681,10 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
     );
 
     await prepare(evidence);
+    await owner.query(
+      "UPDATE berth_retry.proposals SET proposed_at=(SELECT proposed_at FROM berth_retry.proposals WHERE id=$1) WHERE id=$2",
+      [continuation, obsolete],
+    );
     const offered = await view();
     assert.equal(offered.stage, "waiting-for-approval");
     assert.equal(offered.target.bucket, candidate.bucket);
@@ -638,13 +701,6 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
       ).rows[0]?.value;
     assert.equal(await approve(randomUUID()), null);
 
-    const openContinuation = retryContinuationRuntime(
-      {
-        BERTH_RETRY_DATABASE_URL:
-          "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb",
-      },
-      () => new Client({ ...settings, user: "berth_retry_runtime" }),
-    );
     const ownerCredential = `berth-retry-owner-v1.${"x".repeat(43)}`;
     let loseResponse = true;
     const retry = retryApi(

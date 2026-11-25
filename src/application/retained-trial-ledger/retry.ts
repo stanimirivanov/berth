@@ -1,4 +1,5 @@
 import {
+  decodeApproval,
   decodeContinuation,
   type RetryContinuation,
 } from "../retry/continuation.ts";
@@ -67,19 +68,21 @@ export function retainedRetryContinuation(
   db: RetainedTrialDatabase,
 ): RetryContinuation {
   return async (operation, proposal) =>
-    decodeContinuation(
-      proposal === null
-        ? await retainedTrialResult(
+    proposal === null
+      ? decodeContinuation(
+          await retainedTrialResult(
             db,
             "SELECT berth_retry.continuation_status($1) AS result",
             [operation],
-          )
-        : await retainedTrialResult(
+          ),
+        )
+      : decodeApproval(
+          await retainedTrialResult(
             db,
             "SELECT berth_retry.approve_continuation($1,$2) AS result",
             [operation, proposal],
           ),
-    );
+        );
 }
 
 /** Reject broad grants or a different login before a hosted action can use SQL. */

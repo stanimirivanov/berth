@@ -5,7 +5,11 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { emptyControl } from "../../http/empty-control.ts";
-import { decodeContinuation, type RetryContinuation } from "./continuation.ts";
+import {
+  decodeApproval,
+  decodeContinuation,
+  type RetryContinuation,
+} from "./continuation.ts";
 import { decodeRetryStatus, type RetryStatus } from "./contract.ts";
 
 /** Only the start action may use the read-only provider; status reads go to SQL. */
@@ -112,15 +116,20 @@ export function retryApi(
       try {
         if (statusRead || proposal) {
           if (!continuation) return reply({ error: "retry-unavailable" }, 503);
-          const result = decodeContinuation(
-            await continuation(operation, proposal),
-          );
+          const raw = await continuation(operation, proposal);
+          const result = proposal
+            ? decodeApproval(raw)
+            : decodeContinuation(raw);
           if (!result)
             return proposal
               ? reply({ error: "proposal-no-longer-current" }, 409)
               : reply({ error: "not-found" }, 404);
-          if (result.operation !== operation)
-            throw Error("Retry operation mismatch");
+          if (
+            result.operation !== operation ||
+            (proposal &&
+              (!("continuation" in result) || result.continuation !== proposal))
+          )
+            throw Error("Retry approval or operation mismatch");
           return reply(result);
         }
         const status = decodeRetryStatus(

@@ -107,6 +107,15 @@ CREATE UNIQUE INDEX retry_one_current_proposal ON berth_retry.proposals(operatio
 CREATE INDEX retry_proposals_for_operation ON berth_retry.proposals(operation, proposed_at DESC);
 REVOKE ALL ON berth_retry.proposals FROM PUBLIC, berth_runtime, berth_retry_action;
 
+-- Only closed public reason codes survive a failed requalification.
+CREATE TABLE berth_retry.preparation_stops (
+  operation uuid PRIMARY KEY REFERENCES berth_ledger.trials,
+  reason text NOT NULL CHECK (reason IN (
+    'allowance-evidence-unqualified','credential-evidence-unqualified','cleanup-evidence-unqualified'
+  ))
+);
+REVOKE ALL ON berth_retry.preparation_stops FROM PUBLIC, berth_runtime, berth_retry_action;
+
 -- A fixed stored result classifies the only two eligible next steps. Provider
 -- absence never overrides an unsettled mutation; a reused bucket keeps its ID.
 CREATE FUNCTION berth_retry.source_qualified(t berth_ledger.trials, r berth_retry.reconciliations)
@@ -151,6 +160,22 @@ SET search_path = pg_catalog, pg_temp AS $$
     false)
 $$;
 
+CREATE FUNCTION berth_retry.credentials_qualified(binding jsonb, evidence jsonb, starts_at timestamptz)
+RETURNS boolean LANGUAGE sql
+SET search_path = pg_catalog, pg_temp AS $$
+  SELECT coalesce(
+    binding->>'tenancy' ~ '^ocid1[.]tenancy[.]oc1[.][.][A-Za-z0-9]{1,128}$'
+    AND binding->>'user' ~ '^ocid1[.]user[.]oc1[.][.][A-Za-z0-9]{1,128}$'
+    AND binding->>'fingerprint' ~ '^[0-9a-f]{2}(:[0-9a-f]{2}){15}$'
+    AND evidence->'iamReviewed' = 'true'::jsonb
+    AND CASE WHEN jsonb_typeof(evidence->'iamCheckedAt') = 'number'
+      THEN (evidence->>'iamCheckedAt')::numeric BETWEEN
+        extract(epoch FROM starts_at + interval '30 minutes' - interval '24 hours') * 1000
+        AND extract(epoch FROM clock_timestamp()) * 1000
+      ELSE false END,
+    false)
+$$;
+
 CREATE FUNCTION berth_retry.preparation_valid(
   p berth_retry.proposals, t berth_ledger.trials, r berth_retry.reconciliations
 ) RETURNS boolean LANGUAGE sql
@@ -164,9 +189,7 @@ SET search_path = pg_catalog, pg_temp AS $$
     AND p.binding->>'region' = t.region AND p.binding->>'compartment' = t.compartment
     AND p.binding->>'namespace' = t.namespace
     AND p.binding->'monitoringLimit' = '20'::jsonb AND p.binding->'neonLimit' = '64'::jsonb
-    AND p.binding->>'tenancy' ~ '^ocid1[.]tenancy[.]oc1[.][.][A-Za-z0-9]{1,128}$'
-    AND p.binding->>'user' ~ '^ocid1[.]user[.]oc1[.][.][A-Za-z0-9]{1,128}$'
-    AND p.binding->>'fingerprint' ~ '^[0-9a-f]{2}(:[0-9a-f]{2}){15}$'
+    AND berth_retry.credentials_qualified(p.binding,p.evidence,p.starts_at)
     AND (SELECT count(*) = 8 FROM jsonb_object_keys(p.binding))
     AND p.evidence->>'accountType' = 'always-free'
     AND (NOT p.evidence ? 'functionsKnownInsufficient' OR p.evidence->'functionsKnownInsufficient'='false'::jsonb)
@@ -177,20 +200,28 @@ $$;
 
 CREATE FUNCTION berth_retry.prepare_continuation(
   p_operation uuid, p_id uuid, p_starts_at timestamptz, p_binding jsonb, p_evidence jsonb
-) RETURNS void LANGUAGE plpgsql
+) RETURNS text LANGUAGE plpgsql
 SET search_path = pg_catalog, pg_temp SET lock_timeout = '1s' AS $$
 DECLARE
   t berth_ledger.trials%ROWTYPE;
   r berth_retry.reconciliations%ROWTYPE;
   p berth_retry.proposals%ROWTYPE;
-  at timestamptz := date_trunc('milliseconds',clock_timestamp());
+  at timestamptz;
+  stop_reason text;
 BEGIN
   IF current_user <> 'neondb_owner' THEN RAISE EXCEPTION 'Expected dedicated owner'; END IF;
   SELECT * INTO STRICT t FROM berth_ledger.trials WHERE operation = p_operation FOR UPDATE;
+  at := date_trunc('milliseconds',clock_timestamp());
   SELECT * INTO STRICT r FROM berth_retry.reconciliations WHERE operation = p_operation;
   IF p_id IS NULL OR p_id::text !~ '^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$'
     OR p_starts_at IS NULL OR p_starts_at < at - interval '1 minute' OR p_starts_at > at + interval '1 hour'
     OR p_starts_at <> date_trunc('milliseconds',p_starts_at)
+    OR jsonb_typeof(p_binding) IS DISTINCT FROM 'object' OR jsonb_typeof(p_evidence) IS DISTINCT FROM 'object'
+    OR octet_length(p_binding::text) > 1024 OR octet_length(p_evidence::text) > 8192
+    OR p_binding->>'region' IS DISTINCT FROM t.region
+    OR p_binding->>'compartment' IS DISTINCT FROM t.compartment
+    OR p_binding->>'namespace' IS DISTINCT FROM t.namespace
+    OR EXISTS (SELECT FROM berth_retry.proposals WHERE id = p_id)
     OR EXISTS (SELECT FROM berth_ledger.trials WHERE operation = p_id)
     OR EXISTS (SELECT FROM berth_retry.proposals WHERE operation = p_operation AND approved_at IS NOT NULL)
   THEN RAISE EXCEPTION 'Fresh continuation preparation required'; END IF;
@@ -205,21 +236,31 @@ BEGIN
   p.approve_by := least(at + interval '5 minutes', p_starts_at + interval '5 minutes');
   p.binding := p_binding;
   p.evidence := p_evidence;
-  IF NOT berth_retry.source_qualified(t,r) THEN
-    RAISE EXCEPTION 'Safe, settled reconciliation evidence is required';
+  IF NOT berth_retry.source_qualified(t,r)
+    OR r.observed_at < p_starts_at + interval '30 minutes' - interval '24 hours'
+  THEN RAISE EXCEPTION 'Safe, settled reconciliation evidence is required through the creation cutoff';
   END IF;
-  IF p_evidence->'functionsPolicy'->'manualRecoveryReady' IS DISTINCT FROM 'true'::jsonb THEN
-    RAISE EXCEPTION 'Independent cleanup readiness evidence is required';
-  END IF;
-  IF p_evidence->'iamReviewed' IS DISTINCT FROM 'true'::jsonb THEN
-    RAISE EXCEPTION 'Reviewed credential identity and effective IAM evidence are required';
-  END IF;
-  IF NOT berth_retry.preparation_valid(p,t,r) THEN
-    RAISE EXCEPTION 'Exact target binding or current Free allowance evidence did not qualify';
-  END IF;
+  stop_reason := CASE
+    WHEN p_evidence->'functionsPolicy'->'manualRecoveryReady' IS DISTINCT FROM 'true'::jsonb
+      THEN 'cleanup-evidence-unqualified'
+    WHEN NOT berth_retry.credentials_qualified(p_binding,p_evidence,p_starts_at)
+      THEN 'credential-evidence-unqualified'
+    WHEN NOT berth_retry.preparation_valid(p,t,r)
+      THEN 'allowance-evidence-unqualified'
+  END;
+
+  -- Prepare and approve serialize on the same operation row. Return a domain
+  -- stop instead of raising so the old proposal stays withdrawn on commit.
   UPDATE berth_retry.proposals SET withdrawn_at = at
     WHERE operation = p_operation AND withdrawn_at IS NULL;
+  IF stop_reason IS NOT NULL THEN
+    INSERT INTO berth_retry.preparation_stops (operation,reason) VALUES (p_operation,stop_reason)
+      ON CONFLICT (operation) DO UPDATE SET reason=excluded.reason;
+    RETURN stop_reason;
+  END IF;
   INSERT INTO berth_retry.proposals SELECT p.*;
+  DELETE FROM berth_retry.preparation_stops WHERE operation=p_operation;
+  RETURN 'prepared';
 END $$;
 
 -- Withdrawal closes new writes even after approval. Cleanup retains its own reserve.
@@ -252,12 +293,20 @@ DECLARE
   progress text;
   why text;
   original_phase text;
+  preparation record;
 BEGIN
   SELECT * INTO t FROM berth_ledger.trials WHERE operation = p_operation;
   IF NOT FOUND THEN RETURN NULL; END IF;
   SELECT * INTO r FROM berth_retry.reconciliations WHERE operation = p_operation;
-  SELECT * INTO p FROM berth_retry.proposals WHERE operation = p_operation
-    ORDER BY (approved_at IS NOT NULL) DESC, proposed_at DESC, id DESC LIMIT 1;
+  -- The selected proposal and qualification stop must share one snapshot.
+  SELECT (
+    SELECT candidate FROM berth_retry.proposals candidate WHERE operation=p_operation
+    ORDER BY (approved_at IS NOT NULL) DESC, (withdrawn_at IS NULL) DESC, proposed_at DESC, id DESC
+    LIMIT 1
+  ) AS proposal, (
+    SELECT reason FROM berth_retry.preparation_stops WHERE operation=p_operation
+  ) AS stop_reason INTO preparation;
+  p := preparation.proposal;
   IF p.approved_at IS NOT NULL THEN
     SELECT * INTO STRICT child FROM berth_ledger.trials WHERE operation = p.id;
     SELECT admitted INTO active FROM berth_executor.admission WHERE operation = p.id;
@@ -311,6 +360,8 @@ BEGIN
     RETURN berth_retry.continuation_stop(p_operation,
       CASE WHEN r.scope='original-window' THEN 'reconciliation-required' ELSE 'source-not-safe' END);
   END IF;
+  IF preparation.stop_reason IS NOT NULL
+  THEN RETURN berth_retry.continuation_stop(p_operation,preparation.stop_reason); END IF;
   IF p.id IS NULL THEN RETURN berth_retry.continuation_stop(p_operation,'preparation-required'); END IF;
   IF p.withdrawn_at IS NOT NULL THEN RETURN berth_retry.continuation_stop(p_operation,'preparation-withdrawn'); END IF;
   IF clock_timestamp() >= p.approve_by THEN RETURN berth_retry.continuation_stop(p_operation,'proposal-expired'); END IF;
@@ -539,6 +590,7 @@ REVOKE ALL ON FUNCTION berth_retry.begin_reconciliation(uuid,uuid), berth_retry.
   berth_retry.enforce_retained_bucket_scope(), berth_retry.close_unactivated(uuid),
   berth_retry.assert_execution_scope(uuid),
   berth_retry.source_qualified(berth_ledger.trials,berth_retry.reconciliations),
+  berth_retry.credentials_qualified(jsonb,jsonb,timestamptz),
   berth_retry.preparation_valid(berth_retry.proposals,berth_ledger.trials,berth_retry.reconciliations),
   berth_retry.prepare_continuation(uuid,uuid,timestamptz,jsonb,jsonb),
   berth_retry.withdraw_continuation(uuid), berth_retry.continuation_stop(uuid,text),

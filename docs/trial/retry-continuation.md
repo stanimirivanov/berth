@@ -22,9 +22,11 @@ Both routes require a live Retry session. The status payload has the original
 
 - `checking-provider` or `needs-attention` may report a fixed `reason` and
   `ownerProcedure`. **Preparation required** means no qualified proposal has
-  been staged. Review the allowance, credential and independent cleanup
-  checklist below. Separate reasons identify expired or withdrawn proposals,
-  an occupied executor slot, changed preparation and unsafe original evidence.
+  been staged. A failed qualification reports `allowance-evidence-unqualified`,
+  `credential-evidence-unqualified`, or `cleanup-evidence-unqualified` so the owner
+  can revisit that part of the checklist. The API returns a reason code and
+  owner procedure. The preparation inputs remain private. Other reasons cover
+  expiry, withdrawal, an occupied slot, changed preparation and unsafe evidence.
 - `continuing-provisioning` with `scope: original-window` shows the original
   `creationCutoff` and `expiresAt`. Existing deliveries use the original
   admission, cutoff and normal allowance. Retry creates no new authority and
@@ -87,9 +89,12 @@ qualified proposal. It cannot prepare, withdraw, admit, or dispatch it.
    with the original target, explicit credential identity, 20 Monitoring and
    64 application units, and the new operation and window in `functionsPolicy`.
    Keep the original absence observation within the 24-hour evidence horizon
-   through the new creation cutoff. Replacing unapproved preparation withdraws
-   the earlier proposal. An expired or interrupted reconciliation cannot be
-   treated as absence.
+   through the new creation cutoff. The call returns `prepared` or a
+   qualification stop reason. Commit either result. A qualification stop
+   withdraws the prior unapproved proposal in the same transaction and makes
+   the reason available through the status endpoint. A successful replacement
+   clears that stop and becomes the only approvable proposal. An expired or
+   interrupted reconciliation cannot be treated as absence.
 4. Approve the displayed proposal using the Retry session. Commit records and
    prepares exactly one child operation. Activation still requires the
    existing bound executor's credential checks and signed preview and submit
