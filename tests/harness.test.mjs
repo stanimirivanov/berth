@@ -708,7 +708,8 @@ test("Inventory HTTP uses its read port and leaves database wiring to its entry 
       'import "node:crypto"; import type { InventoryReader } from "./contract.ts";',
     "src/application/inventory/contract.ts": 'import "effect/Schema";',
     "src/application/retained-trial-ledger/inventory.ts":
-      'import "pg"; import "../inventory/contract.ts"; import "./sql.ts";',
+      'import "./hosted-postgres.ts"; import "../inventory/contract.ts"; import "./sql.ts";',
+    "src/application/retained-trial-ledger/hosted-postgres.ts": 'import "pg";',
     "src/application/retained-trial-ledger/sql.ts": "",
   };
   assert.deepEqual(analyze(files), []);
@@ -728,16 +729,18 @@ test("Inventory HTTP uses its read port and leaves database wiring to its entry 
 });
 
 test("History and Retry composition can use retained capabilities but cannot import a SQL driver", () => {
-  for (const [capability, entry, operations, compose] of [
+  for (const [capability, entry, connection, operations, compose] of [
     [
       "history",
       "historyReader",
+      "../../storage/postgres/runtime-access.js",
       'return { list: () => db.query("SELECT berth_executor.history_page(null,20)") };',
       "historyReader({}).list();",
     ],
     [
       "retry",
       "retainedRetrySession",
+      "./hosted-postgres.js",
       'return (work) => work({ ledger: { status: (id) => db.query("SELECT berth_retry.status($1)", [id]) } });',
       'retainedRetrySession({})(({ ledger }) => ledger.status("fixture"));',
     ],
@@ -745,10 +748,13 @@ test("History and Retry composition can use retained capabilities but cannot imp
     const runtime = `src/application/${capability}/runtime.ts`;
     const adapter = `src/application/retained-trial-ledger/${capability}.ts`;
     const sources = {
-      [adapter]: `import { Client } from "pg";
+      "src/application/retained-trial-ledger/hosted-postgres.ts":
+        'import "pg";',
+      "src/storage/postgres/runtime-access.ts": "",
+      [adapter]: `import { openDatabase } from "${connection}";
       /** Provide one retained operation. */
       export function ${entry}(_env) {
-        const db = new Client();
+        const db = openDatabase();
         ${operations}
       }`,
       [runtime]: `import { ${entry} } from "../retained-trial-ledger/${capability}.js"; ${compose}`,

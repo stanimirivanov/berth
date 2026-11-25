@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Socket } from "node:net";
 import test, { type TestContext } from "node:test";
+import { setTimeout } from "node:timers/promises";
 import { getCACertificates, setDefaultCACertificates } from "node:tls";
 import { inventoryReader } from "../src/application/retained-trial-ledger/inventory.ts";
 import { retainedRetrySession } from "../src/application/retained-trial-ledger/retry.ts";
@@ -34,18 +35,26 @@ async function runAdapter(
 ) {
   const fixture = await postgresAuthenticationFixture(identity, mode);
   const authorities = getCACertificates("default");
+  t.after(async () => {
+    setDefaultCACertificates(authorities);
+    await fixture.close();
+  });
   setDefaultCACertificates(trusted ? [identity.cert] : []);
   t.mock.method(
     Socket.prototype,
     "connect",
     function (this: Socket, ...args: unknown[]) {
-      return Reflect.apply(
-        originalConnect,
-        this,
-        args[0] === 5432 && args[1] === fixtureHost
-          ? [fixture.port, "127.0.0.1"]
-          : args,
+      const hostedFixture =
+        args.length === 2 && args[0] === 5432 && args[1] === fixtureHost;
+      const loopbackFixture =
+        args.length === 2 &&
+        args[0] === fixture.port &&
+        args[1] === "127.0.0.1";
+      assert.ok(
+        hostedFixture || loopbackFixture,
+        "Unexpected connection in the PostgreSQL authentication fixture",
       );
+      return Reflect.apply(originalConnect, this, [fixture.port, "127.0.0.1"]);
     },
   );
 
@@ -54,15 +63,17 @@ async function runAdapter(
   );
   if (required) url.searchParams.set("channel_binding", "require");
 
-  const request = adapters[adapter](url.href).finally(async () => {
-    setDefaultCACertificates(authorities);
-    await fixture.close();
-  });
-  return { fixture, request };
+  return { fixture, request: adapters[adapter](url.href) };
 }
 
 for (const adapter of ["Inventory", "Retry"] as const) {
-  for (const mode of ["plain-scram", "trust", "cleartext", "md5"] as const) {
+  for (const mode of [
+    "plain-scram",
+    "trust",
+    "cleartext",
+    "md5",
+    "unsolicited-sasl-challenge",
+  ] as const) {
     test(`${adapter} rejects ${mode} when channel binding is required before sending credentials or SQL`, async (t) => {
       const { fixture, request } = await runAdapter(t, adapter, mode, true);
 
@@ -71,6 +82,25 @@ for (const adapter of ["Inventory", "Retry"] as const) {
       assert.deepEqual(fixture.sql, []);
     });
   }
+
+  test(`${adapter} closes a rejected connection even when the peer never answers Terminate`, async (t) => {
+    const { fixture, request } = await runAdapter(
+      t,
+      adapter,
+      "stalled-termination",
+      true,
+    );
+    const deadline = setTimeout(1500, undefined, { ref: false }).then(() =>
+      assert.fail("rejected database connection did not close within 1500 ms"),
+    );
+
+    await assert.rejects(
+      Promise.race([request, deadline]),
+      /requires SCRAM-SHA-256-PLUS/,
+    );
+    assert.equal(fixture.replies, 0);
+    assert.deepEqual(fixture.sql, []);
+  });
 
   for (const [mode, error] of [
     ["incomplete-plus", /requires SCRAM-SHA-256-PLUS/],

@@ -8,7 +8,7 @@ import {
 } from "node:crypto";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { createServer } from "node:net";
+import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSecureContext, TLSSocket } from "node:tls";
@@ -17,8 +17,10 @@ export const fixtureHost = "ep-fixture.aws.neon.tech";
 export const fixturePassword = "disposable-test-password";
 export type Authentication =
   | "plain-scram"
+  | "stalled-termination"
   | "scram-plus"
   | "incomplete-plus"
+  | "unsolicited-sasl-challenge"
   | "invalid-plus"
   | "trust"
   | "cleartext"
@@ -35,28 +37,34 @@ export function fixtureIdentity() {
     const cert = join(directory, "certificate");
     const key = join(directory, "key");
 
-    execFileSync(
-      "openssl",
-      [
-        "req",
-        "-x509",
-        "-newkey",
-        "rsa:2048",
-        "-noenc",
-        "-sha256",
-        "-days",
-        "1",
-        "-subj",
-        "/CN=Berth test",
-        "-addext",
-        `subjectAltName=DNS:${fixtureHost}`,
-        "-keyout",
-        key,
-        "-out",
-        cert,
-      ],
-      { stdio: "ignore" },
-    );
+    try {
+      execFileSync(
+        "openssl",
+        [
+          "req",
+          "-x509",
+          "-newkey",
+          "rsa:2048",
+          "-noenc",
+          "-sha256",
+          "-days",
+          "1",
+          "-subj",
+          "/CN=Berth test",
+          "-addext",
+          `subjectAltName=DNS:${fixtureHost}`,
+          "-keyout",
+          key,
+          "-out",
+          cert,
+        ],
+        { stdio: "ignore" },
+      );
+    } catch {
+      throw Error(
+        "PostgreSQL authentication fixture needs OpenSSL 3 on PATH to generate its TLS identity",
+      );
+    }
 
     return { cert: readFileSync(cert, "utf8"), key: readFileSync(key, "utf8") };
   } finally {
@@ -122,14 +130,23 @@ export async function postgresAuthenticationFixture(
   const mechanisms: string[] = [];
   const sql: string[] = [];
   let replies = 0;
-  const server = createServer((raw) => {
-    raw.once("data", (sslRequest) => {
+  const connections = new Set<Socket>();
+  const stallTermination = mode === "stalled-termination";
+  const server = createServer({ allowHalfOpen: stallTermination }, (raw) => {
+    connections.add(raw);
+    raw.once("close", () => connections.delete(raw));
+    raw.on("readable", function readSslRequest() {
+      const sslRequest = raw.read(8);
+      if (sslRequest === null) return;
+      raw.off("readable", readSslRequest);
       assert.deepEqual(sslRequest, Buffer.concat([int32(8), int32(80877103)]));
+      assert.equal(raw.readableLength, 0);
       raw.write("S");
       const socket = new TLSSocket(raw, {
         isServer: true,
         secureContext: context,
       });
+      socket.allowHalfOpen = stallTermination;
       socket.on("error", () => socket.destroy());
 
       let startup = true;
@@ -152,12 +169,16 @@ export async function postgresAuthenticationFixture(
             if (mode === "trust") socket.write(ready);
             else if (mode === "cleartext") socket.write(auth(3));
             else if (mode === "md5") socket.write(auth(5, Buffer.alloc(4, 1)));
+            else if (mode === "unsolicited-sasl-challenge")
+              socket.write(
+                auth(11, Buffer.from("r=fixture,s=Zml4dHVyZQ==,i=4096")),
+              );
             else
               socket.write(
                 auth(
                   10,
                   Buffer.from(
-                    mode === "plain-scram"
+                    mode === "plain-scram" || stallTermination
                       ? "SCRAM-SHA-256\0\0"
                       : "SCRAM-SHA-256\0SCRAM-SHA-256-PLUS\0\0",
                   ),
@@ -208,7 +229,7 @@ export async function postgresAuthenticationFixture(
               );
             }
           } else if (tag === "X") {
-            socket.end();
+            if (!stallTermination) socket.end();
           } else {
             sql.push(data.subarray(0, -1).toString());
             socket.write(firstQueryError);
@@ -228,6 +249,9 @@ export async function postgresAuthenticationFixture(
     get replies() {
       return replies;
     },
-    close: () => server[Symbol.asyncDispose](),
+    close: () => {
+      for (const connection of connections) connection.destroy();
+      return server[Symbol.asyncDispose]();
+    },
   };
 }
