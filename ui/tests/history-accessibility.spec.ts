@@ -52,7 +52,7 @@ test("History accessibility: recoverable refresh error", async ({ page }) => {
   );
   await page.getByRole("button", { name: "Refresh history" }).click();
   await expect(
-    page.getByRole("alert", { name: "Review inbox errors" }),
+    page.locator("#history-list-errors[aria-live=assertive]"),
   ).toContainText("History is unavailable.");
   await expect(
     page.getByRole("button", { name: "Retry", exact: true }),

@@ -365,7 +365,9 @@ test("history has loading, empty, unavailable and unauthorized states without le
   });
   await openHistory(page);
   const updates = page.locator("#history-list-updates[aria-live=polite]");
-  const errors = page.getByRole("alert", { name: "Review inbox errors" });
+  const errors = page.locator("#history-list-errors[aria-live=assertive]");
+  await expect(updates).toHaveAttribute("aria-atomic", "true");
+  await expect(errors).toHaveAttribute("aria-atomic", "true");
   const originalUpdates = await updates.elementHandle();
   const originalErrors = await errors.elementHandle();
   const inbox = page.getByRole("region", { name: "Recorded operations" });
@@ -435,13 +437,13 @@ test("returning to history preserves a failed first read until the owner retries
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
   await expect(
-    page.getByRole("alert", { name: "Review inbox errors" }),
+    page.locator("#history-list-errors[aria-live=assertive]"),
   ).toContainText("History is unavailable.");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await navigation.getByRole("link", { name: "Infrastructure" }).click();
   await navigation.getByRole("link", { name: "Operation history" }).click();
   await expect(
-    page.getByRole("alert", { name: "Review inbox errors" }),
+    page.locator("#history-list-errors[aria-live=assertive]"),
   ).toContainText("History is unavailable.");
   expect(requests).toHaveLength(1);
 });
@@ -644,7 +646,9 @@ test("detail refresh retains its timestamp on failure and clears only detail on 
   });
   await page.goto(`/operations/${first}`);
   const updates = page.locator("#history-detail-updates[aria-live=polite]");
-  const errors = page.getByRole("alert", { name: "Operation detail errors" });
+  const errors = page.locator("#history-detail-errors[aria-live=assertive]");
+  await expect(updates).toHaveAttribute("aria-atomic", "true");
+  await expect(errors).toHaveAttribute("aria-atomic", "true");
   const originalUpdates = await updates.elementHandle();
   const originalErrors = await errors.elementHandle();
   await page.getByLabel("History access token").fill("h".repeat(40));

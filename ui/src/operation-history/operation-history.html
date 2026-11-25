@@ -51,11 +51,12 @@
       </div>
     }
   </section>
-  <!-- Keep announcements outside the busy panes. Orca treats status roles as status bars. -->
-  <p class="history-announcement" id="history-list-updates" aria-live="polite" aria-atomic="true">{{ listStatus() }}</p>
-  <p class="history-announcement" role="alert" aria-label="Review inbox errors">{{ listError() }}</p>
-  <p class="history-announcement" id="history-detail-updates" aria-live="polite" aria-atomic="true">{{ detailStatus() }}</p>
-  <p class="history-announcement" role="alert" aria-label="Operation detail errors">{{ detailError() }}</p>
+  <!-- Keep live regions outside busy panes. Gecko exposes these divs as sections,
+       allowing Orca to recognise their live updates during concurrent pane changes. -->
+  <div class="history-announcement" id="history-list-updates" aria-live="polite" aria-atomic="true">{{ listStatus() }}</div>
+  <div class="history-announcement" id="history-list-errors" aria-live="assertive" aria-atomic="true">{{ listError() }}</div>
+  <div class="history-announcement" id="history-detail-updates" aria-live="polite" aria-atomic="true">{{ detailStatus() }}</div>
+  <div class="history-announcement" id="history-detail-errors" aria-live="assertive" aria-atomic="true">{{ detailError() }}</div>
   @if (owner.canRead()) {
     <div class="inbox-layout" [class.has-detail]="showDetail()">
       <section class="inbox" [attr.aria-busy]="store.listLoading()" aria-label="Recorded operations">
