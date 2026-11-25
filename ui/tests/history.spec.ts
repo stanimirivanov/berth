@@ -45,7 +45,9 @@ test("the shell marks the active page and opens the existing history access scre
   await expect(
     page.getByRole("heading", { name: "Infrastructure" }),
   ).toBeVisible();
-  await expect(page.getByText("Inventory is not available yet.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "OCI Object Storage bucket" }),
+  ).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(navigation).toHaveCSS("display", "flex");
   const infrastructure = navigation.getByRole("link", {

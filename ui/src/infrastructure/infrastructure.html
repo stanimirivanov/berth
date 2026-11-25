@@ -1,3 +1,89 @@
 <h1>Infrastructure</h1>
-<p>Inventory is not available yet.</p>
 <p><a href="/operations" routerLink="/operations">Open operation history</a></p>
+<section class="inventory-access" aria-label="Inventory access">
+  @if (owner.status() === "forbidden") {
+    <p role="alert">Access to Infrastructure is blocked on this site. Open the configured Berth URL for your deployment.</p>
+  } @else if (!owner.canRead()) {
+    @if (owner.status() === "unauthorized") {
+      <p role="alert">Access denied. Enter a valid owner access token.</p>
+    } @else if (owner.status() === "invalid") {
+      <p role="alert">Enter a valid owner access token.</p>
+    }
+    <form (submit)="connect($event)">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Owner access token</mat-label>
+        <input #tokenInput matInput type="password" autocomplete="off" maxlength="128" spellcheck="false"
+          [value]="token()" (input)="token.set(tokenInput.value)" />
+      </mat-form-field>
+      <button mat-flat-button type="submit">Connect</button>
+    </form>
+  } @else {
+    <p>{{ owner.status() === "verified" ? "Owner access connected" : "Owner access has not been verified." }}</p>
+    <button mat-button type="button" (click)="owner.disconnect()">Disconnect</button>
+  }
+</section>
+
+@for (offering of offerings; track offering.id) {
+  <section [attr.aria-labelledby]="offering.id">
+  <mat-card class="inventory-offering" appearance="outlined">
+    <header class="offering-header">
+      <h2 [id]="offering.id">{{ offering.title }}</h2>
+      <p><strong>Trial feasibility</strong> Partial / no-go</p>
+    </header>
+    <dl class="offering-meters">
+      <div><dt>Usage</dt><dd>Not yet available</dd></div>
+      <div><dt>Cost</dt><dd>Not yet available</dd></div>
+      <div><dt>Free-plan headroom</dt><dd>Not yet available</dd></div>
+    </dl>
+    @if (owner.canRead()) {
+      @if (store.loading(); as loading) {
+        <p role="status">{{ loading === "more" ? "Loading more instances…" : "Loading inventory…" }}</p>
+        <mat-progress-bar mode="indeterminate" aria-label="Inventory read progress" />
+      }
+      @if (store.failure(); as failure) {
+        <p role="alert">
+          @if (failure.kind === "more") {
+            More instances could not be loaded.
+          } @else if (store.snapshot()) {
+            Inventory refresh failed. The displayed inventory may be out of date.
+          } @else {
+            Inventory unavailable.
+          }
+        </p>
+      }
+      @if (store.snapshot(); as snapshot) {
+        @if (snapshot.offering === offering.id) {
+          <p class="fetched">First page fetched <time [attr.datetime]="snapshot.fetchedAt">{{ snapshot.fetchedAt | date: "medium" }}</time></p>
+          @if (snapshot.unrefreshed.length) {
+            <p class="coverage">Some previously loaded instances have yet to be refreshed. Show more to continue.</p>
+          }
+          @if (snapshot.coverage === "incomplete") {
+            <p class="coverage">Inventory coverage incomplete</p>
+          } @else if (!store.rows().length) {
+            <p>No known instances</p>
+          }
+          @if (store.rows().length) {
+            <mat-nav-list class="inventory-instances" aria-label="Managed instances">
+              @for (row of store.rows(); track row.instance) {
+                <berth-inventory-instance [instance]="row" />
+              }
+            </mat-nav-list>
+          }
+        }
+      }
+      <div class="inventory-actions">
+        @if (store.failure()) {
+          <button mat-stroked-button type="button" (click)="store.retry()">Retry</button>
+        } @else if (store.snapshot()) {
+          <button mat-stroked-button type="button" [disabled]="!!store.loading()" (click)="store.refresh()">Refresh inventory</button>
+        }
+        @if (store.snapshot()?.next && !store.failure()) {
+          <button mat-button type="button" [disabled]="!!store.loading()" (click)="store.more()">Show more</button>
+        }
+      </div>
+    } @else {
+      <p>Inventory requires Owner access.</p>
+    }
+  </mat-card>
+  </section>
+}
