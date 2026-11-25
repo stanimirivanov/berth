@@ -10,17 +10,15 @@ criteria.
 - Migration `008_operation_history.sql` requires the dedicated `neondb_owner`
   connection to `neondb`, after migrations 001/002. Installation is an explicit
   owner action; this PR installs nothing on Neon and changes no historical rows.
-- Use a restricted `berth_runtime` connection with a session statement timeout
-  established **before** queries and a client/network deadline. The shared SQL
-  port assumes bounded connections; function-local settings alone are not a hard
-  end-to-end deadline. The History HTTP handler uses this adapter within a
-  read-only transaction.
-- `retainedHistoryLedger(db).list()` returns `{ items, next }`, default 20 records,
+- The retained adapter creates a restricted `berth_runtime` connection for each
+  read. It sets a statement timeout and a client deadline, then checks the login
+  in a read-only transaction before accessing the History projection.
+- `historyReader(env).list()` returns `{ items, next }`, default 20 records,
   maximum 50. Rows sort by start timestamp descending, then operation UUID
   descending. Pass `next` as the next call's `before` cursor. The cursor is the
   last included operation only when another row exists. Unknown/malformed cursors
   and invalid limits fail closed; there is no silent restart or offset scan.
-- `retainedHistoryLedger(db).detail(operation)` returns the same allowlisted record, or null when
+- `historyReader(env).detail(operation)` returns the same allowlisted record, or null when
   absent. Neither method checks execution expiry or creation headroom. There is
   no new execution authorization or cleanup bypass.
 - An empty page is `{ items: [], next: null }`. Missing executor work produces a

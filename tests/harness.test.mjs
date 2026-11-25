@@ -684,6 +684,47 @@ test("Inventory HTTP uses its read port and leaves database wiring to its entry 
   }
 });
 
+test("History and Retry composition can use retained capabilities but cannot import a SQL driver", () => {
+  for (const [capability, entry, operations, compose] of [
+    [
+      "history",
+      "historyReader",
+      'return { list: () => db.query("SELECT berth_executor.history_page(null,20)") };',
+      "historyReader({}).list();",
+    ],
+    [
+      "retry",
+      "retainedRetrySession",
+      'return (work) => work({ ledger: { status: (id) => db.query("SELECT berth_retry.status($1)", [id]) } });',
+      'retainedRetrySession({})(({ ledger }) => ledger.status("fixture"));',
+    ],
+  ]) {
+    const runtime = `src/application/${capability}/runtime.ts`;
+    const adapter = `src/application/retained-trial-ledger/${capability}.ts`;
+    const sources = {
+      [adapter]: `import { Client } from "pg";
+      /** Provide one retained operation. */
+      export function ${entry}(_env) {
+        const db = new Client();
+        ${operations}
+      }`,
+      [runtime]: `import { ${entry} } from "../retained-trial-ledger/${capability}.js"; ${compose}`,
+    };
+    assert.ok(
+      analyze({
+        [adapter]: "",
+        [runtime]:
+          'import { Client } from "pg"; const db = new Client(); db.query(["SELECT ", "berth_executor", ".history_page(null,20)"].join(""));',
+      }).some(
+        (finding) =>
+          finding.file === runtime && finding.rule === "architecture",
+      ),
+      runtime,
+    );
+    assert.deepEqual(analyze(sources), []);
+  }
+});
+
 test("history boundaries permit only the read composition and reject provider or execution coupling", () => {
   const adapter = "src/application/retained-trial-ledger/";
   const sources = {

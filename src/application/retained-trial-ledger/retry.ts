@@ -1,3 +1,4 @@
+import { Client, type ClientConfig } from "pg";
 import {
   decodeApproval,
   decodeContinuation,
@@ -12,13 +13,59 @@ import {
 import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
 /** A checked connection is opened per authenticated retry request. */
-export interface RetryConnection extends RetainedTrialDatabase {
+interface RetryConnection extends RetainedTrialDatabase {
   connect(): Promise<unknown>;
   end(): Promise<unknown>;
 }
 
+/** Environment for the separately scoped Retry database login. */
+type Environment = Record<string, string | undefined>;
+
+/** Run work with checked Retry operations for the duration of one invocation. */
+export type RetainedRetrySession = <T>(
+  work: (operations: {
+    ledger: RetryLedger;
+    continuation: RetryContinuation;
+  }) => Promise<T>,
+) => Promise<T>;
+
+/** Construct a strict TLS connection for the separate retry login. URL options cannot override TLS. */
+function connection(env: Environment): ClientConfig {
+  const url = new URL(env.BERTH_RETRY_DATABASE_URL ?? "");
+  if (
+    url.protocol !== "postgresql:" ||
+    url.username !== "berth_retry_runtime" ||
+    !url.password ||
+    url.pathname !== "/neondb" ||
+    url.hash ||
+    (url.port && url.port !== "5432") ||
+    !/^ep-[a-z0-9-]+\.[a-z0-9.-]+\.neon\.tech$/.test(url.hostname) ||
+    [...url.searchParams].some(
+      ([key, value]) =>
+        url.searchParams.getAll(key).length !== 1 ||
+        !(
+          (key === "sslmode" && ["require", "verify-full"].includes(value)) ||
+          (key === "channel_binding" && value === "require")
+        ),
+    )
+  )
+    throw Error("Retry database unavailable");
+  return {
+    host: url.hostname,
+    port: 5432,
+    database: "neondb",
+    user: url.username,
+    password: decodeURIComponent(url.password),
+    ssl: { rejectUnauthorized: true },
+    enableChannelBinding: true,
+    connectionTimeoutMillis: 3000,
+    statement_timeout: 2500,
+    query_timeout: 4000,
+  };
+}
+
 /** Bind the Retry interface to its four guarded SQL routines, using only the retry login. */
-export function retainedRetryLedger(db: RetainedTrialDatabase): RetryLedger {
+function retainedRetryLedger(db: RetainedTrialDatabase): RetryLedger {
   return {
     /** Status never starts work. */
     async status(operation) {
@@ -64,7 +111,7 @@ export function retainedRetryLedger(db: RetainedTrialDatabase): RetryLedger {
 }
 
 /** Project retained continuation status or atomically record a specified approval. */
-export function retainedRetryContinuation(
+function retainedRetryContinuation(
   db: RetainedTrialDatabase,
 ): RetryContinuation {
   return async (operation, proposal) =>
@@ -86,7 +133,7 @@ export function retainedRetryContinuation(
 }
 
 /** Reject broad grants or a different login before a hosted action can use SQL. */
-export async function assertRetainedRetryRole(db: RetainedTrialDatabase) {
+async function assertRetainedRetryRole(db: RetainedTrialDatabase) {
   const result = await db.query(
     `SELECT
     current_user = 'berth_retry_runtime' AND session_user = current_user
@@ -131,4 +178,25 @@ export async function assertRetainedRetryRole(db: RetainedTrialDatabase) {
   );
   if (result.rows[0]?.allowed !== true)
     throw Error("Retry database unavailable");
+}
+
+/** Own the client and role check for each Retry invocation, including failed work. */
+export function retainedRetrySession(
+  env: Environment,
+  database: (config: ClientConfig) => RetryConnection = (config) =>
+    new Client(config),
+): RetainedRetrySession {
+  return async (work) => {
+    const db = database(connection(env));
+    try {
+      await db.connect();
+      await assertRetainedRetryRole(db);
+      return await work({
+        ledger: retainedRetryLedger(db),
+        continuation: retainedRetryContinuation(db),
+      });
+    } finally {
+      await db.end();
+    }
+  };
 }
