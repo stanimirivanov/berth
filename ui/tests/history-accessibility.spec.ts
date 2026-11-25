@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { first, item } from "./history-fixture";
 
 /** Check the rendered document against axe's WCAG 2.2 A and AA rules. */
-async function expectAccessible(page: Page) {
+async function expectNoAxeViolations(page: Page) {
   const { violations } = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .analyze();
@@ -13,7 +13,7 @@ async function expectAccessible(page: Page) {
 test("History accessibility: access prompt", async ({ page }) => {
   await page.goto("/operations");
   await expect(page.getByLabel("History access token")).toBeVisible();
-  await expectAccessible(page);
+  await expectNoAxeViolations(page);
 });
 
 /** Open a populated Review inbox with a synthetic retained operation. */
@@ -29,7 +29,7 @@ async function openReviewInbox(page: Page) {
 
 test("History accessibility: populated Review inbox", async ({ page }) => {
   await openReviewInbox(page);
-  await expectAccessible(page);
+  await expectNoAxeViolations(page);
 });
 
 test("History accessibility: selected operation detail", async ({ page }) => {
@@ -42,7 +42,7 @@ test("History accessibility: selected operation detail", async ({ page }) => {
   await expect(
     detail.getByRole("heading", { name: "Recorded lifecycle state" }),
   ).toBeVisible();
-  await expectAccessible(page);
+  await expectNoAxeViolations(page);
 });
 
 test("History accessibility: recoverable refresh error", async ({ page }) => {
@@ -58,5 +58,5 @@ test("History accessibility: recoverable refresh error", async ({ page }) => {
     page.getByRole("button", { name: "Retry", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: first })).toBeVisible();
-  await expectAccessible(page);
+  await expectNoAxeViolations(page);
 });

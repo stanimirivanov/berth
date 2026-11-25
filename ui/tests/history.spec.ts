@@ -789,9 +789,7 @@ test("the Review inbox groups attention separately and leads detail with every r
     operation.getByText(/Phase: cleanup · Unresolved mutations: 1/),
   ).toBeVisible();
   await expect(operation).toHaveAccessibleName(
-    new RegExp(
-      `^${first} active .*UTC Phase: cleanup · Unresolved mutations: 1$`,
-    ),
+    `${first} active Nov 20, 2026, 6:50:00 AM UTC Phase: cleanup · Unresolved mutations: 1`,
   );
   await expect(operation).toHaveAttribute("href", `/operations/${first}`);
   await operation.focus();
@@ -1040,6 +1038,7 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
   expect(pagesHeaders).toContain(`Content-Security-Policy: ${policy}\n`);
   const token = page.getByLabel("History access token");
   const detail = page.getByRole("region", { name: "Selected operation" });
+  const updates = page.locator("#history-detail-updates[aria-live=polite]");
   const detailHeading = detail.getByRole("heading", {
     name: "Operation details",
   });
@@ -1075,7 +1074,6 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
     await expect(detailHeading).toHaveAccessibleDescription(
       "Loading operation details…",
     );
-    const updates = page.locator("#history-detail-updates[aria-live=polite]");
     await expect(detail).toHaveAttribute("aria-busy", "true");
     await expect(updates).toHaveText("Loading operation details…");
     expect(
@@ -1089,6 +1087,7 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
     detailReply.resolve();
   }
 
+  await expect(updates).toHaveText("Operation details updated.");
   await expect(detail.getByText(first, { exact: true })).toBeVisible();
   await expect(detailHeading).not.toHaveAttribute("aria-describedby");
   await expect

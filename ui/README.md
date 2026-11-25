@@ -66,10 +66,13 @@ pnpm --dir ui exec playwright install firefox
 pnpm test:ui history.spec.ts --browser firefox --debug -g 'Material access on a saved link|loading, empty, unavailable|detail refresh retains|malformed operation links|returning from desktop detail'
 ```
 
-Step through the scenarios in Playwright Inspector. Give the browser window
-focus before each interaction. Listen to speech or read the screen reader's
-speech output. Pause at the assertions after each action to observe the result
-before stepping forward.
+Use **Step over** in Playwright Inspector until it pauses at an assertion
+for the state you want to observe. Give the browser window focus and listen
+to the announcement or read the screen reader's speech output. On the saved
+link, stop at the loading announcement assertion while the response is held.
+Then step to the `Operation details updated.` assertion and stay paused while
+the browser receives the released response. Finish listening before resuming,
+since the test closes the page when it ends.
 
 | Scenario | What to observe |
 | --- | --- |

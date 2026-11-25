@@ -83,6 +83,10 @@ the first-release fallback.
    connection. Use `BERTH_HISTORY_TOKEN` and `BERTH_INVENTORY_TOKEN` for distinct
    service credentials. Keep owner credentials out of every deployed binding.
    [Neon Function environment variables](https://neon.com/docs/compute/functions/environment-variables)
+4. Complete the automated and desktop screen-reader checks for the exact
+   candidate and record the results with the release evidence before requesting
+   upload approval. Follow the
+   [History accessibility qualification](../../ui/README.md#history-accessibility-qualification).
 
 History enters a read-only transaction and calls only the bounded History page
 and detail projections. Its `berth_runtime` login still has retained executor
