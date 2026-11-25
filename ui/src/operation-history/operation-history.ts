@@ -75,10 +75,34 @@ export class OperationHistory {
         ))
     );
   });
+  protected readonly emptyListMessage = "No recorded operations.";
   protected readonly emptyList = computed(
     () => this.store.list()?.items.length === 0,
   );
+  protected readonly listStatus = computed(() => {
+    if (this.store.listLoading()) {
+      return "Loading operation history…";
+    }
+    if (!this.store.listReadSucceeded()) {
+      return "";
+    }
+    return this.emptyList()
+      ? this.emptyListMessage
+      : "Operation history updated.";
+  });
+  protected readonly listError = computed(() => {
+    if (!this.store.listFailure()) {
+      return "";
+    }
+    const message =
+      "History is unavailable. Retry when the read service is available.";
+    return this.store.list()
+      ? `${message} Displayed data may be out of date.`
+      : message;
+  });
   protected readonly showDetail = computed(() => this.operation() !== null);
+  private readonly invalidHeading =
+    viewChild<ElementRef<HTMLElement>>("invalidHeading");
   private readonly inboxHeading =
     viewChild<ElementRef<HTMLElement>>("inboxHeading");
   private readonly detailHeading =
@@ -118,6 +142,34 @@ export class OperationHistory {
   protected readonly detail = computed(() => {
     const result = this.store.detail();
     return result?.record.operation === this.operation() ? result : null;
+  });
+  protected readonly detailLoadingMessage = "Loading operation details…";
+  private readonly detailLoadingReadyFor = signal<string | null>(null);
+  protected readonly detailStatus = computed(() => {
+    if (!this.showDetail() || !this.owner.canRead()) {
+      return "";
+    }
+    if (this.detailLoading()) {
+      return this.detailLoadingReadyFor() === this.operation()
+        ? this.detailLoadingMessage
+        : "";
+    }
+    return this.detail() && !this.detailFailure()
+      ? "Operation details updated."
+      : "";
+  });
+  protected readonly detailError = computed(() => {
+    const failure = this.detailFailure();
+    if (failure === "missing") {
+      return "Operation not found.";
+    }
+    if (failure === "unavailable") {
+      const message = "Operation details are unavailable.";
+      return this.detail()
+        ? `${message} Displayed data may be out of date.`
+        : message;
+    }
+    return "";
   });
   protected readonly reasons = computed(() => {
     const detail = this.detail();
@@ -181,13 +233,45 @@ export class OperationHistory {
       }
     });
     afterRenderEffect(() => this.restoreFocus());
+    afterRenderEffect((onCleanup) => {
+      const operation = this.operation();
+      if (!operation || !this.detailHeading()) {
+        this.detailLoadingReadyFor.set(null);
+        return;
+      }
+      if (this.store.operation() !== operation) {
+        return;
+      }
+      if (!this.store.detailLoading()) {
+        this.detailLoadingReadyFor.set(operation);
+        return;
+      }
+      if (untracked(this.detailLoadingReadyFor) === operation) {
+        return;
+      }
+      this.detailLoadingReadyFor.set(null);
+      // Let assistive technology process heading focus before announcing loading.
+      const timer = setTimeout(() => {
+        if (
+          this.operation() === operation &&
+          this.store.operation() === operation &&
+          this.store.detailLoading() &&
+          this.owner.canRead() &&
+          !this.invalidOperation()
+        ) {
+          this.detailLoadingReadyFor.set(operation);
+        }
+      }, 100);
+      onCleanup(() => clearTimeout(timer));
+    });
   }
 
   /** Restore focus after route and pane state agree, including a regrouped row. */
   private restoreFocus() {
-    if (!this.owner.canRead() || this.invalidOperation()) {
+    if (this.invalidOperation() || !this.owner.canRead()) {
       this.previousFocusRoute = undefined;
       this.restoredRow = undefined;
+      this.invalidHeading()?.nativeElement.focus();
       return;
     }
     const operation = this.operation();

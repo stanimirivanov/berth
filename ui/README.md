@@ -92,8 +92,13 @@ Neon database. This PR installs nothing and makes no cloud requests during tests
   responses. Reloading the page also clears access; no browser storage or cookies
   are used. Entering a token does not connect to any cloud provider API.
 - Open or refresh `/operations` or `/operations/<operation-id>` directly.
-  Saved links use the history token prompt after a page load. A malformed
-  identifier shows **Invalid operation link** before any history request.
+  Saved links use the history token prompt after a page load. The History URL
+  serializer checks the raw ID in a single-segment `/operations/<operation-id>`
+  URL before Angular decodes it or interprets router syntax. An invalid ID
+  focuses **Invalid operation link** without a History API read. The address
+  retains the original path, query, and fragment. Valid IDs and other URL
+  shapes delegate to Angular's default serializer. The static server still
+  returns 404 for paths such as `/operations/` and `/operations/a/b`.
 - The read service creates one restricted connection per admitted read, establishes
   a read-only transaction, checks SQL privilege drift and invokes only the two
   owner-installed history read functions. Session statement timeout is 2 seconds,

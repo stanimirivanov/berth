@@ -228,9 +228,9 @@ for (const deniedStatus of [401, 403]) {
     if (deniedStatus === 401) {
       await expect(page.getByLabel("History access token")).toBeVisible();
     } else {
-      await expect(page.getByRole("alert")).toContainText(
-        "configured Berth URL",
-      );
+      await expect(
+        page.getByRole("region", { name: "History access" }).getByRole("alert"),
+      ).toContainText("configured Berth URL");
     }
   });
 }

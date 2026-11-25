@@ -1,5 +1,5 @@
 @if (invalidOperation()) {
-  <h1>Invalid operation link</h1>
+  <h1 #invalidHeading tabindex="-1">Invalid operation link</h1>
   <p><a href="/operations" routerLink="/operations">Operation history</a></p>
 } @else {
   <section class="intro">
@@ -51,6 +51,11 @@
       </div>
     }
   </section>
+  <!-- Keep announcements outside the busy panes. Orca treats status roles as status bars. -->
+  <p class="history-announcement" id="history-list-updates" aria-live="polite" aria-atomic="true">{{ listStatus() }}</p>
+  <p class="history-announcement" role="alert" aria-label="Review inbox errors">{{ listError() }}</p>
+  <p class="history-announcement" id="history-detail-updates" aria-live="polite" aria-atomic="true">{{ detailStatus() }}</p>
+  <p class="history-announcement" role="alert" aria-label="Operation detail errors">{{ detailError() }}</p>
   @if (owner.canRead()) {
     <div class="inbox-layout" [class.has-detail]="showDetail()">
       <section class="inbox" [attr.aria-busy]="store.listLoading()" aria-label="Recorded operations">
@@ -63,14 +68,11 @@
             <p><small>Last fetched <time [attr.datetime]="list.fetchedAt">{{ list.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
           }
           @if (store.listLoading()) {
-            <p role="status">Loading operation history…</p>
+            <p>{{ listStatus() }}</p>
             <mat-progress-bar mode="indeterminate" aria-label="Loading operation history" />
           }
           @if (store.listFailure(); as failure) {
-            <p role="alert" class="error">
-              History is unavailable. Retry when the read service is available.
-              @if (store.list()) { Displayed data may be out of date. }
-            </p>
+            <p class="error">{{ listError() }}</p>
             <div class="actions">
               <button mat-stroked-button type="button" (click)="store.retryList()">Retry</button>
               @if (failure.before !== null) {
@@ -79,7 +81,7 @@
             </div>
           }
           @if (emptyList()) {
-            <p role="status" class="empty">No recorded operations.</p>
+            <p class="empty">{{ emptyListMessage }}</p>
           }
           @if (store.list(); as list) {
             @for (group of groups(); track group.label) {
@@ -96,7 +98,7 @@
                         <span matListItemTitle class="operation-id" [id]="item.operation + '-title'">{{ item.operation }}</span>
                         <span matListItemLine class="operation-summary" [id]="item.operation + '-state'">
                           <strong class="status">{{ item.outcome }}</strong>
-                          <time [attr.datetime]="item.startedAt">{{ item.startedAt | date: 'medium' : 'UTC' }}</time>
+                          <time [attr.datetime]="item.startedAt">{{ item.startedAt | date: 'medium' : 'UTC' }} UTC</time>
                         </span>
                         <span matListItemLine class="operation-summary" [id]="item.operation + '-summary'">Phase: {{ item.phase ?? 'Not recorded' }} · Unresolved mutations: {{ item.unresolved.mutations }}</span>
                       </a>
@@ -120,17 +122,14 @@
         <section class="details" aria-label="Selected operation" [attr.aria-busy]="detailLoading()">
           <mat-card appearance="outlined" class="detail-panel">
             <a href="/operations" routerLink="/operations">Back to inbox</a>
-            <h2 #detailHeading tabindex="-1">Operation details</h2>
+            <h2 #detailHeading tabindex="-1" [attr.aria-describedby]="detailLoading() ? 'history-detail-loading' : null">Operation details</h2>
             <button mat-stroked-button type="button" (click)="store.refreshDetail()" [disabled]="detailLoading()">Refresh detail</button>
             @if (detailLoading()) {
-              <p role="status">Loading operation details…</p>
+              <p id="history-detail-loading">{{ detailLoadingMessage }}</p>
               <mat-progress-bar mode="indeterminate" aria-label="Loading operation details" />
             }
             @if (detailFailure()) {
-              <p role="alert" class="error">
-                {{ detailFailure() === 'missing' ? 'Operation not found.' : 'Operation details are unavailable.' }}
-                @if (detail()) { Displayed data may be out of date. }
-              </p>
+              <p class="error">{{ detailError() }}</p>
               <button mat-stroked-button type="button" (click)="store.refreshDetail()">Retry</button>
             }
             @if (detail(); as detail) {
@@ -175,9 +174,9 @@
               <h3>Execution window (UTC)</h3>
               <dl>
                 <dt>Started</dt>
-                <dd>{{ selected.startedAt | date: 'medium' : 'UTC' }}</dd>
+                <dd><time [attr.datetime]="selected.startedAt">{{ selected.startedAt | date: 'medium' : 'UTC' }} UTC</time></dd>
                 <dt>Expires</dt>
-                <dd>{{ selected.expiresAt | date: 'medium' : 'UTC' }}</dd>
+                <dd><time [attr.datetime]="selected.expiresAt">{{ selected.expiresAt | date: 'medium' : 'UTC' }} UTC</time></dd>
               </dl>
               <h3>Unresolved work</h3>
               <p>Unresolved mutations: {{ selected.unresolved.mutations }}</p>
