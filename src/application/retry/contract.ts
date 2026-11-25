@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import type { RetryObservation } from "../../providers/oci/retry-observation.ts";
+import type { RetryObservation, RetryTarget } from "./observation.ts";
 
 /** Canonical UUID for Retry operation, proposal and Inventory links. */
 export const retryId = Schema.String.check(
@@ -22,7 +22,7 @@ export const retryTargetFields = {
     Schema.isPattern(/^ocid1[.]compartment[.]oc1[.][.][A-Za-z0-9]{1,128}$/),
   ),
   bucket: Schema.String.check(Schema.isPattern(/^berth-[0-9a-f]{32}$/)),
-};
+} satisfies Record<keyof RetryTarget, typeof Schema.String>;
 const commonStatus = {
   operation: retryId,
   scope: Schema.Literals(["original-window", "after-expiry"]),

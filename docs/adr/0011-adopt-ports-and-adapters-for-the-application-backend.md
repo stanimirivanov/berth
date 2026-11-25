@@ -13,10 +13,10 @@ Keep retained trial SQL behind the capability-specific interfaces from
 decoding, role checks and read-only transaction for History. The trial executor,
 qualification probes and owner recovery keep their existing boundaries.
 
-Apply this direction through bounded follow-ups. Move the Retry observation
-contract into the application in
-[#153](https://github.com/stanimirivanov/berth/issues/153) and separate History's
-shared database access policy from trial execution in
-[#151](https://github.com/stanimirivanov/berth/issues/151). The backend import
-allowlist enforces approved dependencies today, including the existing edges
-those issues will change.
+Retry owns the observation port and its evidence vocabulary. The OCI observer
+implements the port, and the Retry runtime wires it into reconciliation.
+See [#153](https://github.com/stanimirivanov/berth/issues/153).
+
+The backend import allowlist enforces the approved dependencies. History's
+shared database access policy still depends on trial execution and is tracked
+in [#151](https://github.com/stanimirivanov/berth/issues/151).

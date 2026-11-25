@@ -1,50 +1,13 @@
 import * as Schema from "effect/Schema";
 
+import type {
+  RetryObservation,
+  RetryObserver,
+  RetryTarget,
+} from "../../application/retry/observation.ts";
+
 /** Fixed region, namespace and compartment authorized for the read-only OCI principal. */
-export interface RetryScope {
-  region: string;
-  namespace: string;
-  compartment: string;
-}
-
-/** The operation supplies only the saved bucket name within the fixed deployment scope. */
-export interface RetryTarget extends RetryScope {
-  bucket: string;
-}
-
-/** Closed provider observations. The database matches the scope and ownership tags. */
-export type RetryObservation =
-  | {
-      kind: "present";
-      id: string;
-      etag: string;
-      namespace: string;
-      compartment: string;
-      name: string;
-      operation: string;
-      marker: string;
-      requestId: string;
-      observedAt: string;
-      configurationMatches: boolean;
-    }
-  | {
-      kind:
-        | "not-found"
-        | "absent"
-        | "inconclusive"
-        | "ownership-conflict"
-        | "read-access-unavailable";
-    };
-
-/** The only network capabilities exposed to retry reconciliation are signed GETs. */
-export interface RetryObserver {
-  supports(target: RetryTarget): boolean;
-  observe(
-    target: RetryTarget,
-    probe: "bucket" | "list",
-    deadline: number,
-  ): Promise<RetryObservation>;
-}
+type RetryScope = Omit<RetryTarget, "bucket">;
 
 /** Sign only the request shape produced by this read-only transport. */
 export interface RetrySigner {

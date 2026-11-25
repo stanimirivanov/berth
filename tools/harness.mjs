@@ -13,6 +13,7 @@ const runtimePackages = {
   "src/application/retry/index.ts": [],
   "src/application/retry/runtime.ts": ["node:crypto", "pg", "oci-common"],
   "src/application/retry/reconciliation.ts": ["node:crypto"],
+  "src/application/retry/observation.ts": [],
   "src/providers/oci/retry-observation.ts": ["effect"],
   "src/application/history/contract.ts": ["effect"],
   "src/application/inventory/contract.ts": ["effect"],
@@ -78,20 +79,22 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
   "src/application/retry/continuation.ts": [
     "src/application/retry/contract.ts",
   ],
-  "src/application/retry/contract.ts": [
-    "src/providers/oci/retry-observation.ts",
+  "src/application/retry/contract.ts": ["src/application/retry/observation.ts"],
+  "src/providers/oci/retry-observation.ts": [
+    "src/application/retry/observation.ts",
   ],
   "src/application/retry/runtime.ts": [
     "src/application/retry/continuation.ts",
     "src/application/retry/api.ts",
     "src/application/retry/reconciliation.ts",
+    "src/application/retry/observation.ts",
     "src/providers/oci/retry-observation.ts",
     "src/application/retained-trial-ledger/retry.ts",
   ],
   "src/application/retry/reconciliation.ts": [
     "src/application/retry/contract.ts",
     "src/application/retry/api.ts",
-    "src/providers/oci/retry-observation.ts",
+    "src/application/retry/observation.ts",
   ],
   "src/application/history/index.ts": [
     "src/application/history/api.ts",

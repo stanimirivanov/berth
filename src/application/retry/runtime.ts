@@ -4,10 +4,7 @@ import {
   SimpleAuthenticationDetailsProvider,
 } from "oci-common";
 import { Client, type ClientConfig } from "pg";
-import {
-  type RetryObserver,
-  retryObserver,
-} from "../../providers/oci/retry-observation.ts";
+import { retryObserver } from "../../providers/oci/retry-observation.ts";
 import {
   assertRetainedRetryRole,
   type RetryConnection,
@@ -16,6 +13,7 @@ import {
 } from "../retained-trial-ledger/retry.ts";
 import type { RetryAction } from "./api.ts";
 import type { RetryContinuation } from "./continuation.ts";
+import type { RetryObserver } from "./observation.ts";
 import { retryActions } from "./reconciliation.ts";
 
 /** Server-only configuration for owner sign-in and separately scoped credentials. */
