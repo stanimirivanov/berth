@@ -3,8 +3,8 @@
 This service implements the observation and status part of
 [ADR 0009](../adr/0009-retry-provisioning-from-operation-detail.md).
 A completed check identifies the exact owned bucket or reports that a write
-could be considered. Approval and dispatch of further provisioning belong to
-[#141](https://github.com/stanimirivanov/berth/issues/141).
+could be considered. See the separate
+[continuation contract](retry-continuation.md) for approval, dispatch and recovery.
 
 ## Owner action contract
 
@@ -32,7 +32,8 @@ request IDs and raw provider errors.
 
 ## Scope and accounting
 
-- One durable check can be started per operation. A duplicate neither resets
+- One durable check can start in each scope per operation. A check from the
+  original window is retained when the first post-expiry check starts. A duplicate neither resets
   the check nor extends its 20-second limit. Within the original window, the
   check respects the earlier of its own deadline and the creation cutoff. It
   charges the original normal request allowance and stops if that allowance

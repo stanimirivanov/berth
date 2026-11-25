@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { retryApi } from "../src/application/retry/api.ts";
+import { decodeContinuation } from "../src/application/retry/continuation.ts";
 
 const credential = `berth-retry-owner-v1.${"x".repeat(43)}`;
 const operation = "62ebd914-6089-4e41-81a4-75081cb1cef3";
@@ -132,4 +133,156 @@ test("retry responses project only the public status fields", async () => {
   );
   assert.equal(result.status, 200);
   assert.deepEqual(await result.json(), status);
+});
+
+test("approval requires a Retry session and binds the exact operation and proposal", async () => {
+  const proposal = "6db13184-54af-42e7-894b-ca5a155c2e16";
+  const calls: string[] = [];
+  const api = retryApi(
+    credential,
+    async () => null,
+    () => 1800000000000,
+    async (id: string, approved: string | null) => {
+      calls.push(`${id}:${approved}`);
+      return null;
+    },
+  );
+  const route = `/api/retry/operations/${operation}/proposals/${proposal}/approve`;
+  const post = (path: string, bearer: string, body?: string) =>
+    api.fetch(
+      new Request(origin + path, {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}` },
+        ...(body === undefined ? {} : { body }),
+      }),
+    );
+  assert.equal((await post(route, "h".repeat(43))).status, 401);
+  const signedIn = await post("/api/retry/session", credential);
+  const { session } = await signedIn.json();
+  assert.equal((await post(route, session, "{}")).status, 400);
+  assert.equal((await post(route, session)).status, 409);
+  assert.deepEqual(calls, [`${operation}:${proposal}`]);
+});
+
+test("approval returns only the approved continuation for the proposal in the route", async () => {
+  const proposal = "6db13184-54af-42e7-894b-ca5a155c2e16";
+  const approved = {
+    operation,
+    stage: "continuing-provisioning",
+    scope: "after-expiry",
+    progress: "awaiting-activation",
+    reason: null,
+    authorization: "approved",
+    continuation: proposal,
+    approvedAt: "2026-11-25T09:00:00Z",
+    startsAt: "2026-11-25T09:01:00Z",
+    expiresAt: "2026-11-25T13:01:00Z",
+    ownerProcedure:
+      "https://github.com/stanimirivanov/berth/blob/main/docs/trial/retry-continuation.md",
+  } as const;
+  const stopped = {
+    operation,
+    stage: "needs-attention",
+    reason: "preparation-required",
+    ownerProcedure: approved.ownerProcedure,
+  } as const;
+  let result:
+    | typeof approved
+    | typeof stopped
+    | (Omit<typeof approved, "continuation"> & { continuation: string }) =
+    approved;
+  const api = retryApi(
+    credential,
+    async () => null,
+    Date.now,
+    async () => result,
+  );
+  const send = (path: string, bearer: string) =>
+    api.fetch(
+      new Request(origin + path, {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}` },
+      }),
+    );
+  const { session } = await (
+    await send("/api/retry/session", credential)
+  ).json();
+  const route = `/api/retry/operations/${operation}/proposals/${proposal}/approve`;
+  result = { ...approved, continuation: operation };
+  assert.equal((await send(route, session)).status, 503);
+  result = stopped;
+  assert.equal((await send(route, session)).status, 503);
+  result = approved;
+  assert.deepEqual(await (await send(route, session)).json(), approved);
+});
+
+test("continuation decoding rejects inconsistent progress and unsafe proposal shapes", () => {
+  const time = "2026-11-25T09:00:00.123456+00:00";
+  const later = "2026-11-25T09:01:00Z";
+  const id = "6db13184-54af-42e7-894b-ca5a155c2e16";
+  const approved = {
+    operation,
+    continuation: id,
+    stage: "completed",
+    progress: "completed",
+    reason: null,
+    scope: "after-expiry",
+    authorization: "approved",
+    approvedAt: time,
+    startsAt: later,
+    expiresAt: "2026-11-25T13:01:00Z",
+    ownerProcedure:
+      "https://github.com/stanimirivanov/berth/blob/main/docs/trial/retry-continuation.md",
+  };
+  const proposal = {
+    operation,
+    proposal: id,
+    stage: "waiting-for-approval",
+    target: {
+      region: "eu-frankfurt-1",
+      compartment: "ocid1.compartment.oc1..fixture",
+      namespace: "fixture",
+      bucket: "berth-62ebd91460894e4181a475081cb1cef3",
+      instance: null,
+    },
+    steps: ["create-bucket", "upload-fixture", "verify-and-clean-up"],
+    evidence: {
+      observedAt: time,
+      allowanceCheckedAt: time,
+      iamCheckedAt: time,
+      reference: "fixture-review",
+    },
+    startsAt: later,
+    creationCutoff: "2026-11-25T09:31:00Z",
+    expiresAt: approved.expiresAt,
+    approveBy: later,
+    limits: {
+      normal: 160,
+      cleanup: 40,
+      monitoring: 20,
+      application: 64,
+      applicationCleanup: 12,
+      attemptsPerAction: 3,
+    },
+  };
+  assert.deepEqual(decodeContinuation(approved), approved);
+  assert.deepEqual(decodeContinuation(proposal), proposal);
+  for (const invalid of [
+    {
+      ...approved,
+      progress: "awaiting-activation",
+      reason: "authorization-withdrawn",
+    },
+    { ...approved, stage: "needs-attention", progress: "stopped" },
+    { ...proposal, target: { ...proposal.target, instance: id } },
+    { ...proposal, target: { ...proposal.target, namespace: "" } },
+    { ...proposal, evidence: { ...proposal.evidence, observedAt: "2026" } },
+    { ...proposal, expiresAt: time },
+    {
+      ...proposal,
+      creationCutoff: "2026-11-25T09:31:00.123455Z",
+      approveBy: "2026-11-25T09:31:00.123456Z",
+    },
+  ])
+    assert.throws(() => decodeContinuation(invalid));
 });

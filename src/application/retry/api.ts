@@ -5,7 +5,11 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { emptyControl } from "../../http/empty-control.ts";
-
+import {
+  decodeApproval,
+  decodeContinuation,
+  type RetryContinuation,
+} from "./continuation.ts";
 import { decodeRetryStatus, type RetryStatus } from "./contract.ts";
 
 /** Only the start action may use the read-only provider; status reads go to SQL. */
@@ -15,7 +19,7 @@ export type RetryAction = (
 ) => Promise<RetryStatus | null>;
 
 const operationPath =
-  /^\/api\/retry\/operations\/([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})$/;
+  /^\/api\/retry\/operations\/([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})(?:(\/continuation)|\/proposals\/([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})\/approve)?$/;
 const lifetimeMs = 300000;
 
 /** Compare bounded credential inputs without leaking an equality prefix. */
@@ -31,6 +35,7 @@ export function retryApi(
   ownerCredential: string,
   act: RetryAction,
   now: () => number = Date.now,
+  continuation?: RetryContinuation,
 ) {
   const enabled = /^berth-retry-owner-v1\.[A-Za-z0-9_-]{43,86}$/.test(
     ownerCredential,
@@ -41,7 +46,7 @@ export function retryApi(
       .update(`berth-retry-session/v1:${payload}`)
       .digest("base64url");
 
-  /** A retry token authorizes only provider reconciliation and retained status, until its signed expiry. */
+  /** A Retry session permits reconciliation, retained status, and approval of a qualified proposal until expiry. */
   function validSession(header: string) {
     const parts =
       /^Bearer brr1\.([0-9]{13})\.([a-f0-9-]{36})\.([A-Za-z0-9_-]{43})$/.exec(
@@ -72,11 +77,19 @@ export function retryApi(
       const url = new URL(request.url);
       const signIn =
         request.method === "POST" && url.pathname === "/api/retry/session";
-      const operation = operationPath.exec(url.pathname)?.[1];
-      if (
-        url.search ||
-        (!signIn && (!operation || !["GET", "POST"].includes(request.method)))
-      )
+      const match = operationPath.exec(url.pathname);
+      const operation = match?.[1];
+      const statusRead = match?.[2] !== undefined;
+      const proposal = match?.[3] ?? null;
+      const method = request.method;
+      const operationRequest =
+        operation &&
+        (statusRead
+          ? method === "GET"
+          : proposal
+            ? method === "POST"
+            : method === "GET" || method === "POST");
+      if (url.search || (!signIn && !operationRequest))
         return reply({ error: "not-found" }, 404);
       if (!enabled) return reply({ error: "retry-unavailable" }, 503);
       const credential = request.headers.get("authorization") ?? "";
@@ -101,6 +114,24 @@ export function retryApi(
         return reply({ error: "unauthorized" }, 401);
       if (!operation) return reply({ error: "not-found" }, 404);
       try {
+        if (statusRead || proposal) {
+          if (!continuation) return reply({ error: "retry-unavailable" }, 503);
+          const raw = await continuation(operation, proposal);
+          const result = proposal
+            ? decodeApproval(raw)
+            : decodeContinuation(raw);
+          if (!result)
+            return proposal
+              ? reply({ error: "proposal-no-longer-current" }, 409)
+              : reply({ error: "not-found" }, 404);
+          if (
+            result.operation !== operation ||
+            (proposal &&
+              (!("continuation" in result) || result.continuation !== proposal))
+          )
+            throw Error("Retry approval or operation mismatch");
+          return reply(result);
+        }
         const status = decodeRetryStatus(
           await act(request.method === "POST" ? "start" : "status", operation),
         );

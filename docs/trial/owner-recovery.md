@@ -160,7 +160,8 @@ evidence and may remain unresolved. Never issue an unconditional delete instead.
 | Unresolved create/upload or an executor still holding a lease | Retain spent reservation and uncertainty; no competing create/delete or assumed absence |
 | Cleanup requests exhausted | Report remaining resources and all 40 spent requests; no refund, extra reserve or direct-CLI deletion |
 | Four-hour window expired | No further executor cloud work; read SQL evidence and request a separate explicit owner reconciliation decision |
-| SQL terminal result with zero unresolved requests/open attempts and authenticated resource absence | Record manual recovery separately from hosted teardown; retain partial feasibility and proceed to shutdown |
+| SQL terminal result with zero unresolved requests/open attempts and authenticated resource absence | Record manual recovery separately from hosted teardown. Retain partial feasibility and proceed to shutdown. |
+| Retained-bucket continuation terminal with no unresolved work, child fixture absent and original bucket still verified | Record scoped recovery for the child. Preserve the original bucket and its evidence. Use the original authorization or separate owner decision for any further action. |
 
 Any after-expiry or over-budget resource action needs separate explicit owner
 review of ownership, late completion, new scope and separately accounted requests.

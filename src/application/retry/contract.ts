@@ -1,22 +1,33 @@
 import * as Schema from "effect/Schema";
 import type { RetryObservation } from "../../providers/oci/retry-observation.ts";
 
-const operation = Schema.String.check(
+/** Canonical UUID for Retry operation, proposal and Inventory links. */
+export const retryId = Schema.String.check(
   Schema.isPattern(
     /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,
   ),
 );
-const timestamp = Schema.String.check(
+/** PostgreSQL timestamps with an explicit offset, preserving wire precision. */
+export const retryTimestamp = Schema.String.check(
   Schema.isPattern(
     /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?(?:Z|[+-]\d\d:\d\d)$/,
   ),
   Schema.makeFilter((value) => Number.isFinite(Date.parse(value))),
 );
+/** Exact OCI target fields shared by claims and continuation proposals. */
+export const retryTargetFields = {
+  region: Schema.String.check(Schema.isPattern(/^[a-z]{2}-[a-z]+-[1-9]$/)),
+  namespace: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/)),
+  compartment: Schema.String.check(
+    Schema.isPattern(/^ocid1[.]compartment[.]oc1[.][.][A-Za-z0-9]{1,128}$/),
+  ),
+  bucket: Schema.String.check(Schema.isPattern(/^berth-[0-9a-f]{32}$/)),
+};
 const commonStatus = {
-  operation,
+  operation: retryId,
   scope: Schema.Literals(["original-window", "after-expiry"]),
-  observedAt: Schema.NullOr(timestamp),
-  startedAt: timestamp,
+  observedAt: Schema.NullOr(retryTimestamp),
+  startedAt: retryTimestamp,
   checks: Schema.Struct({
     used: Schema.Literals([0, 1, 2]),
     limit: Schema.Literal(2),
@@ -37,7 +48,7 @@ const status = Schema.Union([
     result: Schema.Literals(["owned-instance", "safe-write-needed"]),
     reason: Schema.Null,
     ownerProcedure: Schema.Null,
-    observedAt: timestamp,
+    observedAt: retryTimestamp,
   }),
   Schema.Struct({
     ...commonStatus,
@@ -84,21 +95,8 @@ export const decodeRetryClaim = Schema.decodeUnknownSync(
       Schema.Struct({
         kind: Schema.Literal("claimed"),
         status: checking,
-        deadline: timestamp,
-        target: Schema.Struct({
-          region: Schema.String.check(
-            Schema.isPattern(/^[a-z]{2}-[a-z]+-[1-9]$/),
-          ),
-          namespace: Schema.String.check(
-            Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/),
-          ),
-          compartment: Schema.String.check(
-            Schema.isPattern(
-              /^ocid1[.]compartment[.]oc1[.][.][A-Za-z0-9]{1,128}$/,
-            ),
-          ),
-          bucket: Schema.String.check(Schema.isPattern(/^berth-[0-9a-f]{32}$/)),
-        }),
+        deadline: retryTimestamp,
+        target: Schema.Struct(retryTargetFields),
       }),
     ]),
   ),

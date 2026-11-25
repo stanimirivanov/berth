@@ -1,4 +1,9 @@
 import {
+  decodeApproval,
+  decodeContinuation,
+  type RetryContinuation,
+} from "../retry/continuation.ts";
+import {
   decodeRetryClaim,
   decodeRetryReservation,
   decodeRetryStatus,
@@ -58,6 +63,28 @@ export function retainedRetryLedger(db: RetainedTrialDatabase): RetryLedger {
   };
 }
 
+/** Project retained continuation status or atomically record a specified approval. */
+export function retainedRetryContinuation(
+  db: RetainedTrialDatabase,
+): RetryContinuation {
+  return async (operation, proposal) =>
+    proposal === null
+      ? decodeContinuation(
+          await retainedTrialResult(
+            db,
+            "SELECT berth_retry.continuation_status($1) AS result",
+            [operation],
+          ),
+        )
+      : decodeApproval(
+          await retainedTrialResult(
+            db,
+            "SELECT berth_retry.approve_continuation($1,$2) AS result",
+            [operation, proposal],
+          ),
+        );
+}
+
 /** Reject broad grants or a different login before a hosted action can use SQL. */
 export async function assertRetainedRetryRole(db: RetainedTrialDatabase) {
   const result = await db.query(
@@ -88,10 +115,15 @@ export async function assertRetainedRetryRole(db: RetainedTrialDatabase) {
     AND NOT EXISTS (
       SELECT FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname = 'berth_retry' AND has_function_privilege(r.oid,p.oid,'EXECUTE')
-        AND p.oid NOT IN (
-          'berth_retry.status(uuid)'::regprocedure, 'berth_retry.begin(uuid,uuid)'::regprocedure,
-          'berth_retry.reserve(uuid,uuid,text)'::regprocedure,
-          'berth_retry.finish(uuid,uuid,jsonb)'::regprocedure
+        AND NOT EXISTS (
+          SELECT FROM unnest(ARRAY[
+            to_regprocedure('berth_retry.status(uuid)'),
+            to_regprocedure('berth_retry.begin(uuid,uuid)'),
+            to_regprocedure('berth_retry.reserve(uuid,uuid,text)'),
+            to_regprocedure('berth_retry.finish(uuid,uuid,jsonb)'),
+            to_regprocedure('berth_retry.continuation_status(uuid)'),
+            to_regprocedure('berth_retry.approve_continuation(uuid,uuid)')
+          ]) AS allowed(oid) WHERE allowed.oid = p.oid
         )
     ) AS allowed
     FROM pg_roles r WHERE r.rolname=current_user`,

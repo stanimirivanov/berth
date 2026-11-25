@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
 import { retainedRetryLedger } from "../../src/application/retained-trial-ledger/retry.ts";
+import { retryApi } from "../../src/application/retry/api.ts";
 import { retryActions } from "../../src/application/retry/reconciliation.ts";
-import { retryRuntime } from "../../src/application/retry/runtime.ts";
+import {
+  retryContinuationRuntime,
+  retryRuntime,
+} from "../../src/application/retry/runtime.ts";
+import { createProposal } from "../../src/providers/oci/client.ts";
 import { retryObserver } from "../../src/providers/oci/retry-observation.ts";
+import { runExecutor } from "../../src/trial/executor.ts";
+import { executorStore } from "../../src/trial/executor-store.ts";
+import { liveAdmissionApi } from "../../src/trial/live-admission.ts";
+import { freePolicyFixture } from "../fakes/free-policy.ts";
+import { FakeObjects } from "../fakes/oci.ts";
 
 const scope = {
   compartment: "ocid1.compartment.oc1..fixture",
@@ -43,6 +53,7 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
       "009_managed_inventory",
       "010_inventory_evidence",
       "011_retry_reconciliation",
+      "012_retry_continuation",
     ])
       await owner.query(await readFile(`migrations/${name}.sql`, "utf8"));
     await admin.query(
@@ -218,6 +229,7 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
       [expiredCleanup.operation],
     );
     const clean = await seed();
+    const retained = await seed();
     const paginated = await seed();
     const orphan = await seed();
     const reachedProvider = Promise.withResolvers<void>();
@@ -241,6 +253,7 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
           return new Response(null, { status: 403 });
         const saved = [
           late,
+          retained,
           mismatch,
           changedIdentity,
           drift,
@@ -415,6 +428,604 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
     assert.equal(interrupted?.reason, "check-interrupted");
     assert.deepEqual(interrupted?.checks, { used: 1, limit: 2 });
     assert.equal(calls, beforeRecovery);
+
+    assert.equal(
+      (
+        await runtime.query(
+          "SELECT berth_retry.continuation_status($1) AS value",
+          [late.operation],
+        )
+      ).rows[0]?.value.reason,
+      "source-not-safe",
+      "owned presence cannot settle a still-open CREATE",
+    );
+    const candidate = await seed("open");
+    const originalWindow = (
+      await owner.query(
+        `UPDATE berth_ledger.trials SET digest=$2, neon_limit=64,
+          started_at=date_trunc('milliseconds',started_at),
+          expires_at=date_trunc('milliseconds',started_at)+interval '4 hours'
+          WHERE operation=$1 RETURNING started_at,expires_at`,
+        [
+          candidate.operation,
+          "fbbab289f7f94b25736c58be46a994c441fd02552cc6022352e3d86d2fab7c83",
+        ],
+      )
+    ).rows[0];
+    const originalEvidence = freePolicyFixture(
+      candidate.operation,
+      originalWindow.started_at.getTime(),
+      scope.region,
+    );
+    const originalBinding = {
+      ...scope,
+      monitoringLimit: 20,
+      neonLimit: 64,
+      tenancy: "ocid1.tenancy.oc1..fixture",
+      user: "ocid1.user.oc1..fixture",
+      fingerprint: Array(16).fill("ab").join(":"),
+    };
+    await owner.query(
+      "INSERT INTO berth_executor.admission(operation,binding,evidence,admitted) VALUES($1,$2,$3,true)",
+      [candidate.operation, originalBinding, originalEvidence],
+    );
+    await owner.query(
+      "INSERT INTO berth_executor.functions_policy VALUES($1,$2,$3,$4,$5)",
+      [
+        candidate.operation,
+        originalWindow.started_at,
+        originalWindow.expires_at,
+        originalBinding,
+        originalEvidence,
+      ],
+    );
+    const initialCheck = await followUp("start", candidate.operation);
+    assert.equal(initialCheck?.scope, "original-window");
+    assert.equal(initialCheck?.result, "safe-write-needed");
+    const beforeStatusRead = calls;
+    const originalAuthority = (
+      await runtime.query(
+        "SELECT berth_retry.continuation_status($1) AS value",
+        [candidate.operation],
+      )
+    ).rows[0]?.value;
+    assert.equal(originalAuthority.scope, "original-window");
+    assert.equal(originalAuthority.stage, "continuing-provisioning");
+    assert.equal(originalAuthority.proposal, undefined);
+    assert.equal(calls, beforeStatusRead);
+    for (const ordinal of [1, 2, 3]) {
+      await owner.query(
+        "INSERT INTO berth_ledger.attempts(id,operation,action,generation,ordinal,outcome) VALUES($1,$2,'create_bucket',0,$3,'failed')",
+        [randomUUID(), candidate.operation, ordinal],
+      );
+    }
+    assert.equal(
+      (
+        await runtime.query(
+          "SELECT berth_retry.continuation_status($1) AS value",
+          [candidate.operation],
+        )
+      ).rows[0]?.value.reason,
+      "original-authority-unavailable",
+    );
+
+    await owner.query(
+      "UPDATE berth_ledger.trials SET started_at=now()-interval '5 hours',expires_at=now()-interval '1 hour' WHERE operation=$1",
+      [candidate.operation],
+    );
+    assert.equal(
+      (await followUp("status", candidate.operation))?.scope,
+      "original-window",
+    );
+    const freshCheck = await followUp("start", candidate.operation);
+    assert.equal(freshCheck?.scope, "after-expiry");
+    assert.equal(freshCheck?.result, "safe-write-needed");
+    const originalCheck = await owner.query(
+      "SELECT scope,used FROM berth_retry.original_window_checks WHERE operation=$1",
+      [candidate.operation],
+    );
+    assert.deepEqual(originalCheck.rows, [
+      { scope: "original-window", used: 2 },
+    ]);
+    const continuation = randomUUID();
+    const starts = Date.now() - 1000;
+    const reviewedAt = Date.now() - 1000;
+    const reviewed = freePolicyFixture(continuation, starts, scope.region);
+    const evidence = {
+      ...reviewed,
+      checkedAt: reviewedAt,
+      iamCheckedAt: reviewedAt,
+      functionsPolicy: {
+        ...reviewed.functionsPolicy,
+        billing: { ...reviewed.functionsPolicy.billing, reviewedAt },
+        plan: { ...reviewed.functionsPolicy.plan, checkedAt: reviewedAt },
+      },
+    };
+    const binding = {
+      ...scope,
+      tenancy: "ocid1.tenancy.oc1..fixture",
+      user: "ocid1.user.oc1..fixture",
+      fingerprint: Array(16).fill("ab").join(":"),
+      monitoringLimit: 20,
+      neonLimit: 64,
+    };
+    const saved = async () =>
+      (
+        await owner.query(
+          "SELECT to_jsonb(t)-'retry_slot_released' AS value FROM berth_ledger.trials t WHERE operation=$1",
+          [candidate.operation],
+        )
+      ).rows[0]?.value;
+    const beforeContinuation = await saved();
+    const prepare = async (
+      snapshot: typeof evidence & { functionsKnownInsufficient?: boolean },
+      id: string = continuation,
+    ) =>
+      (
+        await owner.query(
+          "SELECT berth_retry.prepare_continuation($1,$2,$3,$4,$5) AS result",
+          [
+            candidate.operation,
+            id,
+            new Date(starts),
+            binding,
+            {
+              ...snapshot,
+              functionsPolicy: { ...snapshot.functionsPolicy, operation: id },
+            },
+          ],
+        )
+      ).rows[0]?.result;
+    const view = async () =>
+      (
+        await runtime.query(
+          "SELECT berth_retry.continuation_status($1) AS value",
+          [candidate.operation],
+        )
+      ).rows[0]?.value;
+    const openContinuation = retryContinuationRuntime(
+      {
+        BERTH_RETRY_DATABASE_URL:
+          "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb",
+      },
+      () => new Client({ ...settings, user: "berth_retry_runtime" }),
+    );
+    assert.equal((await view()).reason, "preparation-required");
+    const currentApproval = async (id: string) =>
+      (
+        await runtime.query(
+          "SELECT berth_retry.approve_continuation($1,$2) AS value",
+          [candidate.operation, id],
+        )
+      ).rows[0]?.value;
+    const agedSource = await owner.query(
+      "SELECT observed_at::text AS observed_at FROM berth_retry.reconciliations WHERE operation=$1",
+      [candidate.operation],
+    );
+    await owner.query(
+      "UPDATE berth_retry.reconciliations SET observed_at=now()-interval '23 hours' WHERE operation=$1",
+      [candidate.operation],
+    );
+    const immediate = randomUUID();
+    assert.equal(await prepare(evidence, immediate), "prepared");
+    await assert.rejects(
+      owner.query("SELECT berth_retry.prepare_continuation($1,$2,$3,$4,$5)", [
+        candidate.operation,
+        randomUUID(),
+        new Date(starts + 45 * 60 * 1000),
+        binding,
+        evidence,
+      ]),
+      /reconciliation evidence is required through the creation cutoff/,
+    );
+    assert.equal((await view()).proposal, immediate);
+    await owner.query(
+      "UPDATE berth_retry.reconciliations SET observed_at=$2 WHERE operation=$1",
+      [candidate.operation, agedSource.rows[0]?.observed_at],
+    );
+    for (const [snapshot, reason] of [
+      [{ ...evidence, transferBytes: 1 }, "allowance-evidence-unqualified"],
+      [
+        { ...evidence, functionsKnownInsufficient: true },
+        "allowance-evidence-unqualified",
+      ],
+      [
+        { ...evidence, checkedAt: starts - 86400000 },
+        "allowance-evidence-unqualified",
+      ],
+      [{ ...evidence, iamReviewed: false }, "credential-evidence-unqualified"],
+      [
+        { ...evidence, iamCheckedAt: starts - 86400000 },
+        "credential-evidence-unqualified",
+      ],
+      [
+        {
+          ...evidence,
+          functionsPolicy: {
+            ...evidence.functionsPolicy,
+            manualRecoveryReady: false,
+          },
+        },
+        "cleanup-evidence-unqualified",
+      ],
+    ] as const) {
+      const previous = randomUUID();
+      assert.equal(await prepare(evidence, previous), "prepared");
+      assert.equal((await view()).proposal, previous);
+      assert.equal(await prepare(snapshot, randomUUID()), reason);
+      const stop = await view();
+      assert.equal(stop.reason, reason);
+      assert.equal(stop.proposal, undefined);
+      assert.deepEqual(await openContinuation(candidate.operation, null), stop);
+      assert.equal(await currentApproval(previous), null);
+    }
+    await assert.rejects(
+      runtime.query("SELECT * FROM berth_retry.preparation_stops"),
+      { code: "42501" },
+    );
+    const obsolete = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+    await prepare(evidence, obsolete);
+    await owner.query(
+      "UPDATE berth_retry.proposals SET approve_by=clock_timestamp()-interval '1 second' WHERE id=$1",
+      [obsolete],
+    );
+    assert.equal((await view()).reason, "proposal-expired");
+    assert.equal(
+      (
+        await runtime.query(
+          "SELECT berth_retry.approve_continuation($1,$2) AS value",
+          [candidate.operation, obsolete],
+        )
+      ).rows[0]?.value,
+      null,
+    );
+
+    await prepare(evidence);
+    await owner.query(
+      "UPDATE berth_retry.proposals SET proposed_at=(SELECT proposed_at FROM berth_retry.proposals WHERE id=$1) WHERE id=$2",
+      [continuation, obsolete],
+    );
+    const offered = await view();
+    assert.equal(offered.stage, "waiting-for-approval");
+    assert.equal(offered.target.bucket, candidate.bucket);
+    assert.equal(offered.limits.cleanup, 40);
+    assert.equal(offered.limits.applicationCleanup, 12);
+    assert.equal(offered.proposal, continuation);
+    assert.equal(offered.binding, undefined);
+    const approve = async (id: string = continuation) =>
+      (
+        await runtime.query(
+          "SELECT berth_retry.approve_continuation($1,$2) AS value",
+          [candidate.operation, id],
+        )
+      ).rows[0]?.value;
+    assert.equal(await approve(randomUUID()), null);
+
+    const ownerCredential = `berth-retry-owner-v1.${"x".repeat(43)}`;
+    let loseResponse = true;
+    const retry = retryApi(
+      ownerCredential,
+      followUp,
+      Date.now,
+      async (id, proposal) => {
+        const committed = await openContinuation(id, proposal);
+        if (proposal && loseResponse)
+          throw Error("Approval acknowledgement lost");
+        return committed;
+      },
+    );
+    const send = (path: string, method: string, bearer: string) =>
+      retry.fetch(
+        new Request(`https://fixture.invalid${path}`, {
+          method,
+          headers: { authorization: `Bearer ${bearer}` },
+        }),
+      );
+    const signedIn = await send("/api/retry/session", "POST", ownerCredential);
+    const { session } = await signedIn.json();
+    const parentRoute = `/api/retry/operations/${candidate.operation}`;
+    const approvalRoute = `${parentRoute}/proposals/${continuation}/approve`;
+    const [firstApproval, lostAcknowledgement] = await Promise.all([
+      approve(),
+      send(approvalRoute, "POST", session),
+    ]);
+    assert.equal(lostAcknowledgement.status, 503);
+    assert.equal(firstApproval.continuation, continuation);
+    assert.equal(firstApproval.progress, "awaiting-activation");
+    loseResponse = false;
+    const recovered = await send(`${parentRoute}/continuation`, "GET", session);
+    assert.deepEqual(await recovered.json(), firstApproval);
+    const repeated = await send(approvalRoute, "POST", session);
+    assert.deepEqual(await repeated.json(), firstApproval);
+    assert.deepEqual(await saved(), beforeContinuation);
+    const executor = new Client({
+      ...settings,
+      user: "berth_runtime",
+      password: "test-runtime-only",
+    });
+    await executor.connect();
+    try {
+      const sdk = new FakeObjects();
+      const environment = {
+        ...binding,
+        operation: continuation,
+        startedAt: starts,
+        expiresAt: starts + 14400000,
+        token: "t".repeat(40),
+        previewKey: "v".repeat(40),
+        privateKey: "unused-by-synthetic-provider",
+        connection: "unused",
+      };
+      await assert.rejects(
+        executor.query("SELECT berth_ledger.claim($1,$2,30)", [
+          candidate.operation,
+          randomUUID(),
+        ]),
+        /Trial closed/,
+      );
+      await executor.query("SELECT berth_executor.cleanup($1)", [
+        candidate.operation,
+      ]);
+      const originalReport = await executorStore(executor).report(
+        candidate.operation,
+      );
+      const run = (
+        tick: number,
+        db: Parameters<typeof runExecutor>[0] = executor,
+      ) =>
+        runExecutor(db, {
+          operation: continuation,
+          delivery: createHash("sha256").update(String(tick)).digest("hex"),
+          expiresAt: environment.expiresAt,
+          sdk: () => sdk,
+        });
+      const api = liveAdmissionApi(
+        executor,
+        environment,
+        async () => true,
+        candidate.bucket,
+      );
+      const request = (path: string, body: object) =>
+        new Request(`https://fixture.invalid${path}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${environment.token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+      const preview = await api.fetch(request("/preview", {}));
+      assert.equal(preview.status, 200);
+      const plan = await preview.json();
+      assert.equal(plan.proposal.bucket.name, candidate.bucket);
+      assert.equal(
+        (await api.fetch(request("/submit", { preview: plan.preview }))).status,
+        202,
+      );
+      assert.equal((await view()).progress, "executing");
+      assert.deepEqual(await run(1), { phase: "object" });
+      assert.equal(sdk.value?.name, candidate.bucket);
+      assert.equal(sdk.value?.freeformTags?.["berth-operation"], continuation);
+      assert.equal(sdk.creates, 1);
+      assert.deepEqual(await run(1), { phase: "duplicate" });
+      assert.equal(sdk.creates, 1);
+
+      let withdrewBetweenReservationAndSend = false;
+      await run(2, {
+        async query(text, parameters) {
+          if (text.includes("berth_executor.confirm_retry_dispatch")) {
+            await owner.query("SELECT berth_retry.withdraw_continuation($1)", [
+              candidate.operation,
+            ]);
+            withdrewBetweenReservationAndSend = true;
+          }
+          return executor.query(text, parameters);
+        },
+      });
+      assert.equal(withdrewBetweenReservationAndSend, true);
+      assert.equal((await view()).reason, "authorization-withdrawn");
+      assert.equal(sdk.puts, 0);
+      await run(3);
+      assert.equal(sdk.deletes, 1);
+      assert.equal(sdk.value, undefined);
+      const newSpend = (
+        await owner.query(
+          "SELECT cleanup_used FROM berth_ledger.trials WHERE operation=$1",
+          [continuation],
+        )
+      ).rows[0]?.cleanup_used;
+      assert.ok(newSpend > 0 && newSpend <= 40);
+      assert.deepEqual(await saved(), beforeContinuation);
+      assert.deepEqual(
+        await executorStore(executor).report(candidate.operation),
+        originalReport,
+      );
+    } finally {
+      await executor.end();
+    }
+
+    await owner.query(
+      "UPDATE berth_ledger.trials SET digest=$2 WHERE operation=$1",
+      [
+        retained.operation,
+        "fbbab289f7f94b25736c58be46a994c441fd02552cc6022352e3d86d2fab7c83",
+      ],
+    );
+    assert.equal(
+      (await followUp("start", retained.operation))?.result,
+      "owned-instance",
+    );
+    const retainedChild = randomUUID();
+    const retainedStart = Date.now() - 1000;
+    await owner.query(
+      "SELECT berth_retry.prepare_continuation($1,$2,$3,$4,$5)",
+      [
+        retained.operation,
+        retainedChild,
+        new Date(retainedStart),
+        binding,
+        freePolicyFixture(retainedChild, retainedStart, scope.region),
+      ],
+    );
+    const ownedProposal = (
+      await runtime.query(
+        "SELECT berth_retry.continuation_status($1) AS value",
+        [retained.operation],
+      )
+    ).rows[0]?.value;
+    assert.equal(ownedProposal.stage, "waiting-for-approval");
+    assert.ok(ownedProposal.target.instance);
+    assert.deepEqual(ownedProposal.steps, [
+      "upload-fixture",
+      "verify-and-remove-fixture",
+    ]);
+    assert.equal(
+      (
+        await runtime.query(
+          "SELECT berth_retry.approve_continuation($1,$2) AS value",
+          [retained.operation, retainedChild],
+        )
+      ).rows[0]?.value.continuation,
+      retainedChild,
+    );
+    const reusedRuntime = new Client({
+      ...settings,
+      user: "berth_runtime",
+      password: "test-runtime-only",
+    });
+    await reusedRuntime.connect();
+    try {
+      const sdk = new FakeObjects();
+      const initialBucket = await sdk.createBucket(
+        createProposal({ ...scope, ...retained }),
+      );
+      sdk.value = {
+        ...initialBucket.bucket,
+        id: `ocid1.bucket.oc1..retryFixture${retained.operation.replaceAll("-", "")}`,
+        etag: "fixture-revision",
+      };
+      // A limited owner-reviewed read fixture supplies activation proof. Dispatch
+      // itself inspects the provider ID, revision, and old ownership tags.
+      const env = {
+        ...binding,
+        operation: retainedChild,
+        startedAt: retainedStart,
+        expiresAt: retainedStart + 14400000,
+        token: "t".repeat(40),
+        previewKey: "v".repeat(40),
+        privateKey: "unused-by-synthetic-provider",
+        connection: "unused",
+      };
+      const api = liveAdmissionApi(
+        reusedRuntime,
+        env,
+        async () => true,
+        retained.bucket,
+      );
+      const submit = (path: string, body: object) =>
+        api.fetch(
+          new Request(`https://fixture.invalid${path}`, {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${env.token}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify(body),
+          }),
+        );
+      const proposed = await submit("/preview", {});
+      assert.equal(proposed.status, 200);
+      assert.equal(
+        (await submit("/submit", { preview: (await proposed.json()).preview }))
+          .status,
+        202,
+      );
+      const run = (tick: number) =>
+        runExecutor(reusedRuntime, {
+          operation: retainedChild,
+          expiresAt: env.expiresAt,
+          delivery: createHash("sha256")
+            .update(`retained:${tick}`)
+            .digest("hex"),
+          sdk: () => sdk,
+        });
+      assert.deepEqual(await run(1), { phase: "cleanup" });
+      assert.equal(sdk.puts, 1);
+      assert.deepEqual(await run(2), { phase: "terminal" });
+      assert.equal(sdk.objectDeletes, 1);
+      assert.equal(
+        sdk.creates,
+        1,
+        "only the original fixture creates the bucket",
+      );
+      assert.equal(
+        sdk.deletes,
+        0,
+        "the approved scope preserves the original bucket",
+      );
+      assert.equal(
+        sdk.value.freeformTags?.["berth-operation"],
+        retained.operation,
+      );
+    } finally {
+      await reusedRuntime.end();
+    }
+
+    const missed = await seed();
+    await owner.query(
+      "UPDATE berth_ledger.trials SET digest=$2 WHERE operation=$1",
+      [
+        missed.operation,
+        "fbbab289f7f94b25736c58be46a994c441fd02552cc6022352e3d86d2fab7c83",
+      ],
+    );
+    assert.equal(
+      (await followUp("start", missed.operation))?.result,
+      "safe-write-needed",
+    );
+    const missedChild = randomUUID(),
+      missedStart = Date.now() - 1000;
+    await owner.query(
+      "SELECT berth_retry.prepare_continuation($1,$2,$3,$4,$5)",
+      [
+        missed.operation,
+        missedChild,
+        new Date(missedStart),
+        binding,
+        freePolicyFixture(missedChild, missedStart, scope.region),
+      ],
+    );
+    await runtime.query("SELECT berth_retry.approve_continuation($1,$2)", [
+      missed.operation,
+      missedChild,
+    ]);
+    await assert.rejects(
+      runtime.query("SELECT berth_retry.close_unactivated($1)", [
+        missed.operation,
+      ]),
+      { code: "42501" },
+    );
+    const closeDormant = async () =>
+      (
+        await owner.query(
+          "SELECT berth_retry.close_unactivated($1) AS closed",
+          [missed.operation],
+        )
+      ).rows[0]?.closed;
+    assert.equal(await closeDormant(), false);
+    await owner.query(
+      "UPDATE berth_ledger.trials SET started_at=now()-interval '6 minutes' WHERE operation=$1",
+      [missedChild],
+    );
+    assert.equal(await closeDormant(), true);
+    const missedApproval = (
+      await runtime.query(
+        "SELECT berth_retry.approve_continuation($1,$2) AS value",
+        [missed.operation, missedChild],
+      )
+    ).rows[0]?.value;
+    assert.equal(missedApproval.continuation, missedChild);
+    assert.equal(missedApproval.reason, "activation-expired");
 
     const timely = await seed("open");
     assert.equal(

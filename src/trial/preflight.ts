@@ -390,7 +390,11 @@ export function trialWindow(started: string, expires: string) {
 }
 
 /** Exact non-secret proposal; markers are generated atomically by the ledger on submission. */
-export function proposal(c: TrialConfiguration, operation: string) {
+export function proposal(
+  c: TrialConfiguration,
+  operation: string,
+  preparedBucket?: string,
+) {
   return {
     target: {
       compartment: c.compartment,
@@ -398,7 +402,7 @@ export function proposal(c: TrialConfiguration, operation: string) {
       region: c.region,
     },
     bucket: {
-      name: `berth-${operation.replaceAll("-", "")}`,
+      name: preparedBucket ?? `berth-${operation.replaceAll("-", "")}`,
       publicAccessType: "NoPublicAccess",
       storageTier: "Standard",
       versioning: "Disabled",

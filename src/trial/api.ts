@@ -20,6 +20,8 @@ export interface TrialApiOptions {
   operation?: string;
   /** Only owner-prepared live admission may opt into the one-trial exception. */
   preparedWindow?: { operation: string; startedAt: number; expiresAt: number };
+  /** Server-owned exact target when a continuation keeps the original bucket name. */
+  preparedBucket?: string;
   /** Bind prepared live previews to the reviewed credential identity and window. */
   binding?: string;
   token: string;
@@ -90,6 +92,9 @@ export function makeTrialApi(options: TrialApiOptions) {
     (options.operation !== undefined && !uuid.test(options.operation)) ||
     (options.preparedWindow !== undefined &&
       options.preparedWindow.operation !== options.operation) ||
+    (options.preparedBucket !== undefined &&
+      (!options.preparedWindow ||
+        !/^berth-[0-9a-f]{32}$/.test(options.preparedBucket))) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(options.token) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(options.previewKey)
   )
@@ -100,7 +105,7 @@ export function makeTrialApi(options: TrialApiOptions) {
   const configurationHash = createHash("sha256")
     .update(
       JSON.stringify([
-        proposal(c, "configuration"),
+        proposal(c, "configuration", options.preparedBucket),
         options.binding ?? "",
         options.preparedWindow ?? null,
       ]),
@@ -265,14 +270,14 @@ export function makeTrialApi(options: TrialApiOptions) {
           return reply({
             preview: `${payload}.${sign(payload)}`,
             previewExpiresAt: new Date(acceptedAt + 300000).toISOString(),
-            proposal: proposal(c, id),
+            proposal: proposal(c, id, options.preparedBucket),
             feasibility: functionsAssessment(evidence),
             coverage: "partial-owner-attested",
             hardSpendingCap: false,
           });
         }
         if (!operation) throw Error();
-        const exact = proposal(c, operation);
+        const exact = proposal(c, operation, options.preparedBucket);
         const record = await options.ledger.start({
           operation,
           ...c,

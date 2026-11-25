@@ -39,6 +39,7 @@ export interface LivePorts {
 export function liveTransports(
   e: ReturnType<typeof liveEnvironment>,
   fetcher: typeof fetch = fetch,
+  retainedBucketName?: string,
 ) {
   const signer = new DefaultRequestSigner(
     new SimpleAuthenticationDetailsProvider(
@@ -59,6 +60,7 @@ export function liveTransports(
       e.compartment,
       signer,
       fetcher,
+      retainedBucketName,
     ),
     usage: monitoringTransport(e.region, e.compartment, signer, fetcher),
   };
@@ -206,13 +208,18 @@ export async function executeLiveAdmission(
   request: Request,
   ports: LivePorts = {},
 ) {
-  return withLiveDatabase(e, ports, async (db) => {
+  return withLiveDatabase(e, ports, async (db, snapshot) => {
     await admissionStatus(db, e);
     await meterAdmission(db, e);
     return liveAdmissionApi(
       db,
       e,
-      liveTransports(e, ports.fetch).readiness,
+      liveTransports(
+        e,
+        ports.fetch,
+        snapshot.retryBucket ? snapshot.trial.bucket : undefined,
+      ).readiness,
+      snapshot.trial.bucket,
     ).fetch(request);
   });
 }

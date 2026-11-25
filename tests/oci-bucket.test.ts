@@ -100,6 +100,33 @@ test("bucket deletion uses fresh revision and refuses nonempty or raced resource
   assert.equal(fake.value, undefined);
 });
 
+test("continuation pins the retained bucket revision and cannot create or remove that bucket", async () => {
+  const fake = new FakeOci();
+  const client = bucketClient(fake, dispatcher(), intent.region);
+  const original = await makeBucket(intent, client).create();
+  const child = {
+    ...intent,
+    operation: "00000000-0000-4000-8000-000000000003",
+    marker: "00000000-0000-4000-8000-000000000004",
+    retrySource: intent.operation,
+    retainedBucket: original,
+  };
+  const retained = makeBucket(child, client);
+  const checkpoint = {
+    ...original,
+    operation: child.operation,
+    marker: child.marker,
+  };
+  assert.deepEqual(await retained.read(checkpoint), checkpoint);
+  if (!fake.value) throw Error("missing fixture");
+  fake.value.etag = "changed";
+  await assert.rejects(retained.read(checkpoint), /revision/);
+  await assert.rejects(retained.create(), /invalid-intent/);
+  await assert.rejects(retained.remove(checkpoint), /invalid-intent/);
+  assert.equal(fake.creates, 1);
+  assert.equal(fake.deletes, 0);
+});
+
 test("public Alchemy lifecycle plans without writes and destroys using only cleanup budget", async () => {
   const fake = new FakeOci();
   let cleanupOnly = false;

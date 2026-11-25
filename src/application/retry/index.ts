@@ -1,8 +1,10 @@
 import { retryApi } from "./api.ts";
-import { retryRuntime } from "./runtime.ts";
+import { retryContinuationRuntime, retryRuntime } from "./runtime.ts";
 
-/** Isolated owner reconciliation root. It has no schedule or provider mutation port. */
+/** Isolated owner reconciliation root. Provider writes remain with the separately admitted executor. */
 export default retryApi(
   process.env.BERTH_RETRY_OWNER_CREDENTIAL ?? "",
   retryRuntime(process.env),
+  Date.now,
+  retryContinuationRuntime(process.env),
 );
