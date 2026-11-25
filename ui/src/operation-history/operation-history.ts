@@ -75,6 +75,7 @@ export class OperationHistory {
         ))
     );
   });
+  protected readonly emptyListMessage = "No recorded operations.";
   protected readonly emptyList = computed(
     () => this.store.list()?.items.length === 0,
   );
@@ -82,11 +83,11 @@ export class OperationHistory {
     if (this.store.listLoading()) {
       return "Loading operation history…";
     }
-    if (this.store.listFailure() || !this.store.list()) {
+    if (!this.store.listReadSucceeded()) {
       return "";
     }
     return this.emptyList()
-      ? "No recorded operations."
+      ? this.emptyListMessage
       : "Operation history updated.";
   });
   protected readonly listError = computed(() => {
@@ -142,12 +143,16 @@ export class OperationHistory {
     const result = this.store.detail();
     return result?.record.operation === this.operation() ? result : null;
   });
+  protected readonly detailLoadingMessage = "Loading operation details…";
+  private readonly detailLoadingReadyFor = signal<string | null>(null);
   protected readonly detailStatus = computed(() => {
     if (!this.showDetail() || !this.owner.canRead()) {
       return "";
     }
     if (this.detailLoading()) {
-      return "Loading operation details…";
+      return this.detailLoadingReadyFor() === this.operation()
+        ? this.detailLoadingMessage
+        : "";
     }
     return this.detail() && !this.detailFailure()
       ? "Operation details updated."
@@ -228,6 +233,37 @@ export class OperationHistory {
       }
     });
     afterRenderEffect(() => this.restoreFocus());
+    afterRenderEffect((onCleanup) => {
+      const operation = this.operation();
+      if (!operation || !this.detailHeading()) {
+        this.detailLoadingReadyFor.set(null);
+        return;
+      }
+      if (this.store.operation() !== operation) {
+        return;
+      }
+      if (!this.store.detailLoading()) {
+        this.detailLoadingReadyFor.set(operation);
+        return;
+      }
+      if (untracked(this.detailLoadingReadyFor) === operation) {
+        return;
+      }
+      this.detailLoadingReadyFor.set(null);
+      // Let assistive technology process heading focus before announcing loading.
+      const timer = setTimeout(() => {
+        if (
+          this.operation() === operation &&
+          this.store.operation() === operation &&
+          this.store.detailLoading() &&
+          this.owner.canRead() &&
+          !this.invalidOperation()
+        ) {
+          this.detailLoadingReadyFor.set(operation);
+        }
+      }, 100);
+      onCleanup(() => clearTimeout(timer));
+    });
   }
 
   /** Restore focus after route and pane state agree, including a regrouped row. */

@@ -25,6 +25,7 @@ interface State {
   detail: DetailResult | null;
   operation: string | null;
   listLoading: boolean;
+  listReadSucceeded: boolean;
   detailLoading: boolean;
   listFailure: { before: string | null } | null;
   detailFailure: "missing" | "unavailable" | null;
@@ -40,6 +41,7 @@ const initial: State = {
   detail: null,
   operation: null,
   listLoading: false,
+  listReadSucceeded: false,
   detailLoading: false,
   listFailure: null,
   detailFailure: null,
@@ -83,6 +85,7 @@ export const HistoryStore = signalStore(
             store,
             result.kind === "success"
               ? {
+                  listReadSucceeded: true,
                   list: {
                     ...result.value,
                     before: job.before,
@@ -151,7 +154,7 @@ export const HistoryStore = signalStore(
       patchState(
         store,
         job.pane === "list"
-          ? { listLoading: true, listFailure: null }
+          ? { listLoading: true, listReadSucceeded: false, listFailure: null }
           : { detailLoading: true, detailFailure: null },
       );
       void drain();
@@ -171,7 +174,11 @@ export const HistoryStore = signalStore(
         patchState(store, { listLoading: false });
       }
       if (store.list()?.before !== page.before) {
-        patchState(store, { list: page, listFailure: null });
+        patchState(store, {
+          list: page,
+          listReadSucceeded: false,
+          listFailure: null,
+        });
       }
     };
 
@@ -223,7 +230,11 @@ export const HistoryStore = signalStore(
       /** Preserve settled views while discarding work from the departed screen. */
       leave() {
         discardReads();
-        patchState(store, { listLoading: false, detailLoading: false });
+        patchState(store, {
+          listLoading: false,
+          listReadSucceeded: false,
+          detailLoading: false,
+        });
       },
       refreshList: () =>
         enqueue({ pane: "list", before: store.list()?.before ?? null }),

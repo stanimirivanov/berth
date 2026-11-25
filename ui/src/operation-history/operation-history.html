@@ -81,7 +81,7 @@
             </div>
           }
           @if (emptyList()) {
-            <p class="empty">No recorded operations.</p>
+            <p class="empty">{{ emptyListMessage }}</p>
           }
           @if (store.list(); as list) {
             @for (group of groups(); track group.label) {
@@ -125,7 +125,7 @@
             <h2 #detailHeading tabindex="-1" [attr.aria-describedby]="detailLoading() ? 'history-detail-loading' : null">Operation details</h2>
             <button mat-stroked-button type="button" (click)="store.refreshDetail()" [disabled]="detailLoading()">Refresh detail</button>
             @if (detailLoading()) {
-              <p id="history-detail-loading">{{ detailStatus() }}</p>
+              <p id="history-detail-loading">{{ detailLoadingMessage }}</p>
               <mat-progress-bar mode="indeterminate" aria-label="Loading operation details" />
             }
             @if (detailFailure()) {

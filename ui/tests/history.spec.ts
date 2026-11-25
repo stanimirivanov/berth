@@ -972,8 +972,13 @@ test("an active operation moves to Needs attention at expiry without a history r
 test("returning from desktop detail restores the page it opened from", async ({
   page,
 }) => {
-  await page.route("**/api/history**", (route) => {
+  const newestReply = Promise.withResolvers<void>();
+  let holdNewest = false;
+  await page.route("**/api/history**", async (route) => {
     const url = new URL(route.request().url());
+    if (holdNewest && url.pathname === "/api/history" && !url.search) {
+      await newestReply.promise;
+    }
     return route.fulfill({
       json: url.pathname.endsWith(second)
         ? item(second)
@@ -996,6 +1001,19 @@ test("returning from desktop detail restores the page it opened from", async ({
   await expect(page).toHaveURL("/operations");
   await expect(originalRow).toBeFocused();
   await expect(page.getByRole("link", { name: first })).toHaveCount(0);
+
+  holdNewest = true;
+  const updates = page.locator("#history-list-updates[aria-live=polite]");
+  try {
+    await originalRow.click();
+    await page.getByRole("button", { name: "Newest operations" }).click();
+    await expect(updates).toHaveText("Loading operation history…");
+    await page.getByRole("link", { name: "Back to inbox" }).click();
+    await expect(originalRow).toBeFocused();
+    await expect(updates).toBeEmpty();
+  } finally {
+    newestReply.resolve();
+  }
 });
 
 test("Material access on a saved link preserves the static CSP and keyboard submission", async ({
@@ -1041,9 +1059,25 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
       "background-color",
       "rgb(0, 92, 187)",
     );
+    await page.evaluate(() => {
+      document.addEventListener("focusin", (event) => {
+        const heading = event.target;
+        if (
+          heading instanceof HTMLHeadingElement &&
+          heading.textContent === "Operation details"
+        ) {
+          heading.setAttribute(
+            "data-loading-at-focus",
+            document.querySelector("#history-detail-updates")?.textContent ??
+              "live region missing",
+          );
+        }
+      });
+    });
     await token.fill("h".repeat(40));
     await token.press("Enter");
     await expect(detailHeading).toBeFocused();
+    await expect(detailHeading).toHaveAttribute("data-loading-at-focus", "");
     await expect(detailHeading).toHaveAccessibleDescription(
       "Loading operation details…",
     );
