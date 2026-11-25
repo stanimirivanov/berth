@@ -762,17 +762,19 @@ test("retry boundaries permit the read-only observer and reject executor couplin
     "src/application/retry/continuation.ts":
       'import "effect/Schema"; import "./contract.js";',
     "src/application/retry/contract.ts":
-      'import "effect/Schema"; import type { RetryObservation } from "../../providers/oci/retry-observation.js";',
+      'import "effect/Schema"; import type { RetryObservation } from "./observation.js";',
     "src/application/retry/index.ts":
       'import "./api.js"; import "./runtime.js";',
     "src/application/retry/runtime.ts":
-      'import "./reconciliation.js"; import "./continuation.js"; import type { RetryAction } from "./api.js"; import "../retained-trial-ledger/retry.js"; import "../../providers/oci/retry-observation.js";',
+      'import "./reconciliation.js"; import "./continuation.js"; import type { RetryAction } from "./api.js"; import "../retained-trial-ledger/retry.js"; import "../../providers/oci/retry-observation.js"; import type { RetryObserver } from "./observation.js";',
     "src/application/retry/reconciliation.ts":
-      'import type { RetryLedger } from "./contract.js"; import type { RetryAction } from "./api.js"; import type { RetryObserver } from "../../providers/oci/retry-observation.js";',
+      'import type { RetryLedger } from "./contract.js"; import type { RetryAction } from "./api.js"; import type { RetryObserver } from "./observation.js";',
     "src/application/retained-trial-ledger/retry.ts":
       'import "../retry/contract.js"; import "../retry/continuation.js"; import "./sql.js";',
     "src/application/retained-trial-ledger/sql.ts": "",
-    "src/providers/oci/retry-observation.ts": 'import "effect/Schema";',
+    "src/application/retry/observation.ts": "",
+    "src/providers/oci/retry-observation.ts":
+      'import "effect/Schema"; import type { RetryObserver } from "../../application/retry/observation.js";',
     "src/providers/oci/client.ts": "",
     "src/trial/executor.ts": "",
   };
@@ -796,6 +798,22 @@ test("retry boundaries permit the read-only observer and reject executor couplin
     [
       "src/application/retry/reconciliation.ts",
       'import "../retained-trial-ledger/retry.js";',
+    ],
+    [
+      "src/application/retry/contract.ts",
+      'import type { RetryObservation } from "../../providers/oci/retry-observation.js";',
+    ],
+    [
+      "src/application/retry/reconciliation.ts",
+      'import { retryObserver } from "../../providers/oci/retry-observation.js";',
+    ],
+    [
+      "src/application/retry/observation.ts",
+      'import type { RetryScope } from "../../providers/oci/retry-observation.js";',
+    ],
+    [
+      "src/providers/oci/retry-observation.ts",
+      'import type { RetryLedger } from "../../application/retry/contract.js";',
     ],
     ["src/providers/oci/retry-observation.ts", 'import "./client.js";'],
   ])) {
