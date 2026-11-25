@@ -4,8 +4,9 @@ import { historyApi } from "../src/application/history/api.ts";
 import { onRequest as nestedMiss } from "../ui/functions/api/history/[[rest]].ts";
 import { onRequest as detail } from "../ui/functions/api/history/[operation].ts";
 import { onRequest as list } from "../ui/functions/api/history/index.ts";
+import { historyRecord } from "./fixtures/history-record.ts";
 
-const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const id = historyRecord.operation;
 const env = {
   BERTH_HISTORY_SITE_ORIGIN: "https://berth.pages.dev",
   BERTH_HISTORY_NEON_ORIGIN:
@@ -26,9 +27,15 @@ function request(path: string, init: RequestInit = {}) {
 
 test("Pages list and detail reach the real Neon handler with only server-side authorization", async () => {
   const calls: unknown[][] = [];
-  const neon = historyApi(env.BERTH_HISTORY_UPSTREAM_TOKEN, async (...args) => {
-    calls.push(args);
-    return args[0] ? { operation: args[0] } : { items: [], next: null };
+  const neon = historyApi(env.BERTH_HISTORY_UPSTREAM_TOKEN, {
+    async list(before, limit) {
+      calls.push(["list", before, limit]);
+      return { items: [], next: null };
+    },
+    async detail(operation) {
+      calls.push(["detail", operation]);
+      return { ...historyRecord, operation };
+    },
   });
   const upstream: typeof fetch = async (url, init) => {
     const sent = new Request(url, init);
@@ -57,12 +64,12 @@ test("Pages list and detail reach the real Neon handler with only server-side au
     { request: request(`/api/history/${id}`), env },
     upstream,
   );
-  assert.deepEqual(await record.json(), { operation: id });
+  assert.deepEqual(await record.json(), historyRecord);
   assert.equal(record.headers.get("cache-control"), "no-store");
   assert.equal(record.headers.get("access-control-allow-origin"), null);
   assert.deepEqual(calls, [
-    [null, id, 2],
-    [id, null, 20],
+    ["list", id, 2],
+    ["detail", id],
   ]);
 });
 

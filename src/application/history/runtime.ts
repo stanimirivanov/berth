@@ -4,7 +4,7 @@ import {
   retainedHistoryConnection,
   retainedHistoryLedger,
 } from "../retained-trial-ledger/history.ts";
-import type { HistoryRead } from "./api.ts";
+import type { HistoryRead } from "./contract.ts";
 
 /** Restricted invocation connection; tests replace only the database I/O boundary. */
 export interface HistoryDatabase {
@@ -27,7 +27,9 @@ export function historyReader(
   ) => new Client(configuration),
 ): HistoryRead {
   let busy = false;
-  return async (operation, before, limit) => {
+
+  /** Keep each read inside one checked transaction and release it before the next read. */
+  async function withLedger<T>(read: (ledger: HistoryRead) => Promise<T>) {
     if (
       busy ||
       Object.keys(env).some((key) => key.startsWith("OCI_") && env[key])
@@ -44,10 +46,7 @@ export function historyReader(
     try {
       await db.connect();
       await prepareRetainedHistoryReader(db);
-      const store = retainedHistoryLedger(db);
-      return operation
-        ? await store.detail(operation)
-        : await store.list(before, limit);
+      return await read(retainedHistoryLedger(db));
     } finally {
       try {
         await db.end();
@@ -55,5 +54,10 @@ export function historyReader(
         busy = false;
       }
     }
+  }
+
+  return {
+    list: (before, limit) => withLedger((ledger) => ledger.list(before, limit)),
+    detail: (operation) => withLedger((ledger) => ledger.detail(operation)),
   };
 }

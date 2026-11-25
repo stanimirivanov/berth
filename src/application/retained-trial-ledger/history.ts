@@ -2,7 +2,11 @@ import {
   assertRuntimePrivileges,
   restrictedConnection,
 } from "../../storage/postgres/runtime-access.ts";
-import { decodeHistoryDetail, decodeHistoryPage } from "../history/contract.ts";
+import {
+  decodeHistoryDetail,
+  decodeHistoryPage,
+  type HistoryRead,
+} from "../history/contract.ts";
 import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
 export { restrictedConnection as retainedHistoryConnection };
@@ -14,7 +18,7 @@ export async function prepareRetainedHistoryReader(db: RetainedTrialDatabase) {
 }
 
 /** Read only the existing owner-reviewed History functions on a read-only connection. */
-export function retainedHistoryLedger(db: RetainedTrialDatabase) {
+export function retainedHistoryLedger(db: RetainedTrialDatabase): HistoryRead {
   /** Preserve the existing History error contract and redact SQL diagnostics. */
   async function read<T>(
     decode: (value: unknown) => T,

@@ -4,6 +4,7 @@ import { historyApi } from "../src/application/history/api.ts";
 import { inventoryApi } from "../src/application/inventory/api.ts";
 import { onRequest as history } from "../ui/functions/api/history/index.ts";
 import { onRequest as inventory } from "../ui/functions/api/inventory/index.ts";
+import { historyRecord } from "./fixtures/history-record.ts";
 
 const site = "https://berth.example";
 const historyOrigin = "https://history.compute.aws.neon.tech";
@@ -27,7 +28,7 @@ function request(url: string, token: string, origin?: string) {
 }
 
 test("read-only access can be shut down and restored without discarding retained evidence", async () => {
-  const historyPage = { items: [{ verdict: "partial" }], next: null };
+  const historyPage = { items: [historyRecord], next: null };
   const inventoryPage = {
     offering: "oci-object-storage-bucket",
     coverage: "incomplete",
@@ -45,9 +46,14 @@ test("read-only access can be shut down and restored without discarding retained
       otherToken: bindings.BERTH_INVENTORY_UPSTREAM_TOKEN,
       page: historyPage,
       api: (token: string) =>
-        historyApi(token, async () => {
-          reads++;
-          return historyPage;
+        historyApi(token, {
+          async list() {
+            reads++;
+            return historyPage;
+          },
+          async detail() {
+            assert.fail("The history page request must use the list port");
+          },
         }),
     },
     {
