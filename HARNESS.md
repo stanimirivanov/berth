@@ -164,6 +164,11 @@ limitation visible when extending tests.
 | Pre-PR / CI | `pnpm check` | Application and browser tests, bundles, secret scan and dependency audits |
 | DB boundary | `BERTH_TEST_POSTGRES_PORT=<loopback-port> pnpm test:setup-db` | Use a fresh disposable DB; never substitute a remote URL |
 
+`pnpm typecheck:pages` checks every Pages handler and edge module with Worker
+types. `pnpm typecheck:playwright` checks the Playwright configuration, tests
+and fixtures with Node and DOM types. Both are no-emit projects in the fast gate.
+The full gate still checks Angular templates through the AOT build.
+
 `pnpm lint:spacing` adds ESLint Stylistic's
 [`padding-line-between-statements`](https://eslint.style/rules/padding-line-between-statements)
 to the existing Biome checks. Require a blank line before and after function
