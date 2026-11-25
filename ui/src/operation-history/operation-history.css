@@ -102,9 +102,6 @@ berth-operation-history {
     color: var(--muted);
     font-size: 0.875rem;
   }
-  .operation-row[aria-current="page"] .operation-summary {
-    color: var(--ink);
-  }
   .operations .operation-row .operation-id[matListItemTitle],
   .operations .operation-row .operation-summary[matListItemLine] {
     overflow-wrap: anywhere;

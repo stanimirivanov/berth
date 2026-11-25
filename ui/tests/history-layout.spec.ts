@@ -25,19 +25,34 @@ async function expectReadable(locator: Locator) {
   await expect(locator).toBeVisible();
   expect(
     await locator.evaluate((element) => {
-      const { left, right, top, bottom } = element.getBoundingClientRect();
-      const clipsVertically = ["hidden", "clip"].includes(
-        getComputedStyle(element).overflowY,
-      );
       const range = document.createRange();
       range.selectNodeContents(element);
-      return Array.from(range.getClientRects()).every(
-        (line) =>
-          line.left >= left - 1 &&
-          line.right <= right + 1 &&
-          (!clipsVertically ||
-            (line.top >= top - 1 && line.bottom <= bottom + 1)),
-      );
+      const lines = Array.from(range.getClientRects());
+      const clips = (overflow: string) => ["hidden", "clip"].includes(overflow);
+      for (
+        let container: Element | null = element;
+        container;
+        container = container.parentElement
+      ) {
+        const { overflowX, overflowY } = getComputedStyle(container);
+        const clipsWidth = container === element || clips(overflowX);
+        const clipsHeight = clips(overflowY);
+        if (!clipsWidth && !clipsHeight) {
+          continue;
+        }
+        const { left, right, top, bottom } = container.getBoundingClientRect();
+        const fits = lines.every(
+          (line) =>
+            (!clipsWidth ||
+              (line.left >= left - 1 && line.right <= right + 1)) &&
+            (!clipsHeight ||
+              (line.top >= top - 1 && line.bottom <= bottom + 1)),
+        );
+        if (!fits) {
+          return false;
+        }
+      }
+      return lines.length > 0;
     }),
     (await locator.textContent()) ?? undefined,
   ).toBe(true);
@@ -54,9 +69,22 @@ async function expectNoHorizontalScroll(page: Page, width: number) {
   ).toEqual({ viewport: width, document: width, offset: 0 });
 }
 
-/** Verify actual keyboard focus has an exposed target in the viewport. */
+/** Verify keyboard focus has a painted indicator and an exposed target. */
 async function expectExposedFocus(locator: Locator) {
   await expect(locator).toBeFocused();
+  if (await locator.evaluate((element) => element.matches("input"))) {
+    const outline = locator
+      .locator("xpath=ancestor::mat-form-field")
+      .locator(".mdc-notched-outline__leading");
+    await expect(outline).toBeVisible();
+    await expect(outline).toHaveCSS("border-top-style", "solid");
+    await expect(outline).toHaveCSS("border-top-width", "2px");
+    await expect(outline).toHaveCSS("border-top-color", /^rgb\(/);
+  } else {
+    await expect(locator).toHaveCSS("outline-style", "solid");
+    await expect(locator).toHaveCSS("outline-width", /^[1-9][\d.]*px$/);
+    await expect(locator).toHaveCSS("outline-color", /^rgb\(/);
+  }
   await expect
     .poll(() =>
       locator.evaluate((element) => {
@@ -94,11 +122,31 @@ async function tabThrough(
   }
 }
 
+/** Reach and fill the History access field with the keyboard. */
+async function enterHistoryToken(page: Page, token: Locator) {
+  await tabThrough(
+    page,
+    "Tab",
+    page.getByRole("link", { name: "Berth home" }),
+    page.getByRole("link", { name: "Infrastructure" }),
+    page.getByRole("link", { name: "Operation history" }),
+    token,
+  );
+  await page.keyboard.insertText("h".repeat(40));
+}
+
 /** Follow History access, pagination, an operation and the return link by keyboard. */
 async function checkHistoryLayout(
   page: Page,
-  width: number,
-  textScale: number,
+  {
+    width,
+    textScale,
+    headingSize,
+  }: {
+    width: number;
+    textScale: number;
+    headingSize: number;
+  },
 ) {
   await mockHistory(page);
   await page.goto("/operations");
@@ -111,7 +159,6 @@ async function checkHistoryLayout(
     "font-size",
     `${16 * textScale}px`,
   );
-  const headingSize = width === 320 ? 28.8 : 40 * textScale;
   await expect(heading).toHaveCSS("font-size", `${headingSize}px`);
   await expect(label).toHaveCSS("font-size", `${16 * textScale}px`);
   await expect(token).toHaveCSS("font-size", `${16 * textScale}px`);
@@ -122,15 +169,7 @@ async function checkHistoryLayout(
   await expectReadable(hint);
   await expectNoHorizontalScroll(page, width);
 
-  await tabThrough(
-    page,
-    "Tab",
-    page.getByRole("link", { name: "Berth home" }),
-    page.getByRole("link", { name: "Infrastructure" }),
-    page.getByRole("link", { name: "Operation history" }),
-    token,
-  );
-  await page.keyboard.insertText("h".repeat(40));
+  await enterHistoryToken(page, token);
   await expect
     .poll(async () => {
       const labelBox = await label.boundingBox();
@@ -234,7 +273,11 @@ test("History respects the Chromium default font size at 200% text with desktop 
       viewport: { width: 1280, height: 820 },
     });
     try {
-      await checkHistoryLayout(context.pages()[0], 1280, 2);
+      await checkHistoryLayout(context.pages()[0], {
+        width: 1280,
+        textScale: 2,
+        headingSize: 80,
+      });
     } finally {
       await context.close();
     }
@@ -247,7 +290,11 @@ test("History reflows at 320 CSS pixels with default text", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 820 });
-  await checkHistoryLayout(page, 320, 1);
+  await checkHistoryLayout(page, {
+    width: 320,
+    textScale: 1,
+    headingSize: 28.8,
+  });
 });
 
 /** Calculate WCAG contrast from Chromium's computed sRGB colors. */
@@ -268,7 +315,7 @@ function contrastRatio(foreground: number[], background: number[]) {
 async function measureContrast(
   subject: Locator,
   property: "color" | "border-top-color" | "outline-color" | "background-color",
-  stateLayer?: string,
+  stateLayer?: { selector: string; coversForeground?: boolean },
 ) {
   const colors = await subject.evaluate(
     (element, { property, stateLayer }) => {
@@ -294,23 +341,29 @@ async function measureContrast(
           if (!stateLayer) {
             return { foreground, background };
           }
+          const { selector, coversForeground } = stateLayer;
           const layer =
-            element.closest(stateLayer) ?? element.querySelector(stateLayer);
+            element.closest(selector) ?? element.querySelector(selector);
           if (!layer) {
-            throw new Error(`Missing Material state layer ${stateLayer}`);
+            throw new Error(`Missing Material state layer ${selector}`);
           }
           const { opacity, backgroundColor } = getComputedStyle(
             layer,
             "::before",
           );
           const alpha = Number(opacity);
-          const overlay = alpha > 0 ? rgb(backgroundColor) : background;
-          return {
-            foreground,
-            background: background.map(
+          if (alpha === 0) {
+            return { foreground, background };
+          }
+          const overlay = rgb(backgroundColor);
+          const blend = (color: number[]) =>
+            color.map(
               (channel, index) =>
                 channel * (1 - alpha) + overlay[index] * alpha,
-            ),
+            );
+          return {
+            foreground: coversForeground ? blend(foreground) : foreground,
+            background: blend(background),
           };
         }
         surface = surface.parentElement;
@@ -336,7 +389,7 @@ test("History text, controls and keyboard indicators meet WCAG AA contrast", asy
     label: string,
     subject: Locator,
     property: Parameters<typeof measureContrast>[1] = "color",
-    stateLayer?: string,
+    stateLayer?: Parameters<typeof measureContrast>[2],
   ) => {
     const result = await measureContrast(subject, property, stateLayer);
     measurements[label] = result;
@@ -370,26 +423,13 @@ test("History text, controls and keyboard indicators meet WCAG AA contrast", asy
   await measure("Token field outline", outline, "border-top-color");
   await measure("Submit control fill", load, "background-color");
 
-  await tabThrough(
-    page,
-    "Tab",
-    page.getByRole("link", { name: "Berth home" }),
-    page.getByRole("link", { name: "Infrastructure" }),
-    page.getByRole("link", { name: "Operation history" }),
-    token,
-  );
-  await expect(outline).toHaveCSS("border-top-width", "2px");
+  await enterHistoryToken(page, token);
   await measure("Focused token outline", outline, "border-top-color");
-  await page.keyboard.insertText("h".repeat(40));
   await page.keyboard.press("Tab");
   await expectExposedFocus(load);
-  await expect(load).toHaveCSS("outline-style", "solid");
-  await measure(
-    "Focused submit label",
-    load,
-    "color",
-    ".mat-mdc-button-persistent-ripple",
-  );
+  await measure("Focused submit label", load, "color", {
+    selector: ".mat-mdc-button-persistent-ripple",
+  });
   await measure("Submit focus ring", load, "outline-color");
   await page.keyboard.press("Enter");
 
@@ -404,8 +444,10 @@ test("History text, controls and keyboard indicators meet WCAG AA contrast", asy
   const row = inbox.getByRole("link", { name: first });
   await expect(row).toBeVisible();
   const summary = row.getByText("Phase: cleanup · Unresolved mutations: 1");
+  // The list state layer sits above row content and the inset focus ring.
+  const rowStateLayer = { selector: ".operation-row", coversForeground: true };
   await page.mouse.move(0, 0);
-  await measure("Inbox row summary", summary, "color", ".operation-row");
+  await measure("Inbox row summary", summary, "color", rowStateLayer);
   await row.click();
   await page.mouse.move(0, 0);
   const detail = page.getByRole("region", { name: "Selected operation" });
@@ -430,25 +472,19 @@ test("History text, controls and keyboard indicators meet WCAG AA contrast", asy
     row,
   );
   await expect(row).toHaveAttribute("aria-current", "page");
-  await expect(row).toHaveCSS("outline-style", "solid");
   await measure(
     "Selected row ID while focused",
     row.getByText(first, { exact: true }),
     "color",
-    ".operation-row",
+    rowStateLayer,
   );
   await measure(
     "Selected row summary while focused",
     summary,
     "color",
-    ".operation-row",
+    rowStateLayer,
   );
-  await measure(
-    "Selected row focus ring",
-    row,
-    "outline-color",
-    ".operation-row",
-  );
+  await measure("Selected row focus ring", row, "outline-color", rowStateLayer);
 
   await testInfo.attach("wcag-contrast.json", {
     body: JSON.stringify(measurements, null, 2),
