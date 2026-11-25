@@ -67,6 +67,14 @@ export const historyFunction = {
   source: "./src/application/history/index.ts",
 };
 
+/** Dedicated Inventory projection with no executor credentials or schedule. */
+export const inventoryFunction = {
+  ...probeFunction,
+  slug: "berthinventory118",
+  name: "Berth read-only managed inventory",
+  source: "./src/application/inventory/index.ts",
+};
+
 /** Isolated retry owner action, built locally and deployed only under separate authorization. */
 export const retryFunction = {
   ...probeFunction,

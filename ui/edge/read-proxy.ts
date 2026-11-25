@@ -1,0 +1,190 @@
+/** Fixed browser and upstream bindings for the selected read capability. */
+interface ReadBindings {
+  siteOrigin: string | undefined;
+  upstreamOrigin: string | undefined;
+  browserToken: string | undefined;
+  upstreamToken: string | undefined;
+  project?: (value: unknown, limit: number) => unknown;
+}
+
+const uuid =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+const inventoryCursor = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+const token = /^[A-Za-z0-9_-]{32,128}$/;
+const maxBytes = 128 * 1024;
+
+/** Accept only a canonical HTTPS origin, optionally with a trailing slash. */
+function origin(value: string | undefined): URL {
+  if (!value || !/^https:\/\/[a-z0-9.-]+\/?$/.test(value)) throw Error();
+  const url = new URL(value);
+  if (value !== url.origin && value !== url.href) throw Error();
+  return url;
+}
+
+/** Hash both inputs and compare every digest byte without an early exit. */
+async function matches(actual: string, expected: string) {
+  const hash = async (value: string) =>
+    new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+    );
+  const [left, right] = await Promise.all([hash(actual), hash(expected)]);
+  let difference = 0;
+  for (const [index, byte] of left.entries())
+    difference |= byte ^ (right[index] ?? 0);
+  return difference === 0;
+}
+
+/** Allow a UUID cursor and limit from 1 to 50 on list requests. */
+function validQuery(
+  url: URL,
+  detail: boolean,
+  kind: "history" | "inventory",
+): boolean {
+  const cursor = kind === "history" ? "before" : "after";
+  const cursorShape = kind === "history" ? uuid : inventoryCursor;
+  if (url.search.length > 256 || (detail && url.search)) return false;
+  const seen = new Set<string>();
+  for (const [key, value] of url.searchParams) {
+    if (seen.has(key)) return false;
+    if (key === cursor) {
+      if (!cursorShape.test(value)) return false;
+    } else if (key === "limit") {
+      if (!/^[1-9][0-9]?$/.test(value) || Number(value) > 50) return false;
+    } else return false;
+    seen.add(key);
+  }
+  return true;
+}
+
+/** Read bounded JSON without forwarding upstream headers or a partial response. */
+async function readJson(response: Response): Promise<unknown> {
+  if (
+    !/^application\/json(?:\s*;|$)/i.test(
+      response.headers.get("content-type") ?? "",
+    ) ||
+    !response.body
+  )
+    throw Error();
+  const reader = response.body.getReader();
+  const bytes = new Uint8Array(maxBytes);
+  let length = 0;
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done)
+        return JSON.parse(
+          new TextDecoder("utf-8", { fatal: true }).decode(
+            bytes.subarray(0, length),
+          ),
+        );
+      if (part.value.byteLength > maxBytes - length) throw Error();
+      bytes.set(part.value, length);
+      length += part.value.byteLength;
+    }
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** Authorize a single same-origin read, then send one bounded request to the configured Neon Function. */
+export async function readProxy(
+  request: Request,
+  kind: "history" | "inventory",
+  config: ReadBindings,
+  upstream: typeof fetch,
+): Promise<Response> {
+  const root = `/api/${kind}`;
+  const reply = (
+    value: unknown,
+    status = 200,
+    headers: Record<string, string> = {},
+  ) =>
+    Response.json(value, {
+      status,
+      headers: {
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        ...headers,
+      },
+    });
+  const unavailable = () => reply({ error: `${kind}-unavailable` }, 503);
+  try {
+    const site = origin(config.siteOrigin);
+    const neon = origin(config.upstreamOrigin);
+    if (!/^[a-z0-9-]+\.compute\.[a-z0-9.-]+\.neon\.tech$/.test(neon.hostname))
+      return unavailable();
+    const access = config.browserToken,
+      service = config.upstreamToken;
+    if (
+      !access ||
+      !service ||
+      !token.test(access) ||
+      !token.test(service) ||
+      access === service
+    )
+      return unavailable();
+    const url = new URL(request.url);
+    const browserOrigin = request.headers.get("origin");
+    const fetchSite = request.headers.get("sec-fetch-site");
+    if (
+      url.origin !== site.origin ||
+      (browserOrigin !== null && browserOrigin !== site.origin) ||
+      (fetchSite !== null &&
+        fetchSite !== "same-origin" &&
+        fetchSite !== "none")
+    )
+      return reply({ error: "forbidden" }, 403);
+    if (request.method !== "GET")
+      return reply({ error: "method-not-allowed" }, 405, { allow: "GET" });
+    const detail = url.pathname !== root;
+    if (
+      detail &&
+      (kind !== "history" ||
+        !url.pathname.startsWith(`${root}/`) ||
+        !uuid.test(url.pathname.slice(root.length + 1)))
+    )
+      return reply({ error: "not-found" }, 404);
+    const authorization = request.headers.get("authorization") ?? "";
+    if (
+      authorization.length > 135 ||
+      !(await matches(authorization, `Bearer ${access}`))
+    )
+      return reply({ error: "unauthorized" }, 401);
+    if (!validQuery(url, detail, kind))
+      return reply({ error: `invalid-${kind}-request` }, 400);
+    const target = new URL(neon);
+    target.pathname = url.pathname;
+    target.search = url.search;
+    const response = await upstream(target, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${service}`,
+      },
+      redirect: "manual",
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (response.status === 200) {
+      try {
+        const value = await readJson(response);
+        return reply(
+          config.project
+            ? config.project(value, Number(url.searchParams.get("limit") ?? 20))
+            : value,
+        );
+      } finally {
+        if (!response.bodyUsed) void response.body?.cancel().catch(() => {});
+      }
+    }
+    void response.body?.cancel().catch(() => {});
+    return detail && response.status === 404
+      ? reply({ error: "not-found" }, 404)
+      : unavailable();
+  } catch {
+    return unavailable();
+  }
+}

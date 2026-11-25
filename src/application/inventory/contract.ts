@@ -34,5 +34,10 @@ const page = Schema.Struct({
 /** Bounded Inventory projection, carrying observed presence and offering coverage independently. */
 export type InventoryPage = typeof page.Type;
 
+/** Read one retained Inventory page. The cursor names the last seen instance and remains opaque to callers. */
+export interface InventoryReader {
+  page(after?: string | null, limit?: number): Promise<InventoryPage>;
+}
+
 /** Decode only application-owned Inventory fields and discard undeclared evidence. */
 export const decodeInventoryPage = Schema.decodeUnknownSync(page);

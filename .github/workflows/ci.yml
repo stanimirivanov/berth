@@ -68,6 +68,7 @@ jobs:
             exit 1
           fi
       - run: pnpm check
+      - run: pnpm run build:inventory
       - run: pnpm run build:state-probe
       - run: pnpm run test:setup-db
         env:

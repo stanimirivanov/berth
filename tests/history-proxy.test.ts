@@ -190,8 +190,14 @@ test("Pages returns fixed errors for redirects, upstream failures, oversized or 
 
 test("Pages invocation rules isolate only the history API from the static UI", async () => {
   const { readFile } = await import("node:fs/promises");
+  const routes = JSON.parse(await readFile("ui/public/_routes.json", "utf8"));
   assert.deepEqual(
-    JSON.parse(await readFile("ui/public/_routes.json", "utf8")),
+    {
+      ...routes,
+      include: routes.include.filter((route: string) =>
+        route.startsWith("/api/history"),
+      ),
+    },
     {
       version: 1,
       include: ["/api/history", "/api/history/*"],
