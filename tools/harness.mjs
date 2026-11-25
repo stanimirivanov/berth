@@ -85,7 +85,7 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
   ],
   "src/application/retry/runtime.ts": [
     "src/application/retry/continuation.ts",
-    "src/application/retry/api.ts",
+    "src/application/retry/contract.ts",
     "src/application/retry/reconciliation.ts",
     "src/application/retry/observation.ts",
     "src/providers/oci/retry-observation.ts",
@@ -93,7 +93,6 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
   ],
   "src/application/retry/reconciliation.ts": [
     "src/application/retry/contract.ts",
-    "src/application/retry/api.ts",
     "src/application/retry/observation.ts",
   ],
   "src/application/history/index.ts": [
