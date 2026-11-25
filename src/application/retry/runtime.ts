@@ -11,8 +11,8 @@ import {
   retainedRetryContinuation,
   retainedRetryLedger,
 } from "../retained-trial-ledger/retry.ts";
-import type { RetryAction } from "./api.ts";
 import type { RetryContinuation } from "./continuation.ts";
+import type { RetryAction } from "./contract.ts";
 import type { RetryObserver } from "./observation.ts";
 import { retryActions } from "./reconciliation.ts";
 

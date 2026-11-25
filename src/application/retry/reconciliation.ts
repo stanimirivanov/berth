@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { RetryAction } from "./api.ts";
-import type { RetryLedger, RetryProof } from "./contract.ts";
+import type { RetryAction, RetryLedger, RetryProof } from "./contract.ts";
 import type { RetryObservation, RetryObserver } from "./observation.ts";
 
 /** Claim once, commit every reservation before its GET, and account under the selected execution scope. */

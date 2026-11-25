@@ -82,6 +82,12 @@ const status = Schema.Union([
 /** Public retry projection derived from the same codec used at the SQL and HTTP boundaries. */
 export type RetryStatus = typeof status.Type;
 
+/** Start may query the read-only provider during reconciliation. Status reads use the retained ledger only. */
+export type RetryAction = (
+  action: "start" | "status",
+  operation: string,
+) => Promise<RetryStatus | null>;
+
 /** Decode and project the approved fields, stripping excess private values at every struct. */
 export const decodeRetryStatus = Schema.decodeUnknownSync(
   Schema.NullOr(status),

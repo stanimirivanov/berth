@@ -13,8 +13,10 @@ Keep retained trial SQL behind the capability-specific interfaces from
 decoding, role checks and read-only transaction for History. The trial executor,
 qualification probes and owner recovery keep their existing boundaries.
 
-Retry owns the observation port and its evidence vocabulary. The OCI observer
-implements the port, and the Retry runtime wires it into reconciliation.
+Retry owns the start and status action port used by its HTTP adapter and
+implemented by reconciliation. See [#163](https://github.com/stanimirivanov/berth/issues/163).
+Retry also owns the observation port and its evidence vocabulary. The OCI
+observer implements that port, and the Retry runtime wires it into reconciliation.
 See [#153](https://github.com/stanimirivanov/berth/issues/153).
 
 The backend import allowlist enforces the approved dependencies. History's

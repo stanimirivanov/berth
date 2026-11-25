@@ -10,13 +10,7 @@ import {
   decodeContinuation,
   type RetryContinuation,
 } from "./continuation.ts";
-import { decodeRetryStatus, type RetryStatus } from "./contract.ts";
-
-/** Only the start action may use the read-only provider; status reads go to SQL. */
-export type RetryAction = (
-  action: "start" | "status",
-  operation: string,
-) => Promise<RetryStatus | null>;
+import { decodeRetryStatus, type RetryAction } from "./contract.ts";
 
 const operationPath =
   /^\/api\/retry\/operations\/([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})(?:(\/continuation)|\/proposals\/([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12})\/approve)?$/;

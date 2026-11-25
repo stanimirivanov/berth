@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { retryApi } from "../src/application/retry/api.ts";
 import { decodeContinuation } from "../src/application/retry/continuation.ts";
+import type { RetryAction } from "../src/application/retry/contract.ts";
 
 const credential = `berth-retry-owner-v1.${"x".repeat(43)}`;
 const operation = "62ebd914-6089-4e41-81a4-75081cb1cef3";
@@ -111,9 +112,7 @@ test("retry responses project only the public status fields", async () => {
     observedAt: null,
     startedAt: "2026-11-23T12:00:00Z",
     checks: { used: 1, limit: 2 },
-  } satisfies NonNullable<
-    Awaited<ReturnType<import("../src/application/retry/api.ts").RetryAction>>
-  >;
+  } satisfies NonNullable<Awaited<ReturnType<RetryAction>>>;
   const api = retryApi(credential, async () => ({
     ...status,
     privateProviderId: "fixture-private",
