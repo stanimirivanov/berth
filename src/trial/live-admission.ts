@@ -112,6 +112,7 @@ export function liveAdmissionApi(
   db: LedgerDatabase,
   e: ReturnType<typeof liveEnvironment>,
   check: (kind: "namespace" | "empty") => Promise<boolean>,
+  savedBucket?: string,
 ) {
   const configuration = {
     compartment: e.compartment,
@@ -126,6 +127,10 @@ export function liveAdmissionApi(
     previewKey: e.previewKey,
     operation: e.operation,
     preparedWindow: e,
+    ...(savedBucket &&
+    savedBucket !== `berth-${e.operation.replaceAll("-", "")}`
+      ? { preparedBucket: savedBucket }
+      : {}),
     configuration,
     headroom: async () => {
       const status = await admissionStatus(db, e),

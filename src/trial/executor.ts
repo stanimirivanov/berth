@@ -246,6 +246,17 @@ export async function runExecutor(
           deletionRequest = request;
         }
         await guard(action);
+        if (
+          opened.snapshot.retrySource &&
+          (action === "create_bucket" || action === "put_object")
+        ) {
+          await store.confirmRetryDispatch(claim, request);
+          if (
+            controller.signal.aborted ||
+            clock() >= Math.min(deadline, start + timing.creationMs)
+          )
+            throw new BucketFailure("budget");
+        }
         started = true;
         const result = await send();
         await ledger.settle(claim, request, "succeeded", "provider-response");
@@ -325,8 +336,11 @@ export async function runExecutor(
       }),
       client = bucketClient(sdk, dispatcher, snapshot.trial.region),
       objects = objectClient(sdk, dispatcher, snapshot.trial.region);
+    const { retrySource, retryBucket } = snapshot;
     const intent = {
       operation: options.operation,
+      ...(retrySource ? { retrySource } : {}),
+      ...(retryBucket ? { retainedBucket: retryBucket } : {}),
       marker: snapshot.trial.marker,
       bucket: snapshot.trial.bucket,
       compartment: snapshot.trial.compartment,
@@ -564,26 +578,27 @@ export async function runExecutor(
         ).remove();
         await store.access(claim, "object-removed");
       }
-      await bucketLifecycle(store, claim, intent, client, true, {
-        /** Retain the freshly verified revision for the subsequent budgeted dispatch. */
-        preparing(bucket) {
-          deletionTarget = bucket;
-        },
-        /** Record only the scoped absence just verified by the provider. */
-        async verified() {
-          if (!inventoryEnabled || !cleanupInspection || !snapshot.bucket)
-            return;
-          const previous =
-            deletionRequest ??
-            (await latestSuccessfulDelete().catch(() => undefined));
-          if (previous)
-            await recordInventoryDelete(
-              previous,
-              deletionTarget ?? snapshot.bucket,
-              cleanupInspection,
-            );
-        },
-      });
+      if (!retryBucket)
+        await bucketLifecycle(store, claim, intent, client, true, {
+          /** Retain the freshly verified revision for the subsequent budgeted dispatch. */
+          preparing(bucket) {
+            deletionTarget = bucket;
+          },
+          /** Record only the scoped absence just verified by the provider. */
+          async verified() {
+            if (!inventoryEnabled || !cleanupInspection || !snapshot.bucket)
+              return;
+            const previous =
+              deletionRequest ??
+              (await latestSuccessfulDelete().catch(() => undefined));
+            if (previous)
+              await recordInventoryDelete(
+                previous,
+                deletionTarget ?? snapshot.bucket,
+                cleanupInspection,
+              );
+          },
+        });
     } else {
       const listing = await client.list(intent, true);
       if (listing.items.length || listing.opcNextPage)
@@ -594,10 +609,12 @@ export async function runExecutor(
       throw Error("Unresolved");
     for (const a of j.attempts.filter((a) => a.outcome === "open"))
       await ledger.end(claim, a.id, "succeeded");
-    await ledger.finish(
-      claim,
-      snapshot.failed || !snapshot.receipt ? "failed" : "succeeded",
-    );
+    if (retryBucket) await store.finishRetainedRetry(claim);
+    else
+      await ledger.finish(
+        claim,
+        snapshot.failed || !snapshot.receipt ? "failed" : "succeeded",
+      );
     return { phase: "terminal" };
   } catch {
     try {

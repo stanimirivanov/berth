@@ -13,6 +13,10 @@ import {
 /** Saved public intent; credentials and owner/admin identities never enter resource state. */
 export interface BucketIntent {
   operation: string;
+  /** A linked authorization uses the original operation only to derive its exact bucket name. */
+  retrySource?: string;
+  /** Reuse only the proved original bucket. Child object writes retain the child marker. */
+  retainedBucket?: { id: string; etag: string; marker: string };
   marker: string;
   bucket: string;
   compartment: string;

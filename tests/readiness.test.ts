@@ -60,3 +60,28 @@ test("readiness refuses endpoint injection before signer or transport access", (
     /target/,
   );
 });
+
+test("retained-bucket activation requires a complete scope listing with exactly the approved name", async () => {
+  const retained = "berth-00000000000040008000000000000001";
+  const namespace = "fixture";
+  const compartment = "ocid1.compartment.oc1..fixture";
+  const approved = { name: retained, namespace, compartmentId: compartment };
+  const check = (entry: unknown[], incomplete = false) =>
+    readinessTransport(
+      "eu-frankfurt-1",
+      namespace,
+      compartment,
+      { signHttpRequest: async () => {} },
+      async () =>
+        Response.json(entry, {
+          headers: incomplete ? { "opc-next-page": "opaque" } : {},
+        }),
+      retained,
+    )("empty");
+
+  assert.equal(await check([approved]), true);
+  assert.equal(await check([]), false);
+  assert.equal(await check([{ ...approved, name: "foreign" }]), false);
+  assert.equal(await check([{ ...approved, compartmentId: "foreign" }]), false);
+  assert.equal(await check([approved], true), false);
+});

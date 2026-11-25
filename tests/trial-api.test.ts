@@ -531,3 +531,64 @@ test("live preview rejects owner evidence drift away from a consumed exception",
   );
   assert.equal((await api.fetch(request("preview"))).status, 409);
 });
+
+test("a continuation preview signs the approved saved bucket, not the name derived from its new operation", async () => {
+  const child = "ceca60d9-c885-4b53-8abf-579163888140";
+  const savedBucket = "berth-62ebd91460894e4181a475081cb1cef3";
+  const make = (bucket: string) =>
+    makeTrialApi({
+      operation: child,
+      preparedWindow: {
+        operation: child,
+        startedAt: now,
+        expiresAt: now + 14400000,
+      },
+      preparedBucket: bucket,
+      token,
+      previewKey: "b".repeat(40),
+      configuration: config,
+      now: () => now,
+      headroom: async () => evidence,
+      verifyCredentials: async () => true,
+      ledger: {
+        async start(intent) {
+          return {
+            ...intent,
+            marker: child,
+            bucket,
+            object_name: "trial.bin",
+            outcome: "active",
+            started_at: new Date(now).toISOString(),
+            expires_at: new Date(now + 14400000).toISOString(),
+          };
+        },
+      },
+      admitCleanup: async () => assert.fail("unexpected cleanup"),
+    });
+  const request = (path: string, body: object) =>
+    new Request(`https://fixture.invalid${path}`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  const api = make(savedBucket);
+  const preview = await api.fetch(request("/preview", {}));
+  assert.equal(preview.status, 200);
+  const document = await preview.json();
+  assert.equal(document.proposal.bucket.name, savedBucket);
+  assert.equal(
+    (
+      await make("berth-00000000000040008000000000000001").fetch(
+        request("/submit", { preview: document.preview }),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await api.fetch(request("/submit", { preview: document.preview }))).status,
+    202,
+  );
+});

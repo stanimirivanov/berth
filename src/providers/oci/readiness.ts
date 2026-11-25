@@ -7,6 +7,7 @@ export function readinessTransport(
   compartment: string,
   signer: RequestSigner,
   fetcher: typeof fetch = fetch,
+  retainedBucketName?: string,
 ) {
   if (
     !/^[a-z]{2}-[a-z]+-[1-9]$/.test(region) ||
@@ -45,9 +46,21 @@ export function readinessTransport(
         text += decoder.decode(chunk.value, { stream: true });
       }
       const value: unknown = JSON.parse(text + decoder.decode());
-      return check === "namespace"
-        ? value === namespace
-        : Array.isArray(value) && value.length === 0;
+      if (check === "namespace") return value === namespace;
+      if (!Array.isArray(value)) return false;
+      if (!retainedBucketName) return value.length === 0;
+      const candidate: unknown = value[0];
+      return (
+        value.length === 1 &&
+        candidate !== null &&
+        typeof candidate === "object" &&
+        "name" in candidate &&
+        candidate.name === retainedBucketName &&
+        "namespace" in candidate &&
+        candidate.namespace === namespace &&
+        "compartmentId" in candidate &&
+        candidate.compartmentId === compartment
+      );
     } finally {
       await reader?.cancel().catch(() => undefined);
       reader?.releaseLock();

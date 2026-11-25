@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
 import { makeLedger } from "../../src/trial/ledger.ts";
+import { freePolicyFixture } from "../fakes/free-policy.ts";
 
 test("prepared admission refuses mutations, charges credential requests, admits once and preserves cleanup", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
@@ -1267,66 +1268,6 @@ test("legacy direct SQL admission cannot create via schedule but retains owned c
     }, true);
   }
 });
-
-/** Synthetic owner-reviewed evidence; values cover the fixed window, never a live account. */
-function freePolicyFixture(
-  operation: string,
-  startedAt: number,
-  region: unknown,
-) {
-  return {
-    checkedAt: startedAt,
-    iamCheckedAt: startedAt,
-    iamReviewed: true,
-    accountType: "always-free",
-    homeRegion: region,
-    neonFree: true,
-    storageBytes: 10485760,
-    objectRequests: 200,
-    transferBytes: 1048576,
-    monitoringRequests: 20,
-    functionsMode: "free-plan-unknown-v1",
-    functionsUsage: "unknown",
-    functionsAllowance: "unknown",
-    functionsPolicy: {
-      operation,
-      startedAt,
-      expiresAt: startedAt + 14400000,
-      shutdownBy: startedAt + 15300000,
-      policyVersion: "free-plan-v1",
-      unknownAllowanceAccepted: true,
-      partialVerdictAccepted: true,
-      exclusiveProjectUse: true,
-      manualRecoveryReady: true,
-      otherServicesEvidence: "offline-reviewed-envelope",
-      reviewer: "fixture-owner",
-      probeClientMs: 2252,
-      scenario: "64x60-plus36x60-v1",
-      plan: {
-        status: "free",
-        source: "owner-console",
-        checkedAt: startedAt,
-        project: "fixture-project",
-        branch: "fixture-branch",
-        period: "fixture-period",
-        evidence: "offline-plan-record",
-      },
-      billing: {
-        reviewedAt: startedAt,
-        source: "neon-free-no-overage-2026-11-19",
-        evidence: "offline-billing-review",
-      },
-      allowances: {
-        postgresStorageBytes: 10485760,
-        requiredPostgresStorageBytes: 1048576,
-        postgresComputeCuSeconds: 36000,
-        requiredPostgresComputeCuSeconds: 28800,
-        sharedTransferBytes: 10485760,
-        requiredSharedTransferBytes: 1048576,
-      },
-    },
-  };
-}
 
 test("Free policy rejects fabricated quotas and stale plan evidence without blocking unknown Functions totals", async () => {
   const { preflight, functionsAssessment } = await import(

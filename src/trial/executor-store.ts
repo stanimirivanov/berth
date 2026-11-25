@@ -7,6 +7,10 @@ export type Phase = "bucket" | "object" | "observe" | "cleanup";
 /** One fixed operation checkpoint, owned by the same fence as all ledger requests. */
 export interface ExecutionSnapshot {
   trial: TrialRecord;
+  /** SQL records this link atomically with approval and retains it for cleanup. */
+  retrySource?: string;
+  /** Provider identity and revision retained from the original reconciliation. */
+  retryBucket?: BucketAttributes;
   phase: Phase;
   bucket: BucketAttributes | null;
   receipt: ProbeReceipt | null;
@@ -109,6 +113,19 @@ export function executorStore(db: LedgerDatabase) {
         operation,
         owner,
         delivery,
+      ]),
+    /** Recheck a linked CREATE or PUT against its committed reservation at the send boundary. */
+    confirmRetryDispatch: (claim: LedgerClaim, request: string) =>
+      call(
+        "SELECT berth_executor.confirm_retry_dispatch($1,$2,$3,$4) AS result",
+        [claim.operation, claim.owner, claim.generation, request],
+      ),
+    /** Close an authorized reuse only after the child's object evidence is resolved. */
+    finishRetainedRetry: (claim: LedgerClaim) =>
+      call("SELECT berth_executor.finish_retained_retry($1,$2,$3) AS result", [
+        claim.operation,
+        claim.owner,
+        claim.generation,
       ]),
     /** Guarded checkpoint commands and closed Alchemy bucket state. */
     access: <T = unknown>(

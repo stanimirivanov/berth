@@ -11,9 +11,11 @@ import {
 import {
   assertRetainedRetryRole,
   type RetryConnection,
+  retainedRetryContinuation,
   retainedRetryLedger,
 } from "../retained-trial-ledger/retry.ts";
 import type { RetryAction } from "./api.ts";
+import type { RetryContinuation } from "./continuation.ts";
 import { retryActions } from "./reconciliation.ts";
 
 /** Server-only configuration for owner sign-in and separately scoped credentials. */
@@ -105,17 +107,30 @@ const unavailable: RetryObserver = {
   observe: async () => ({ kind: "inconclusive" }),
 };
 
-/** Open one checked connection after owner authentication, and release it on every outcome. */
+/** Connect under the checked owner-action role and close even after an error. */
+async function withRetryConnection<T>(
+  env: Environment,
+  database: (config: ClientConfig) => RetryConnection,
+  work: (db: RetryConnection) => Promise<T>,
+): Promise<T> {
+  const db = database(connection(env));
+  try {
+    await db.connect();
+    await assertRetainedRetryRole(db);
+    return await work(db);
+  } finally {
+    await db.end();
+  }
+}
+
+/** Open SQL after Retry authentication and attach the read-only observer only for new checks. */
 export function retryRuntime(
   env: Environment,
   database: (config: ClientConfig) => RetryConnection = (config) =>
     new Client(config),
 ): RetryAction {
-  return async (action, operation) => {
-    const db = database(connection(env));
-    try {
-      await db.connect();
-      await assertRetainedRetryRole(db);
+  return (action, operation) =>
+    withRetryConnection(env, database, async (db) => {
       let provider = unavailable;
       if (action === "start") {
         try {
@@ -124,12 +139,18 @@ export function retryRuntime(
           // Preserve a durable read-scope stop even when OCI credentials are unavailable.
         }
       }
-      return await retryActions(retainedRetryLedger(db), provider)(
-        action,
-        operation,
-      );
-    } finally {
-      await db.end();
-    }
-  };
+      return retryActions(retainedRetryLedger(db), provider)(action, operation);
+    });
+}
+
+/** Approval and status only reach SQL. The fenced executor owns provider writes. */
+export function retryContinuationRuntime(
+  env: Environment,
+  database: (config: ClientConfig) => RetryConnection = (config) =>
+    new Client(config),
+): RetryContinuation {
+  return (operation, proposal) =>
+    withRetryConnection(env, database, (db) =>
+      retainedRetryContinuation(db)(operation, proposal),
+    );
 }

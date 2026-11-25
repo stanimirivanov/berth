@@ -133,3 +133,32 @@ test("retry responses project only the public status fields", async () => {
   assert.equal(result.status, 200);
   assert.deepEqual(await result.json(), status);
 });
+
+test("approval requires a Retry session and binds the exact operation and proposal", async () => {
+  const proposal = "6db13184-54af-42e7-894b-ca5a155c2e16";
+  const calls: string[] = [];
+  const api = retryApi(
+    credential,
+    async () => null,
+    () => 1800000000000,
+    async (id: string, approved: string | null) => {
+      calls.push(`${id}:${approved}`);
+      return null;
+    },
+  );
+  const route = `/api/retry/operations/${operation}/proposals/${proposal}/approve`;
+  const post = (path: string, bearer: string, body?: string) =>
+    api.fetch(
+      new Request(origin + path, {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}` },
+        ...(body === undefined ? {} : { body }),
+      }),
+    );
+  assert.equal((await post(route, "h".repeat(43))).status, 401);
+  const signedIn = await post("/api/retry/session", credential);
+  const { session } = await signedIn.json();
+  assert.equal((await post(route, session, "{}")).status, 400);
+  assert.equal((await post(route, session)).status, 409);
+  assert.deepEqual(calls, [`${operation}:${proposal}`]);
+});

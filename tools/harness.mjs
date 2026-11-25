@@ -8,6 +8,7 @@ import ts from "typescript-ast";
 const runtimePackages = {
   "src/http/empty-control.ts": [],
   "src/application/retry/contract.ts": ["effect"],
+  "src/application/retry/continuation.ts": ["effect"],
   "src/application/retry/api.ts": ["node:crypto"],
   "src/application/retry/index.ts": [],
   "src/application/retry/runtime.ts": ["node:crypto", "pg", "oci-common"],
@@ -70,6 +71,7 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/application/retry/runtime.ts",
   ],
   "src/application/retry/api.ts": [
+    "src/application/retry/continuation.ts",
     "src/http/empty-control.ts",
     "src/application/retry/contract.ts",
   ],
@@ -77,6 +79,7 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/providers/oci/retry-observation.ts",
   ],
   "src/application/retry/runtime.ts": [
+    "src/application/retry/continuation.ts",
     "src/application/retry/api.ts",
     "src/application/retry/reconciliation.ts",
     "src/providers/oci/retry-observation.ts",
@@ -110,6 +113,7 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/application/retained-trial-ledger/sql.ts",
   ],
   "src/application/retained-trial-ledger/retry.ts": [
+    "src/application/retry/continuation.ts",
     "src/application/retry/contract.ts",
     "src/application/retained-trial-ledger/sql.ts",
   ],

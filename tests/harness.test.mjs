@@ -758,17 +758,18 @@ test("retry boundaries permit the read-only observer and reject executor couplin
     "src/http/empty-control.ts": "",
     "src/trial/live-hosted.ts": 'import "../http/empty-control.js";',
     "src/application/retry/api.ts":
-      'import "../../http/empty-control.js"; import "./contract.js";',
+      'import "../../http/empty-control.js"; import "./contract.js"; import "./continuation.js";',
+    "src/application/retry/continuation.ts": 'import "effect/Schema";',
     "src/application/retry/contract.ts":
       'import "effect/Schema"; import type { RetryObservation } from "../../providers/oci/retry-observation.js";',
     "src/application/retry/index.ts":
       'import "./api.js"; import "./runtime.js";',
     "src/application/retry/runtime.ts":
-      'import "./reconciliation.js"; import type { RetryAction } from "./api.js"; import "../retained-trial-ledger/retry.js"; import "../../providers/oci/retry-observation.js";',
+      'import "./reconciliation.js"; import "./continuation.js"; import type { RetryAction } from "./api.js"; import "../retained-trial-ledger/retry.js"; import "../../providers/oci/retry-observation.js";',
     "src/application/retry/reconciliation.ts":
       'import type { RetryLedger } from "./contract.js"; import type { RetryAction } from "./api.js"; import type { RetryObserver } from "../../providers/oci/retry-observation.js";',
     "src/application/retained-trial-ledger/retry.ts":
-      'import "../retry/contract.js"; import "./sql.js";',
+      'import "../retry/contract.js"; import "../retry/continuation.js"; import "./sql.js";',
     "src/application/retained-trial-ledger/sql.ts": "",
     "src/providers/oci/retry-observation.ts": 'import "effect/Schema";',
     "src/providers/oci/client.ts": "",
@@ -776,6 +777,14 @@ test("retry boundaries permit the read-only observer and reject executor couplin
   };
   assert.deepEqual(analyze(sources), []);
   for (const [file, text] of /** @type {[string, string][]} */ ([
+    [
+      "src/application/retry/continuation.ts",
+      'import "../../trial/executor.js";',
+    ],
+    [
+      "src/application/retry/continuation.ts",
+      'import "../../providers/oci/client.js";',
+    ],
     ["src/application/retry/contract.ts", 'import "../../trial/executor.js";'],
     ["src/trial/live-hosted.ts", 'import "../application/retry/contract.js";'],
     ["src/application/retry/runtime.ts", 'import "../../trial/executor.js";'],

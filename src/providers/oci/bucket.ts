@@ -44,10 +44,14 @@ export function makeBucket(
 ) {
   const i = Object.freeze({ ...saved });
   const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+  const namingOperation = i.retrySource ?? i.operation;
   if (
+    !uuid.test(namingOperation) ||
     !uuid.test(i.operation) ||
     !uuid.test(i.marker) ||
-    i.bucket !== `berth-${i.operation.replaceAll("-", "")}` ||
+    (i.retainedBucket !== undefined &&
+      (!i.retrySource || !uuid.test(i.retainedBucket.marker))) ||
+    i.bucket !== `berth-${namingOperation.replaceAll("-", "")}` ||
     !/^ocid1[.]compartment[.]oc1[.][.][A-Za-z0-9]{1,128}$/.test(
       i.compartment,
     ) ||
@@ -66,8 +70,11 @@ export function makeBucket(
       b.namespace !== i.namespace ||
       b.name !== i.bucket ||
       b.compartmentId !== i.compartment ||
-      b.freeformTags?.["berth-operation"] !== i.operation ||
-      b.freeformTags?.["berth-marker"] !== i.marker
+      b.freeformTags?.["berth-operation"] !==
+        (i.retainedBucket ? namingOperation : i.operation) ||
+      b.freeformTags?.["berth-marker"] !==
+        (i.retainedBucket?.marker ?? i.marker) ||
+      (i.retainedBucket !== undefined && b.id !== i.retainedBucket.id)
     )
       throw new BucketFailure("ownership");
     if (!b.id || !/^ocid1[.]bucket[.]/.test(b.id) || !etag || b.etag !== etag)
@@ -130,6 +137,8 @@ export function makeBucket(
     if (!(await exists(cleanup))) return undefined;
     const r = await client.get(i, cleanup);
     const value = verify(r.bucket, r.eTag, known);
+    if (!cleanup && i.retainedBucket && value.etag !== i.retainedBucket.etag)
+      throw new BucketFailure("revision");
     if (!known) throw new BucketFailure("identity-unrecorded");
     await restrictions(cleanup);
     return value;
@@ -141,6 +150,7 @@ export function makeBucket(
     read,
     /** A collision or ambiguous prior create stops here; no automatic adoption or replay. */
     async create() {
+      if (i.retainedBucket) throw new BucketFailure("invalid-intent");
       if (await read()) throw new BucketFailure("collision");
       const r = await client.create(i);
       const value = verify(r.bucket, r.eTag);
@@ -149,6 +159,7 @@ export function makeBucket(
     },
     /** Delete only a newly inspected empty owned bucket at its unchanged revision. */
     async remove(known: BucketAttributes) {
+      if (i.retainedBucket) throw new BucketFailure("invalid-intent");
       const before = await read(known, true);
       if (!before) {
         await deletion?.verified();
