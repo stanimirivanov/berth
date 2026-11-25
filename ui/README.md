@@ -33,6 +33,59 @@ styles. Material motion is disabled for the static CSP. Keep the visible
 loading text alongside progress.
 [Material qualification](../docs/research/angular-material-pages-csp.md)
 
+## History accessibility qualification
+
+The production Chromium suite runs full-page axe scans for the History access
+prompt, populated Review inbox, loaded operation detail, and recoverable refresh
+error with retained rows. Any reported WCAG 2.2 A or AA violation fails the suite.
+Each state uses synthetic History responses and the production CSP.
+Run just these scans after building the backend and UI.
+
+```bash
+pnpm build && pnpm build:ui
+pnpm test:ui history-accessibility
+```
+
+Release qualification stays pending until the release candidate passes the
+desktop screen-reader checklist and its results are recorded. The
+[Orca and Chromium results in PR #185](https://github.com/stanimirivanov/berth/pull/185)
+document the earlier announcement and focus changes. Automated checks cover
+rules axe can evaluate. The screen-reader pass checks what the browser actually
+announces and where keyboard focus lands.
+
+### Desktop screen-reader pass
+
+Build as above and start the screen reader in a desktop session. Use one desktop
+browser and screen-reader combination. Firefox with Orca is the Linux option. The
+commands below run the existing browser scenarios against loopback with
+synthetic responses and a fixture token. Install the selected browser and
+substitute its Playwright name for `firefox` if using a different combination.
+
+```bash
+pnpm --dir ui exec playwright install firefox
+pnpm test:ui history.spec.ts --browser firefox --debug -g 'Material access on a saved link|loading, empty, unavailable|detail refresh retains|malformed operation links|returning from desktop detail'
+```
+
+Step through the scenarios in Playwright Inspector. Give the browser window
+focus before each interaction. Listen to speech or read the screen reader's
+speech output. Pause at the assertions after each action to observe the result
+before stepping forward.
+
+| Scenario | What to observe |
+| --- | --- |
+| **Material access on a saved link** | After the saved-link prompt appears, Tab to the token field before the test fills it. Hear “History access token” and the tab-memory help. Step through Enter submission and listen for the focused “Operation details” heading and loading message while the test holds the detail response. After the response is released, hear the updated detail announcement. |
+| **History has loading, empty, unavailable and unauthorized states** | After Load history, hear “Loading operation history…” before the held response is released, then hear the empty result. On Refresh history, hear the unavailable warning. When Retry succeeds, hear the updated result and confirm an operation is available. |
+| **Detail refresh retains its timestamp on failure** | On Refresh detail, hear the recoverable stale-data warning and confirm the existing detail is still available. After the retry that returns a successful result, hear the updated detail announcement. |
+| **Malformed operation links** | At `/operations/%ZZ?view=raw&name=a%2Bb#record%20notes`, hear the focused “Invalid operation link” heading. Confirm the address retains its query and fragment. The scenario checks that no History request was made. |
+| **Returning from desktop detail** | Track the operation selected on the older page. Activate “Back to inbox” and hear the same operation row receive focus, including its ID, status, UTC time and summary. |
+
+Record the date, tested commit, OS, browser and screen-reader names and versions,
+and the result for each row in the release evidence. Include what was actually
+spoken and focused, and record missing or duplicated announcements and failures.
+Repeat the manual checks when a change affects token help, History loading,
+refresh or error announcements, saved-link or detail focus, or Review inbox row
+content and focus restoration.
+
 ## Reuse the Review inbox controls in Infrastructure
 
 - Use the shared Azure theme and outlined Material cards for offering surfaces.
