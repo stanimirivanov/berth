@@ -64,8 +64,9 @@ never waits for metrics before required teardown. Install owner migration 003 af
 
 `live-index.ts` is the separate real OCI composition root; `live-hosted.ts` owns
 fixed-route admission, `live-environment.ts` validates explicit trial credentials,
-and `live-runtime.ts` owns restricted SQL plus real signed transports. Shared
-`executor-security.ts` retains the synthetic root's connection/privilege checks.
+and `live-runtime.ts` owns restricted SQL plus real signed transports. Both
+executors use the shared
+[PostgreSQL runtime access policy](../storage/postgres/runtime-access.ts).
 The live root accepts only a pre-admitted operation and exact SQL target/window;
 never add an admission bypass or import administrator/synthetic tooling here.
 See docs/trial/live-executor.md and docs/trial/hosted-admission.md.

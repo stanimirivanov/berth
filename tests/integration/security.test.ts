@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { assertExecutorPrivileges } from "../../src/trial/executor-hosted.ts";
+import { assertRuntimePrivileges } from "../../src/storage/postgres/runtime-access.ts";
 
 test("runtime startup rejects direct, column, inherited, schema and SET ROLE privilege drift before any write", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
@@ -29,7 +29,7 @@ test("runtime startup rejects direct, column, inherited, schema and SET ROLE pri
   try {
     for (const migration of ["001_trial", "002_executor", "003_usage"])
       await owner.query(await readFile(`migrations/${migration}.sql`, "utf8"));
-    await assertExecutorPrivileges(runtime);
+    await assertRuntimePrivileges(runtime);
     await admin.query("CREATE ROLE berth_checkpoint_privileged NOLOGIN");
     await admin.query(
       "GRANT UPDATE ON berth_ledger.trials TO berth_checkpoint_privileged",
@@ -65,13 +65,13 @@ test("runtime startup rejects direct, column, inherited, schema and SET ROLE pri
       await admin.query(grant);
       try {
         await assert.rejects(
-          () => assertExecutorPrivileges(runtime),
+          () => assertRuntimePrivileges(runtime),
           /Runtime privilege boundary failed/,
         );
       } finally {
         await admin.query(revoke);
       }
-      await assertExecutorPrivileges(runtime);
+      await assertRuntimePrivileges(runtime);
     }
     for (const table of [
       "berth_ledger.trials",

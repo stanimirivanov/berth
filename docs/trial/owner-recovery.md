@@ -108,8 +108,8 @@ node --input-type=module <<'JS' > "$BERTH_RECOVERY_RUN/queue-result.txt" 2>&1
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { readPrivateText } from './dist/scripts/oci-files.js';
+import { assertRuntimePrivileges } from './dist/src/storage/postgres/runtime-access.js';
 import { liveEnvironment } from './dist/src/trial/live-environment.js';
-import { assertExecutorPrivileges } from './dist/src/trial/executor-security.js';
 import { executeLive } from './dist/src/trial/live-runtime.js';
 try {
   const e = liveEnvironment(JSON.parse(await readPrivateText(process.env.BERTH_OWNER_ENV_FILE)));
@@ -121,7 +121,7 @@ try {
       statement_timeout: 5000, query_timeout: 6000 });
     try {
       await db.connect();
-      await assertExecutorPrivileges(db);
+      await assertRuntimePrivileges(db);
       const r = (await db.query('SELECT berth_executor.report($1) AS value', [e.operation])).rows[0].value;
       if (!r.cleanup_requested) throw Error('Cleanup not queued');
     } finally { await db.end(); }

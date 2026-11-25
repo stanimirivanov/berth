@@ -7,8 +7,8 @@ import { Client } from "pg";
 import { boundedObjectSdk } from "../providers/oci/client.ts";
 import { readinessTransport } from "../providers/oci/readiness.ts";
 import { monitoringTransport } from "../providers/oci/usage.ts";
+import { assertRuntimePrivileges } from "../storage/postgres/runtime-access.ts";
 import { runExecutor } from "./executor.ts";
-import { assertExecutorPrivileges } from "./executor-security.ts";
 import { executorStore } from "./executor-store.ts";
 import type { LedgerDatabase } from "./ledger.ts";
 import {
@@ -182,7 +182,7 @@ async function withLiveDatabase<T>(
       });
   try {
     await db.connect();
-    await assertExecutorPrivileges(db);
+    await assertRuntimePrivileges(db);
     const store = executorStore(db),
       snapshot = await store.report(e.operation),
       trial = snapshot?.trial;

@@ -2160,9 +2160,8 @@ test("read-only operation history paginates retained evidence without exposing r
     await owner.query(
       await readFile("migrations/008_operation_history.sql", "utf8"),
     );
-    const { retainedHistoryLedger } = await import(
-      "../../src/application/retained-trial-ledger/history.ts"
-    );
+    const { prepareRetainedHistoryReader, retainedHistoryLedger } =
+      await import("../../src/application/retained-trial-ledger/history.ts");
     const store = retainedHistoryLedger(db);
     const empty = await store.list();
     assert.equal(empty.items.length, 1);
@@ -2213,8 +2212,10 @@ test("read-only operation history paginates retained evidence without exposing r
     ) AS evidence`)
       ).rows[0].evidence;
     const before = await snapshot();
-    await db.query("BEGIN READ ONLY");
     try {
+      await prepareRetainedHistoryReader(db);
+      const mode = await db.query("SHOW transaction_read_only");
+      assert.equal(mode.rows[0]?.transaction_read_only, "on");
       const first = await store.list(null, 2);
       assert.deepEqual(
         first.items.map((item) => item.operation),
