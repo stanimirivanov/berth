@@ -603,12 +603,14 @@ test("live roots allow reviewed transports but reject synthetic and administrato
     "src/trial/live-index.ts":
       'import "./live-hosted.js"; import "./live-runtime.js";',
     "src/trial/live-environment.ts":
-      'import "node:crypto"; import "./executor-security.js";',
+      'import "node:crypto"; import "../storage/postgres/runtime-access.js";',
     "src/trial/live-hosted.ts":
       'import "./live-environment.js"; import "./scheduled.js";',
     "src/trial/live-runtime.ts":
-      'import "oci-common"; import "pg"; import "../providers/oci/client.js"; import "./executor.js";',
-    "src/trial/executor-security.ts":
+      'import "oci-common"; import "pg"; import "../providers/oci/client.js"; import "../storage/postgres/runtime-access.js"; import "./executor.js";',
+    "src/trial/executor-hosted.ts":
+      'import "../storage/postgres/runtime-access.js";',
+    "src/storage/postgres/runtime-access.ts":
       "/** Shared restricted SQL check. */ export const restricted = true;",
   };
   assert.deepEqual(
@@ -625,7 +627,7 @@ test("live roots allow reviewed transports but reject synthetic and administrato
     ["src/trial/live-index.ts", 'import "../../scripts/oci-admin-setup.js";'],
     ["src/trial/live-hosted.ts", 'import "oci-common";'],
     ["src/trial/live-runtime.ts", 'import "./executor-synthetic.js";'],
-    ["src/trial/executor-security.ts", 'import "node:fs";'],
+    ["src/storage/postgres/runtime-access.ts", 'import "node:fs";'],
   ];
   for (const [file, text] of rejected)
     assert.ok(analyze({ [file]: text }).some((f) => f.rule === "architecture"));
@@ -692,14 +694,14 @@ test("history boundaries permit only the read composition and reject provider or
     "src/application/history/runtime.ts":
       'import type { HistoryRead } from "./api.js"; import "../retained-trial-ledger/history.js";',
     [`${adapter}history.ts`]:
-      'import "../../trial/executor-security.js"; import "../history/contract.js"; import "./sql.js";',
+      'import "../../storage/postgres/runtime-access.js"; import "../history/contract.js"; import "./sql.js";',
     [`${adapter}inventory.ts`]:
       'import "../inventory/contract.js"; import "./sql.js"; const query = "SELECT berth_inventory.inventory_page($1,$2)";',
     [`${adapter}retry.ts`]: 'import "../retry/contract.js"; import "./sql.js";',
     [`${adapter}sql.ts`]: "",
     "src/application/inventory/contract.ts": 'import "effect/Schema";',
     "src/application/retry/contract.ts": "",
-    "src/trial/executor-security.ts": "",
+    "src/storage/postgres/runtime-access.ts": "",
     "src/trial/executor-store.ts": "",
     "src/trial/executor.ts": "",
     "src/trial/live-runtime.ts": "",
@@ -738,6 +740,11 @@ test("history boundaries permit only the read composition and reject provider or
       'import "../retained-trial-ledger/retry.js";',
     ],
     [`${adapter}inventory.ts`, 'import "../../trial/executor-store.js";'],
+    [`${adapter}history.ts`, 'import "../../trial/executor-security.js";'],
+    [
+      "src/storage/postgres/runtime-access.ts",
+      'import "../../trial/executor.js";',
+    ],
     [
       "src/application/history/runtime.ts",
       'const query = "SELECT berth_executor.history_page($1,$2)";',
@@ -745,9 +752,11 @@ test("history boundaries permit only the read composition and reject provider or
     ["src/trial/executor-store.ts", 'import "../application/history/api.js";'],
   ])) {
     assert.ok(
-      analyze({ ...sources, [file]: text }).some(
-        (error) => error.rule === "architecture",
-      ),
+      analyze({
+        ...sources,
+        "src/trial/executor-security.ts": "",
+        [file]: text,
+      }).some((error) => error.file === file && error.rule === "architecture"),
       file,
     );
   }

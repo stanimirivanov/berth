@@ -28,7 +28,7 @@ const runtimePackages = {
   "src/application/history/index.ts": [],
   "src/trial/live-admission.ts": ["node:crypto"],
   "src/providers/oci/readiness.ts": ["oci-common"],
-  "src/trial/executor-security.ts": [],
+  "src/storage/postgres/runtime-access.ts": [],
   "src/trial/live-index.ts": [],
   "src/trial/live-environment.ts": ["node:crypto"],
   "src/trial/live-hosted.ts": ["node:crypto"],
@@ -111,7 +111,7 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
   "src/application/retained-trial-ledger/history.ts": [
     "src/application/history/contract.ts",
     "src/application/retained-trial-ledger/sql.ts",
-    "src/trial/executor-security.ts",
+    "src/storage/postgres/runtime-access.ts",
   ],
   "src/application/retained-trial-ledger/inventory.ts": [
     "src/application/inventory/contract.ts",
@@ -418,7 +418,7 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
                 "src/trial/live-runtime.ts",
               ].includes(resolved)) ||
             (file === "src/trial/live-environment.ts" &&
-              resolved === "src/trial/executor-security.ts") ||
+              resolved === "src/storage/postgres/runtime-access.ts") ||
             (file === "src/trial/live-hosted.ts" &&
               [
                 "src/http/empty-control.ts",
@@ -431,7 +431,7 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
                 "src/trial/live-admission.ts",
                 "src/providers/oci/readiness.ts",
                 "src/trial/live-hosted.ts",
-                "src/trial/executor-security.ts",
+                "src/storage/postgres/runtime-access.ts",
                 "src/trial/executor.ts",
                 "src/trial/executor-store.ts",
                 "src/trial/ledger.ts",
@@ -455,7 +455,7 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
                 "src/trial/executor.ts",
                 "src/trial/executor-store.ts",
                 "src/trial/executor-synthetic.ts",
-                "src/trial/executor-security.ts",
+                "src/storage/postgres/runtime-access.ts",
                 "src/trial/scheduled.ts",
               ].includes(resolved)) ||
             (file === "src/trial/executor-synthetic.ts" &&

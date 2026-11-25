@@ -1,23 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertExecutorPrivileges } from "../src/trial/executor-hosted.ts";
+import { assertRuntimePrivileges } from "../src/storage/postgres/runtime-access.ts";
 
 test("executor rejects missing, false and uncertain privilege evidence without exposing database details", async () => {
   for (const rows of [[], [{ restricted: false }], [{ restricted: null }]])
     await assert.rejects(
-      () => assertExecutorPrivileges({ query: async () => ({ rows }) }),
+      () => assertRuntimePrivileges({ query: async () => ({ rows }) }),
       /Runtime privilege boundary failed/,
     );
   await assert.rejects(
     () =>
-      assertExecutorPrivileges({
+      assertRuntimePrivileges({
         query: async () => {
           throw Error("private-canary");
         },
       }),
     /^Error: Runtime privilege boundary failed$/,
   );
-  await assertExecutorPrivileges({
+  await assertRuntimePrivileges({
     query: async () => ({ rows: [{ restricted: true }] }),
   });
 });

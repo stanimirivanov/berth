@@ -1,4 +1,7 @@
-/** Validate both injected URLs and reject unrelated service credentials before connecting. */
+/**
+ * Validate both injected URLs and reject unrelated service credentials.
+ * Return the unpooled URL with `sslmode=verify-full`.
+ */
 export function restrictedConnection(env: Record<string, string | undefined>) {
   for (const name of [
     "AWS_ACCESS_KEY_ID",
@@ -32,9 +35,9 @@ export function restrictedConnection(env: Record<string, string | undefined>) {
 /**
  * Fail closed before ledger access if the dedicated login has gained administrator,
  * ownership, role-switching, schema creation or protected-table privileges. This is
- * a startup drift check, not protection against a concurrent malicious DB owner.
+ * a startup drift check and assumes a trusted database owner throughout the invocation.
  */
-export async function assertExecutorPrivileges(db: {
+export async function assertRuntimePrivileges(db: {
   query(text: string): Promise<{ rows: Record<string, unknown>[] }>;
 }) {
   try {

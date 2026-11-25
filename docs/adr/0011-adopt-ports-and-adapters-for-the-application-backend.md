@@ -19,6 +19,8 @@ Retry also owns the observation port and its evidence vocabulary. The OCI
 observer implements that port, and the Retry runtime wires it into reconciliation.
 See [#153](https://github.com/stanimirivanov/berth/issues/153).
 
-The backend import allowlist enforces the approved dependencies. History's
-shared database access policy still depends on trial execution and is tracked
-in [#151](https://github.com/stanimirivanov/berth/issues/151).
+The retained History adapter and the trial executors use the storage-owned
+PostgreSQL runtime access policy for the shared `berth_runtime` login. History
+starts a read-only transaction before checking privileges. The backend import
+allowlist permits those storage dependencies and rejects History imports from
+trial execution. See [#151](https://github.com/stanimirivanov/berth/issues/151).

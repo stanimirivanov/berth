@@ -1,12 +1,9 @@
-import {
-  assertExecutorPrivileges,
-  restrictedConnection,
-} from "./executor-security.ts";
-
-export { assertExecutorPrivileges } from "./executor-security.ts";
-
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Client } from "pg";
+import {
+  assertRuntimePrivileges,
+  restrictedConnection,
+} from "../storage/postgres/runtime-access.ts";
 import { runExecutor } from "./executor.ts";
 import { executorStore } from "./executor-store.ts";
 import { type SyntheticCloud, syntheticSdk } from "./executor-synthetic.ts";
@@ -55,7 +52,7 @@ export async function execute(
   });
   try {
     await db.connect();
-    await assertExecutorPrivileges(db);
+    await assertRuntimePrivileges(db);
     if (!delivery) {
       const snapshot = await executorStore(db).report(e.operation);
       return {

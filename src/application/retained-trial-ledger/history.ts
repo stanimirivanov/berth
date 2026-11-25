@@ -1,7 +1,7 @@
 import {
-  assertExecutorPrivileges,
+  assertRuntimePrivileges,
   restrictedConnection,
-} from "../../trial/executor-security.ts";
+} from "../../storage/postgres/runtime-access.ts";
 import { decodeHistoryDetail, decodeHistoryPage } from "../history/contract.ts";
 import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
@@ -10,7 +10,7 @@ export { restrictedConnection as retainedHistoryConnection };
 /** Enter the read-only transaction before checking the retained History login. */
 export async function prepareRetainedHistoryReader(db: RetainedTrialDatabase) {
   await db.query("BEGIN READ ONLY");
-  await assertExecutorPrivileges(db);
+  await assertRuntimePrivileges(db);
 }
 
 /** Read only the existing owner-reviewed History functions on a read-only connection. */
