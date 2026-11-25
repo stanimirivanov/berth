@@ -216,6 +216,12 @@ and reviewed branch rules are the authority. The hook never stages or changes fi
 - Verification uses disposable PostgreSQL and synthetic provider fixtures. Live
   work follows the separately authorized scope and evidence requirements in SPEC.md.
 
+## Local TLS fixture setup
+
+Put the OpenSSL 3 CLI on PATH before running `pnpm test` or `pnpm check`.
+The PostgreSQL authentication tests generate a temporary certificate and key
+for their loopback TLS server.
+
 ## Local scanner setup (Linux x64)
 
 These are installation commands, not a step run on every check. Choose a persistent

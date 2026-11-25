@@ -21,8 +21,9 @@ const runtimePackages = {
   "src/application/inventory/index.ts": [],
   "src/application/retained-trial-ledger/sql.ts": [],
   "src/application/retained-trial-ledger/history.ts": ["pg"],
-  "src/application/retained-trial-ledger/inventory.ts": ["pg"],
-  "src/application/retained-trial-ledger/retry.ts": ["pg"],
+  "src/application/retained-trial-ledger/hosted-postgres.ts": ["pg"],
+  "src/application/retained-trial-ledger/inventory.ts": [],
+  "src/application/retained-trial-ledger/retry.ts": [],
   "src/application/history/api.ts": ["node:crypto"],
   "src/application/history/runtime.ts": [],
   "src/application/history/index.ts": [],
@@ -117,11 +118,13 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
   "src/application/retained-trial-ledger/inventory.ts": [
     "src/application/inventory/contract.ts",
     "src/application/retained-trial-ledger/sql.ts",
+    "src/application/retained-trial-ledger/hosted-postgres.ts",
   ],
   "src/application/retained-trial-ledger/retry.ts": [
     "src/application/retry/continuation.ts",
     "src/application/retry/contract.ts",
     "src/application/retained-trial-ledger/sql.ts",
+    "src/application/retained-trial-ledger/hosted-postgres.ts",
   ],
 });
 

@@ -54,7 +54,10 @@ The adapter checks the login and grants before assuming the reader role in a
 read-only transaction. The login must have only that role membership and the
 database must retain its restricted public grants. The adapter verifies TLS,
 uses bounded connection and query timeouts, and closes the connection after
-each read.
+each read. When the database URL includes `channel_binding=require`, the
+connection must complete SCRAM-SHA-256-PLUS before any SQL runs. Omitting the
+option prefers SCRAM-SHA-256-PLUS and permits the server’s other supported
+authentication methods over verified TLS.
 
 ## Local verification
 
