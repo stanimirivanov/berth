@@ -56,7 +56,10 @@ request IDs and raw provider errors.
 Apply migration 011 after migrations 001–010 as the dedicated owner. Grant
 `berth_retry_action` to a login named `berth_retry_runtime`, with no other
 application role or table privileges. Set `BERTH_RETRY_DATABASE_URL` to that
-login's TLS-verified Neon URL.
+login's TLS-verified Neon URL. When the URL includes `channel_binding=require`,
+the connection must complete SCRAM-SHA-256-PLUS before the role check or any
+other SQL runs. Omitting the option prefers SCRAM-SHA-256-PLUS and permits the
+server’s other supported authentication methods over verified TLS.
 
 Use a separate OCI principal with only the Object Storage read permissions
 needed for GetBucket and ListBuckets in the saved compartment. Provide its

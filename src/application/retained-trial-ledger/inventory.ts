@@ -1,9 +1,12 @@
-import { Client, type ClientConfig } from "pg";
 import {
   decodeInventoryPage,
   type InventoryPage,
   type InventoryReader,
 } from "../inventory/contract.ts";
+import {
+  type HostedPostgresConfig,
+  hostedPostgresClient,
+} from "./hosted-postgres.ts";
 import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
 /** Private database connection managed by the retained Inventory adapter. */
@@ -15,7 +18,7 @@ export interface InventoryDatabase extends RetainedTrialDatabase {
 /** Bind the dedicated login to the expected database and enforce verified TLS. */
 function inventoryConnection(
   env: Record<string, string | undefined>,
-): ClientConfig {
+): HostedPostgresConfig {
   const configured = env.BERTH_INVENTORY_DATABASE_URL;
   const url = new URL(configured ?? "");
   if (
@@ -47,6 +50,7 @@ function inventoryConnection(
     password: decodeURIComponent(url.password),
     ssl: { rejectUnauthorized: true },
     enableChannelBinding: true,
+    requireChannelBinding: url.searchParams.has("channel_binding"),
     connectionTimeoutMillis: 1000,
     statement_timeout: 1000,
     query_timeout: 1500,
@@ -104,8 +108,9 @@ async function assertInventoryRole(db: RetainedTrialDatabase) {
 /** Perform one bounded read at a time, retaining the raw database session inside this adapter. */
 export function inventoryReader(
   env: Record<string, string | undefined>,
-  database: (config: ClientConfig) => InventoryDatabase = (config) =>
-    new Client(config),
+  database: (
+    config: HostedPostgresConfig,
+  ) => InventoryDatabase = hostedPostgresClient,
 ): InventoryReader {
   let busy = false;
   return {

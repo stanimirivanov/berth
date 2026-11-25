@@ -1,4 +1,3 @@
-import { Client, type ClientConfig } from "pg";
 import {
   decodeApproval,
   decodeContinuation,
@@ -10,6 +9,10 @@ import {
   decodeRetryStatus,
   type RetryLedger,
 } from "../retry/contract.ts";
+import {
+  type HostedPostgresConfig,
+  hostedPostgresClient,
+} from "./hosted-postgres.ts";
 import { type RetainedTrialDatabase, retainedTrialResult } from "./sql.ts";
 
 /** A checked connection is opened per authenticated retry request. */
@@ -30,7 +33,7 @@ export type RetainedRetrySession = <T>(
 ) => Promise<T>;
 
 /** Construct a strict TLS connection for the separate retry login. URL options cannot override TLS. */
-function connection(env: Environment): ClientConfig {
+function connection(env: Environment): HostedPostgresConfig {
   const url = new URL(env.BERTH_RETRY_DATABASE_URL ?? "");
   if (
     url.protocol !== "postgresql:" ||
@@ -58,6 +61,7 @@ function connection(env: Environment): ClientConfig {
     password: decodeURIComponent(url.password),
     ssl: { rejectUnauthorized: true },
     enableChannelBinding: true,
+    requireChannelBinding: url.searchParams.has("channel_binding"),
     connectionTimeoutMillis: 3000,
     statement_timeout: 2500,
     query_timeout: 4000,
@@ -183,8 +187,9 @@ async function assertRetainedRetryRole(db: RetainedTrialDatabase) {
 /** Own the client and role check for each Retry invocation, including failed work. */
 export function retainedRetrySession(
   env: Environment,
-  database: (config: ClientConfig) => RetryConnection = (config) =>
-    new Client(config),
+  database: (
+    config: HostedPostgresConfig,
+  ) => RetryConnection = hostedPostgresClient,
 ): RetainedRetrySession {
   return async (work) => {
     const db = database(connection(env));
