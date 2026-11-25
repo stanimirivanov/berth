@@ -17,16 +17,22 @@ The browser token stays in tab memory. The service token stays server-side.
 
 Both reads use the same record shape:
 
-- `operation` (lowercase UUIDv4), `startedAt` and `expiresAt` (timestamp strings).
+- `operation` (lowercase UUIDv4), `startedAt` and `expiresAt` (valid calendar
+  timestamps with a UTC designator or offset, optionally with fractional seconds).
 - `outcome` (`active`, `needs-reconciliation`, `succeeded` or `failed`) and
   `phase` (`bucket`, `object`, `observe`, `cleanup` or null). Null means no phase
   was recorded.
 - Boolean `pendingUpload`, `cleanupRequested` and `objectRemoved`. False can
   reflect absent executor work, so it cannot establish provider state.
-- Integer `used` and `limit` in each `budgets.normal`, `budgets.cleanup`,
-  `budgets.monitoring` and `budgets.neon` meter. These are application counters.
-- Integer `unresolved.requests` and `unresolved.mutations`, and fixed
-  `verdict: "partial"`.
+- Safe integer `used` and `limit` in each `budgets.normal`, `budgets.cleanup`,
+  `budgets.monitoring` and `budgets.neon` meter, with `0 <= used <= limit`
+  and a positive limit. These are application counters.
+- Nonnegative safe integers `unresolved.requests` and `unresolved.mutations`,
+  with mutations at most requests, and fixed `verdict: "partial"`.
+
+A page contains at most 50 records and its cursor is a lowercase UUIDv4 or null.
+A successful detail must match the requested operation. The backend and Angular
+exercise these rules with the same wire fixtures.
 
 Reads can return newer recorded state on later requests, including after
 execution expiry. The API excludes dated evidence, provider usage and remaining

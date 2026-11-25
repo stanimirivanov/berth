@@ -29,8 +29,8 @@ function record(value: unknown): Operation {
     const meter = item.budgets?.[key];
     if (
       !meter ||
-      !Number.isInteger(meter.used) ||
-      !Number.isInteger(meter.limit) ||
+      !Number.isSafeInteger(meter.used) ||
+      !Number.isSafeInteger(meter.limit) ||
       meter.used < 0 ||
       meter.limit < 1 ||
       meter.used > meter.limit
@@ -41,7 +41,7 @@ function record(value: unknown): Operation {
   if (
     !item.unresolved ||
     [item.unresolved.requests, item.unresolved.mutations].some(
-      (count) => !Number.isInteger(count) || count < 0,
+      (count) => !Number.isSafeInteger(count) || count < 0,
     ) ||
     item.unresolved.mutations > item.unresolved.requests
   ) {
