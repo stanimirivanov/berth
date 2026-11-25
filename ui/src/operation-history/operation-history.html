@@ -135,8 +135,8 @@
             }
             @if (detail(); as detail) {
               @let selected = detail.record;
-              @if (reasons().length) {
-                <section class="attention-reasons" aria-label="Attention reasons">
+              <section [class.attention-reasons]="reasons().length > 0" [attr.aria-label]="reasons().length ? 'Attention reasons' : 'Retry access'">
+                @if (reasons().length) {
                   <h3>Needs attention</h3>
                   <ul>
                     @for (reason of reasons(); track reason.message) {
@@ -148,8 +148,15 @@
                       <a href="{{ link.url }}" rel="noreferrer">{{ link.label }}</a>
                     }
                   </div>
-                </section>
-              }
+                }
+                @for (record of [selected]; track record.operation) {
+                  <berth-retry-panel
+                    [operation]="record.operation"
+                    [originalExpired]="retryOriginalExpired()"
+                    [originalCleanup]="record.cleanupRequested || record.phase === 'cleanup'"
+                  />
+                }
+              </section>
               <p><small>Last fetched <time [attr.datetime]="detail.fetchedAt">{{ detail.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
               <p class="mono">{{ selected.operation }}</p>
               <h3>Recorded lifecycle state</h3>

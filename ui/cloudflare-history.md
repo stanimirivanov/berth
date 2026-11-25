@@ -14,8 +14,8 @@ Infrastructure and History release, follow the
 From the repository root, run `pnpm ui:install` and `pnpm check` using the pinned
 toolchain. The history proxy tests exercise both Pages entrypoints against the
 real Neon response handler with injected local data. The Angular build copies
-`_routes.json` and `_headers` into `ui/dist/history/browser`. Only
-`/api/history`, `/api/inventory`, and their descendants invoke Pages Functions.
+`_routes.json` and `_headers` into `ui/dist/history/browser`. Only the History, Inventory and Retry API paths and their descendants invoke
+Pages Functions. The optional Retry binding stays unset during a read-only release.
 Inventory uses the [dedicated read bindings](../docs/trial/managed-inventory-api.md#bindings-and-database-access).
 Static UI requests
 bypass the Function and receive the static security headers. The build emits

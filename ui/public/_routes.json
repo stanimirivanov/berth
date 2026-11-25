@@ -4,7 +4,9 @@
     "/api/history",
     "/api/history/*",
     "/api/inventory",
-    "/api/inventory/*"
+    "/api/inventory/*",
+    "/api/retry",
+    "/api/retry/*"
   ],
   "exclude": []
 }

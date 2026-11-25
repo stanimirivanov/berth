@@ -51,6 +51,37 @@ while the exact evidence still qualifies. The proposal shows nonsecret target
 and review information. Private tags, revisions, credential identity, raw
 provider data and the evidence document stay server-side.
 
+## Retry in the Review inbox
+
+Open the operation's saved detail from the inbox or follow **Review operation**
+on an Uncertain Infrastructure row. Under **Needs attention**, select **Retry
+provisioning** and sign in with the separate Retry owner credential. Berth reads
+retained Retry status first. The control stays available on the same detail
+after the original attention flags clear. **Check provider** starts
+reconciliation only when that read calls for a new check. **Approve proposal**
+applies only to the target, steps, dates and limits shown in the panel.
+
+After a reload, reconnect to History and sign in to Retry again. After a lost
+action response, use **Check retry status**. It reads retained state instead
+of submitting the action again. If a proposal changed or expired, review the
+fresh status before deciding whether to approve. The original lifecycle
+outcome and partial/no-go verdict remain visible separately.
+
+Retry action credentials and state live only in the open panel. Closing it,
+navigating away, expiry, or a Retry access denial clears them. History remains
+accessible through its independent read credential. Disconnecting from History
+or losing its access also clears the Retry panel.
+
+For a separately approved Retry deployment, set the production Pages binding
+`BERTH_RETRY_NEON_ORIGIN` to the HTTPS origin of the dedicated Retry Function.
+Keep this distinct from the History and Inventory upstream origins. Use the
+existing canonical `BERTH_HISTORY_SITE_ORIGIN` binding. Leave Retry unset for a
+read-only release and leave preview bindings unset. Pages forwards the separate
+Retry owner credential or short-lived session only to the fixed Retry routes.
+The Neon Function verifies both credentials. Pages needs no additional secret
+and forwards no cookie, History credential, body, or retry attempt. The static
+production CSP keeps `connect-src 'self'`.
+
 ## Prepare a proposal
 
 Install migration 012 after 001–011 as the dedicated database owner. Use the

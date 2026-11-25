@@ -32,6 +32,7 @@ import { OWNER_SESSION } from "../owner-access/owner-session";
 import { activeExpiry, attentionReasons, ownerProcedures } from "./attention";
 import type { Operation } from "./history-reader";
 import { HistoryStore } from "./history-store";
+import { RetryPanel } from "./retry/retry-panel";
 
 /** Read-only history screen. The shell holds accepted access in tab memory. */
 @Component({
@@ -48,6 +49,7 @@ import { HistoryStore } from "./history-store";
     MatListItemTitle,
     MatNavList,
     MatProgressBarModule,
+    RetryPanel,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./operation-history.html",
@@ -120,6 +122,11 @@ export class OperationHistory {
   protected readonly reasons = computed(() => {
     const detail = this.detail();
     return detail ? attentionReasons(detail.record, this.now()) : [];
+  });
+
+  protected readonly retryOriginalExpired = computed(() => {
+    const detail = this.detail();
+    return detail !== null && Date.parse(detail.record.expiresAt) <= this.now();
   });
 
   protected readonly recoveryLinks = computed(() => {
