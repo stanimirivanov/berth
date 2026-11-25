@@ -10,7 +10,7 @@
   --error: #8a2424;
   --focus: #97530c;
   font:
-    16px / 1.5 system-ui,
+    100% / 1.5 system-ui,
     sans-serif;
   color: var(--ink);
   background: var(--paper);
