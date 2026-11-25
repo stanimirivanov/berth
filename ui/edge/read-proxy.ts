@@ -14,7 +14,7 @@ const token = /^[A-Za-z0-9_-]{32,128}$/;
 const maxBytes = 128 * 1024;
 
 /** Accept only a canonical HTTPS origin, optionally with a trailing slash. */
-function origin(value: string | undefined): URL {
+export function origin(value: string | undefined): URL {
   if (!value || !/^https:\/\/[a-z0-9.-]+\/?$/.test(value)) throw Error();
   const url = new URL(value);
   if (value !== url.origin && value !== url.href) throw Error();
@@ -57,7 +57,7 @@ function validQuery(
 }
 
 /** Read bounded JSON without forwarding upstream headers or a partial response. */
-async function readJson(response: Response): Promise<unknown> {
+export async function readJson(response: Response): Promise<unknown> {
   if (
     !/^application\/json(?:\s*;|$)/i.test(
       response.headers.get("content-type") ?? "",

@@ -1,0 +1,91 @@
+@if (!store.opened()) {
+  <button #launch mat-stroked-button type="button" (click)="store.open()">Retry provisioning</button>
+} @else {
+  <section class="retry-panel" aria-label="Retry provisioning">
+    <div class="retry-heading">
+      <h4 #heading tabindex="-1">Retry provisioning</h4>
+      <button mat-button type="button" (click)="close()">Close Retry</button>
+    </div>
+    @if (store.notice(); as notice) {
+      <p role="alert">{{ message[notice] }}</p>
+    }
+    @if (!store.authenticated() && store.notice() !== "forbidden") {
+      <form (submit)="signIn($event, retryCredential)">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Retry owner credential</mat-label>
+          <input #retryCredential matInput type="password" autocomplete="off" maxlength="107" spellcheck="false" />
+        </mat-form-field>
+        <button mat-flat-button type="submit" [disabled]="store.busy() !== null">Sign in to Retry</button>
+      </form>
+    }
+    @if (store.busy(); as busy) {
+      <p role="status">{{ busyLabel[busy] }}</p>
+    }
+    @if (store.snapshot(); as snapshot) {
+      <p role="status"><strong>{{ stageLabels[snapshot.stage] }}</strong></p>
+      @if ("reason" in snapshot && snapshot.reason) {
+        <p>{{ blockedByCleanup() ? reasons["cleanup-started"] : reasons[snapshot.reason] }}</p>
+      }
+      @if (checkAvailable()) {
+        <button mat-flat-button type="button" (click)="store.check(operation(), originalExpired())">Check provider</button>
+      }
+      @if ("scope" in snapshot && snapshot.scope === "original-window") {
+        <p>Original execution authority. No new approval is required while it remains eligible.</p>
+        <dl>
+          <dt>Creation cutoff</dt><dd>{{ snapshot.creationCutoff | date: "medium" : "UTC" }} UTC</dd>
+          <dt>Execution expires</dt><dd>{{ snapshot.expiresAt | date: "medium" : "UTC" }} UTC</dd>
+        </dl>
+      }
+      @if ("continuation" in snapshot) {
+        <p>Recorded continuation <span class="identifier">{{ snapshot.continuation }}</span></p>
+        @if (snapshot.progress === "awaiting-activation") {
+          <p>Approval recorded. The separately authorized executor still needs activation.</p>
+        }
+      }
+      @if (snapshot.stage === "waiting-for-approval") {
+        <h5>Proposed target</h5>
+        <dl class="identifier">
+          <dt>Bucket</dt><dd>{{ snapshot.target.bucket }}</dd>
+          <dt>Region</dt><dd>{{ snapshot.target.region }}</dd>
+          <dt>Namespace</dt><dd>{{ snapshot.target.namespace }}</dd>
+          <dt>Compartment</dt><dd>{{ snapshot.target.compartment }}</dd>
+          @if (snapshot.target.instance; as instance) { <dt>Retained instance</dt><dd>{{ instance }}</dd> }
+        </dl>
+        <h5>Remaining steps</h5>
+        <ol>
+          @for (step of snapshot.steps; track step) { <li>{{ stepLabels[step] }}</li> }
+        </ol>
+        <h5>Proposed window and evidence (UTC)</h5>
+        <dl>
+          <dt>Starts</dt><dd>{{ snapshot.startsAt | date: "medium" : "UTC" }}</dd>
+          <dt>Creation cutoff</dt><dd>{{ snapshot.creationCutoff | date: "medium" : "UTC" }}</dd>
+          <dt>Execution expires</dt><dd>{{ snapshot.expiresAt | date: "medium" : "UTC" }}</dd>
+          <dt>Approve by</dt><dd>{{ snapshot.approveBy | date: "medium" : "UTC" }}</dd>
+          <dt>Provider observed</dt><dd>{{ snapshot.evidence.observedAt | date: "medium" : "UTC" }}</dd>
+          <dt>Allowances checked</dt><dd>{{ snapshot.evidence.allowanceCheckedAt | date: "medium" : "UTC" }}</dd>
+          <dt>IAM checked</dt><dd>{{ snapshot.evidence.iamCheckedAt | date: "medium" : "UTC" }}</dd>
+          <dt>Evidence reference</dt><dd class="identifier">{{ snapshot.evidence.reference }}</dd>
+        </dl>
+        <h5>Request limits</h5>
+        <dl>
+          <dt>Normal Object Storage</dt><dd>{{ snapshot.limits.normal }}</dd>
+          <dt>Monitoring</dt><dd>{{ snapshot.limits.monitoring }}</dd>
+          <dt>Application units</dt><dd>{{ snapshot.limits.application }}</dd>
+          <dt>Attempts per action</dt><dd>{{ snapshot.limits.attemptsPerAction }}</dd>
+        </dl>
+        <p><strong>Protected cleanup reserve</strong> {{ snapshot.limits.cleanup }} Object Storage requests and {{ snapshot.limits.applicationCleanup }} of the application units.</p>
+        <button mat-flat-button type="button" (click)="store.approve(operation())">Approve proposal</button>
+      }
+    }
+    @if (store.authenticated() && !store.busy()) {
+      <div class="retry-actions">
+        <button mat-stroked-button type="button" (click)="store.refresh(operation())">Check retry status</button>
+        @if (ownerLink(); as link) {
+          <a href="{{ link }}" rel="noreferrer">Owner procedure</a>
+        } @else if (!store.snapshot()) {
+          <a href="{{ procedure }}" rel="noreferrer">Owner procedure</a>
+        }
+      </div>
+    }
+  </section>
+}

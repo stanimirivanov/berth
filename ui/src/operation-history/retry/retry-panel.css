@@ -1,0 +1,40 @@
+berth-retry-panel {
+  display: block;
+  margin-block-start: 1rem;
+}
+
+berth-retry-panel .retry-panel {
+  border-block-start: 1px solid var(--mat-sys-outline-variant);
+  padding-block-start: 0.75rem;
+}
+
+berth-retry-panel .retry-heading,
+berth-retry-panel form,
+berth-retry-panel .retry-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+berth-retry-panel .retry-heading {
+  justify-content: space-between;
+}
+
+berth-retry-panel .retry-heading h4 {
+  margin: 0;
+}
+
+berth-retry-panel mat-form-field {
+  flex: 1 1 15rem;
+  min-inline-size: 0;
+}
+
+berth-retry-panel .identifier,
+berth-retry-panel dd {
+  overflow-wrap: anywhere;
+}
+
+berth-retry-panel .retry-actions {
+  margin-block-start: 0.75rem;
+}
