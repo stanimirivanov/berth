@@ -2160,9 +2160,39 @@ test("read-only operation history paginates retained evidence without exposing r
     await owner.query(
       await readFile("migrations/008_operation_history.sql", "utf8"),
     );
-    const { prepareRetainedHistoryReader, retainedHistoryLedger } =
-      await import("../../src/application/retained-trial-ledger/history.ts");
-    const store = retainedHistoryLedger(db);
+    const { historyReader } = await import(
+      "../../src/application/retained-trial-ledger/history.ts"
+    );
+    const url =
+      "postgresql://berth_runtime:fixture@ep-fixture.neon.tech/neondb";
+    const historyTransactionModes: unknown[] = [];
+    const store = historyReader(
+      { DATABASE_URL: url, DATABASE_URL_UNPOOLED: url },
+      () => {
+        const connection = new Client({
+          host: "127.0.0.1",
+          port: Number(process.env.BERTH_TEST_POSTGRES_PORT),
+          database: "neondb",
+          user: "berth_runtime",
+          password: "test-runtime-only",
+        });
+        return {
+          connect: () => connection.connect(),
+          end: () => connection.end(),
+          async query(text, values) {
+            if (
+              /^\s*SELECT\s+berth_executor\.history_(?:page|detail)\s*\(/i.test(
+                text,
+              )
+            ) {
+              const mode = await connection.query("SHOW transaction_read_only");
+              historyTransactionModes.push(mode.rows[0]?.transaction_read_only);
+            }
+            return connection.query(text, values);
+          },
+        };
+      },
+    );
     const empty = await store.list();
     assert.equal(empty.items.length, 1);
     assert.equal(
@@ -2212,67 +2242,69 @@ test("read-only operation history paginates retained evidence without exposing r
     ) AS evidence`)
       ).rows[0].evidence;
     const before = await snapshot();
-    try {
-      await prepareRetainedHistoryReader(db);
-      const mode = await db.query("SHOW transaction_read_only");
-      assert.equal(mode.rows[0]?.transaction_read_only, "on");
-      const first = await store.list(null, 2);
-      assert.deepEqual(
-        first.items.map((item) => item.operation),
-        [ids[2], ids[1]],
-      );
-      assert.equal(first.next, ids[1]);
-      const second = await store.list(first.next, 2);
-      assert.deepEqual(
-        second.items.map((item) => item.operation),
-        [ids[0], operation],
-      );
-      assert.equal(second.next, null);
-      assert.deepEqual(await store.list(operation), {
-        items: [],
-        next: null,
-      });
-      const detail = await store.detail(ids[2] as string);
-      assert.ok(detail);
-      assert.equal(detail.outcome, "needs-reconciliation");
-      assert.equal(detail.phase, "cleanup");
-      assert.equal(detail.pendingUpload, true);
-      assert.equal(detail.cleanupRequested, true);
-      assert.equal(detail.verdict, "partial");
-      assert.deepEqual(detail.budgets, {
-        normal: { used: 15, limit: 160 },
-        cleanup: { used: 14, limit: 40 },
-        monitoring: { used: 0, limit: 20 },
-        neon: { used: 0, limit: 40 },
-      });
-      assert.deepEqual(detail.unresolved, { requests: 1, mutations: 1 });
-      assert.equal(JSON.stringify(detail).includes("private"), false);
-      assert.deepEqual(
-        Object.keys(detail).sort(),
-        [
-          "operation",
-          "startedAt",
-          "expiresAt",
-          "outcome",
-          "phase",
-          "pendingUpload",
-          "cleanupRequested",
-          "objectRemoved",
-          "budgets",
-          "unresolved",
-          "verdict",
-        ].sort(),
-      );
-      assert.equal(await store.detail(randomUUID()), null);
-    } finally {
-      await db.query("ROLLBACK");
-    }
+    const first = await store.list(null, 2);
+    assert.deepEqual(
+      first.items.map((item) => item.operation),
+      [ids[2], ids[1]],
+    );
+    assert.equal(first.next, ids[1]);
+    const second = await store.list(first.next, 2);
+    assert.deepEqual(
+      second.items.map((item) => item.operation),
+      [ids[0], operation],
+    );
+    assert.equal(second.next, null);
+    assert.deepEqual(await store.list(operation), {
+      items: [],
+      next: null,
+    });
+    const detail = await store.detail(ids[2] as string);
+    assert.ok(detail);
+    assert.equal(detail.outcome, "needs-reconciliation");
+    assert.equal(detail.phase, "cleanup");
+    assert.equal(detail.pendingUpload, true);
+    assert.equal(detail.cleanupRequested, true);
+    assert.equal(detail.verdict, "partial");
+    assert.deepEqual(detail.budgets, {
+      normal: { used: 15, limit: 160 },
+      cleanup: { used: 14, limit: 40 },
+      monitoring: { used: 0, limit: 20 },
+      neon: { used: 0, limit: 40 },
+    });
+    assert.deepEqual(detail.unresolved, { requests: 1, mutations: 1 });
+    assert.equal(JSON.stringify(detail).includes("private"), false);
+    assert.deepEqual(
+      Object.keys(detail).sort(),
+      [
+        "operation",
+        "startedAt",
+        "expiresAt",
+        "outcome",
+        "phase",
+        "pendingUpload",
+        "cleanupRequested",
+        "objectRemoved",
+        "budgets",
+        "unresolved",
+        "verdict",
+      ].sort(),
+    );
+    assert.equal(await store.detail(randomUUID()), null);
     for (const limit of [0, 51, null])
       await assert.rejects(
         db.query("SELECT berth_executor.history_page(null,$1)", [limit]),
       );
     await assert.rejects(store.list(randomUUID()));
     await assert.rejects(store.list("bad-cursor"));
+    assert.equal(
+      historyTransactionModes.length,
+      8,
+      "probe the transaction mode for every History projection",
+    );
+    assert.ok(
+      historyTransactionModes.every((mode) => mode === "on"),
+      "every History projection must run in a read-only transaction",
+    );
     await assert.rejects(
       db.query("SELECT berth_executor.history_record($1)", [ids[2]]),
       /permission denied/,

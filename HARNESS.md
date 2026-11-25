@@ -135,6 +135,10 @@ are erased from the runtime graph. The root compiler preserves inline-only
 `{ type T }` edges under `verbatimModuleSyntax`, including Pages modules loaded
 by the proxy tests. The Angular compiler erases these bindings in browser code.
 
+History and Retry composition imports their retained adapters for typed
+operations. The package allowlist grants the PostgreSQL driver to the adapters.
+They own credentials, role checks and connection lifetimes.
+
 The web graph covers `ui/src/`, `ui/edge/` and `ui/functions/`. The harness
 prefers an exact source file, then uses TypeScript's bundler rules, including
 Angular extensionless imports and Pages `.js` specifiers for TypeScript.

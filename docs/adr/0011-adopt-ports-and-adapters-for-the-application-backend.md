@@ -25,5 +25,11 @@ starts a read-only transaction before checking privileges. The backend import
 allowlist permits those storage dependencies and rejects History imports from
 trial execution. See [#151](https://github.com/stanimirivanov/berth/issues/151).
 History owns the typed list and detail read port. Its HTTP and retained
-PostgreSQL adapters share the decoded result types, and runtime composition
-opens a checked connection for each read. See [#162](https://github.com/stanimirivanov/berth/issues/162).
+PostgreSQL adapters share the decoded result types. See
+[#162](https://github.com/stanimirivanov/berth/issues/162).
+
+The retained History and Retry adapters open, check and close their PostgreSQL
+connections for each invocation. The History runtime receives typed list and
+detail operations. The Retry runtime receives typed ledger and continuation
+operations for the duration of the checked session. See
+[#164](https://github.com/stanimirivanov/berth/issues/164).

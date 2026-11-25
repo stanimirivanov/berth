@@ -3,8 +3,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
-import { retainedRetryLedger } from "../../src/application/retained-trial-ledger/retry.ts";
+import { retainedRetrySession } from "../../src/application/retained-trial-ledger/retry.ts";
 import { retryApi } from "../../src/application/retry/api.ts";
+import type { RetryAction } from "../../src/application/retry/contract.ts";
+import type { RetryObserver } from "../../src/application/retry/observation.ts";
 import { retryActions } from "../../src/application/retry/reconciliation.ts";
 import {
   retryContinuationRuntime,
@@ -116,8 +118,20 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
         ? new Response(null, { status: 404 })
         : Response.json([]);
     };
-    const act = retryActions(
-      retainedRetryLedger(runtime),
+    const env = {
+      BERTH_RETRY_DATABASE_URL:
+        "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb?sslmode=verify-full",
+    };
+    const database = () =>
+      new Client({ ...settings, user: "berth_retry_runtime" });
+    const withRetry = retainedRetrySession(env, database);
+    const actions =
+      (provider: RetryObserver): RetryAction =>
+      (action, operation) =>
+        withRetry(({ ledger }) =>
+          retryActions(ledger, provider)(action, operation),
+        );
+    const act = actions(
       retryObserver(scope, { async signHttpRequest() {} }, fetcher),
     );
     assert.equal(await act("status", operation), null);
@@ -147,18 +161,13 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
       code: "42501",
     });
     let configurationChecked = false;
-    const hosted = retryRuntime(
-      {
-        BERTH_RETRY_DATABASE_URL:
-          "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb?sslmode=verify-full",
-      },
-      (configuration) => {
-        assert.deepEqual(configuration.ssl, { rejectUnauthorized: true });
-        assert.equal(configuration.user, "berth_retry_runtime");
-        configurationChecked = true;
-        return new Client({ ...settings, user: "berth_retry_runtime" });
-      },
-    );
+    const checked = retainedRetrySession(env, (configuration) => {
+      assert.deepEqual(configuration.ssl, { rejectUnauthorized: true });
+      assert.equal(configuration.user, "berth_retry_runtime");
+      configurationChecked = true;
+      return database();
+    });
+    const hosted = retryRuntime(env, checked);
     assert.deepEqual(await hosted("status", operation), first);
     assert.equal(configurationChecked, true);
 
@@ -298,49 +307,39 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
       },
     );
     let pathsProbe: string | undefined;
-    const followUp = retryActions(retainedRetryLedger(runtime), fixtures);
-    const peer = new Client({ ...settings, user: "berth_retry_runtime" });
-    await peer.connect();
+    const followUp = actions(fixtures);
+    const firstRequest = followUp("start", late.operation);
     try {
-      const firstRequest = followUp("start", late.operation);
-      try {
-        await Promise.race([
-          reachedProvider.promise,
-          firstRequest.then(() => assert.fail("Expected a provider check")),
-        ]);
-        const concurrent = retryActions(retainedRetryLedger(peer), fixtures);
-        assert.equal(
-          (await concurrent("start", late.operation))?.stage,
-          "checking-provider",
-        );
-        assert.equal(
-          (await concurrent("status", late.operation))?.checks.used,
-          1,
-        );
-        assert.equal(calls, 1);
-      } finally {
-        returnProvider.resolve();
-      }
-      const recovered = await firstRequest;
-      assert.equal(recovered?.result, "owned-instance");
+      await Promise.race([
+        reachedProvider.promise,
+        firstRequest.then(() => assert.fail("Expected a provider check")),
+      ]);
       assert.equal(
-        Date.parse(recovered?.observedAt ?? ""),
-        Date.parse(providerDate),
+        (await followUp("start", late.operation))?.stage,
+        "checking-provider",
       );
-      assert.doesNotMatch(
-        JSON.stringify(recovered),
-        /retryFixture|fixture-revision|fixture-get/,
-      );
-      const inventory = (
-        await owner.query("SELECT berth_inventory.inventory_page() AS value")
-      ).rows[0]?.value;
-      assert.deepEqual(
-        inventory.items.map((row: { operation: string }) => row.operation),
-        [late.operation],
-      );
+      assert.equal((await followUp("status", late.operation))?.checks.used, 1);
+      assert.equal(calls, 1);
     } finally {
-      await peer.end();
+      returnProvider.resolve();
     }
+    const reconciliation = await firstRequest;
+    assert.equal(reconciliation?.result, "owned-instance");
+    assert.equal(
+      Date.parse(reconciliation?.observedAt ?? ""),
+      Date.parse(providerDate),
+    );
+    assert.doesNotMatch(
+      JSON.stringify(reconciliation),
+      /retryFixture|fixture-revision|fixture-get/,
+    );
+    const inventory = (
+      await owner.query("SELECT berth_inventory.inventory_page() AS value")
+    ).rows[0]?.value;
+    assert.deepEqual(
+      inventory.items.map((row: { operation: string }) => row.operation),
+      [late.operation],
+    );
     assert.equal(
       (await followUp("start", mismatch.operation))?.reason,
       "ownership-conflict",
@@ -583,12 +582,13 @@ test("expired retry accounts for one read-only check, deduplicates, and preserve
           [candidate.operation],
         )
       ).rows[0]?.value;
+    const continuationEnv = {
+      BERTH_RETRY_DATABASE_URL:
+        "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb",
+    };
     const openContinuation = retryContinuationRuntime(
-      {
-        BERTH_RETRY_DATABASE_URL:
-          "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb",
-      },
-      () => new Client({ ...settings, user: "berth_retry_runtime" }),
+      continuationEnv,
+      retainedRetrySession(continuationEnv, database),
     );
     assert.equal((await view()).reason, "preparation-required");
     const currentApproval = async (id: string) =>

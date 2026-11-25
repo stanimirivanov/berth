@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retainedRetryLedger } from "../src/application/retained-trial-ledger/retry.ts";
+import { retainedRetrySession } from "../src/application/retained-trial-ledger/retry.ts";
 import { retryActions } from "../src/application/retry/reconciliation.ts";
 
 const operation = "62ebd914-6089-4e41-81a4-75081cb1cef3";
@@ -25,9 +25,16 @@ function fixture(reservation: unknown, bucket = target.bucket) {
     startedAt: "2026-11-23T12:00:00Z",
     checks: { used: 0, limit: 2 },
   };
-  const action = retryActions(
-    retainedRetryLedger({
+  const session = retainedRetrySession(
+    {
+      BERTH_RETRY_DATABASE_URL:
+        "postgresql://berth_retry_runtime:fixture@ep-retry.fixture.neon.tech/neondb",
+    },
+    () => ({
+      async connect() {},
+      async end() {},
       async query(sql) {
+        if (sql.includes("AS allowed")) return { rows: [{ allowed: true }] };
         const command = /berth_retry\.(\w+)/.exec(sql)?.[1];
         calls.push(command ?? "unknown");
         const result =
@@ -44,15 +51,21 @@ function fixture(reservation: unknown, bucket = target.bucket) {
         return { rows: [{ result }] };
       },
     }),
-    {
-      supports: () => true,
-      async observe(scope) {
-        reads.push(scope.bucket);
-        return { kind: "inconclusive" };
-      },
-    },
   );
-  return { calls, reads, start: () => action("start", operation) };
+  return {
+    calls,
+    reads,
+    start: () =>
+      session(({ ledger }) =>
+        retryActions(ledger, {
+          supports: () => true,
+          async observe(scope) {
+            reads.push(scope.bucket);
+            return { kind: "inconclusive" };
+          },
+        })("start", operation),
+      ),
+  };
 }
 
 test("only a Boolean true reservation can dispatch a provider read", async () => {
