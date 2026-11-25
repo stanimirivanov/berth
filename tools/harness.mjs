@@ -545,6 +545,17 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
             "Scripts may compose scripts, deployment configuration and the environment allowlist only.",
           );
         if (!typeOnly) graph.get(file)?.push(resolved);
+      } else if (
+        file === "scripts/history-server.ts" &&
+        (path.posix.isAbsolute(name) ||
+          path.win32.isAbsolute(name) ||
+          name.toLowerCase().startsWith("file:"))
+      ) {
+        fail(
+          node,
+          "architecture",
+          "Use relative paths for local imports in the History preview.",
+        );
       } else if (file.startsWith("src/")) {
         const allowed =
           runtimePackages[/** @type {keyof typeof runtimePackages} */ (file)] ??

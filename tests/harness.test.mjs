@@ -78,6 +78,22 @@ test("History preview composes its read API and runtime without private-file hel
   );
 });
 
+test("History preview requires relative paths for direct local imports", () => {
+  const preview = "scripts/history-server.ts";
+  const imports = [
+    "/fixtures/local-module.mjs",
+    "C:\\fixtures\\local-module.mjs",
+    "FiLe:///fixtures/local-module.mjs",
+  ]
+    .map((specifier) => `import ${JSON.stringify(specifier)};`)
+    .join("\n");
+  const findings = analyze({ [preview]: imports, "scripts/other.ts": imports });
+  assert.deepEqual(
+    findings.map(({ file, line, rule }) => ({ file, line, rule })),
+    [1, 2, 3].map((line) => ({ file: preview, line, rule: "architecture" })),
+  );
+});
+
 test("runtime cycles fail while type-only cycles do not", () => {
   const files = {
     "scripts/a.ts": 'import "./b.js";',
