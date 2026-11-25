@@ -1,10 +1,35 @@
 import * as Schema from "effect/Schema";
 
-const budget = Schema.Struct({ used: Schema.Number, limit: Schema.Number });
+/** Maximum number of records per History request and response page. */
+export const historyPageLimit = 50;
+
+const operationId = Schema.String.check(
+  Schema.isPattern(
+    /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/,
+  ),
+);
+const timestampPattern =
+  /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const timestamp = Schema.String.check(
+  Schema.makeFilter((value) => {
+    if (!timestampPattern.test(value) || !Number.isFinite(Date.parse(value)))
+      return false;
+    const date = value.slice(0, 10);
+    return new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) === date;
+  }),
+);
+const count = Schema.Number.check(
+  Schema.isInt(),
+  Schema.isGreaterThanOrEqualTo(0),
+);
+const budget = Schema.Struct({
+  used: count,
+  limit: count.check(Schema.isGreaterThanOrEqualTo(1)),
+}).check(Schema.makeFilter(({ used, limit }) => used <= limit));
 const record = Schema.Struct({
-  operation: Schema.String,
-  startedAt: Schema.String,
-  expiresAt: Schema.String,
+  operation: operationId,
+  startedAt: timestamp,
+  expiresAt: timestamp,
   outcome: Schema.Literals([
     "active",
     "needs-reconciliation",
@@ -25,14 +50,19 @@ const record = Schema.Struct({
     neon: budget,
   }),
   unresolved: Schema.Struct({
-    requests: Schema.Number,
-    mutations: Schema.Number,
-  }),
+    requests: count,
+    mutations: count,
+  }).check(
+    Schema.makeFilter(({ requests, mutations }) => mutations <= requests),
+  ),
 });
 const page = Schema.Struct({
-  items: Schema.Array(record),
-  next: Schema.NullOr(Schema.String),
+  items: Schema.Array(record).check(Schema.isMaxLength(historyPageLimit)),
+  next: Schema.NullOr(operationId),
 });
+
+/** Match canonical identifiers in History request paths, cursors and retained rows. */
+export const isHistoryOperationId = Schema.is(operationId);
 
 /** One retained operation's public status and budget evidence. */
 export type HistoryDetail = typeof record.Type;

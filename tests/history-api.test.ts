@@ -55,6 +55,18 @@ test("history API authenticates before reads, admits strict bounded pages and ex
   const failed = await api.fetch(request(`/api/history?before=${id}`));
   assert.equal(failed.status, 503);
   assert.deepEqual(await failed.json(), { error: "history-unavailable" });
+
+  const mismatched = historyApi(token, {
+    list: read.list,
+    async detail() {
+      return historyRecord;
+    },
+  });
+  const wrongRecord = await mismatched.fetch(
+    request(`/api/history/${missingId}`),
+  );
+  assert.equal(wrongRecord.status, 503);
+  assert.deepEqual(await wrongRecord.json(), { error: "history-unavailable" });
 });
 
 test("history reader checks identity in a read-only transaction, closes on error and rejects provider credentials", async () => {

@@ -1,8 +1,9 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { HistoryRead } from "./contract.ts";
-
-const uuid =
-  /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+import {
+  type HistoryRead,
+  historyPageLimit,
+  isHistoryOperationId,
+} from "./contract.ts";
 
 /** Independent private read API; execution expiry never authorizes or blocks historical reads. */
 export function historyApi(token: string, read: HistoryRead) {
@@ -41,22 +42,23 @@ export function historyApi(token: string, read: HistoryRead) {
         rawLimit = url.searchParams.get("limit"),
         limit = rawLimit === null ? 20 : Number(rawLimit);
       if (
-        (detail && (!operation || !uuid.test(operation) || url.search)) ||
+        (detail &&
+          (!operation || !isHistoryOperationId(operation) || url.search)) ||
         [...url.searchParams.keys()].some(
           (key) =>
             !["before", "limit"].includes(key) ||
             url.searchParams.getAll(key).length !== 1,
         ) ||
-        (before !== null && !uuid.test(before)) ||
+        (before !== null && !isHistoryOperationId(before)) ||
         (rawLimit !== null && !/^[1-9][0-9]?$/.test(rawLimit)) ||
-        limit > 50
+        limit > historyPageLimit
       )
         return reply({ error: "invalid-history-request" }, 400);
       try {
-        const value =
-          operation === null
-            ? await read.list(before, limit)
-            : await read.detail(operation);
+        if (operation === null) return reply(await read.list(before, limit));
+        const value = await read.detail(operation);
+        if (value && value.operation !== operation)
+          return reply({ error: "history-unavailable" }, 503);
         return reply(value, value === null ? 404 : 200);
       } catch {
         return reply({ error: "history-unavailable" }, 503);
