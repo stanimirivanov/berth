@@ -1,11 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import type { HistoryRead } from "./contract.ts";
 
-/** Read-only port: null operation selects a bounded page, otherwise one detail record. */
-export type HistoryRead = (
-  operation: string | null,
-  before: string | null,
-  limit: number,
-) => Promise<unknown>;
 const uuid =
   /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
@@ -58,7 +53,10 @@ export function historyApi(token: string, read: HistoryRead) {
       )
         return reply({ error: "invalid-history-request" }, 400);
       try {
-        const value = await read(detail ? operation : null, before, limit);
+        const value =
+          operation === null
+            ? await read.list(before, limit)
+            : await read.detail(operation);
         return reply(value, value === null ? 404 : 200);
       } catch {
         return reply({ error: "history-unavailable" }, 503);

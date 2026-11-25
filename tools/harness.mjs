@@ -99,8 +99,9 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/application/history/api.ts",
     "src/application/history/runtime.ts",
   ],
+  "src/application/history/api.ts": ["src/application/history/contract.ts"],
   "src/application/history/runtime.ts": [
-    "src/application/history/api.ts",
+    "src/application/history/contract.ts",
     "src/application/retained-trial-ledger/history.ts",
   ],
   "src/application/inventory/api.ts": ["src/application/inventory/contract.ts"],

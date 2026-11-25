@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { retainedHistoryLedger } from "../src/application/retained-trial-ledger/history.ts";
+import { historyRecord } from "./fixtures/history-record.ts";
 
 test("operation history uses only parameterized read functions and redacts database failures", async () => {
   const queries: { text: string; values: unknown[] | undefined }[] = [];
@@ -13,7 +14,9 @@ test("operation history uses only parameterized read functions and redacts datab
           {
             result: text.includes("history_page")
               ? { ...page, privateState: "fixture" }
-              : null,
+              : values?.[0] === historyRecord.operation
+                ? { ...historyRecord, privateState: "fixture" }
+                : null,
           },
         ],
       };
@@ -21,6 +24,7 @@ test("operation history uses only parameterized read functions and redacts datab
   });
   assert.deepEqual(await store.list(), page);
   assert.equal(await store.detail("fixture-operation"), null);
+  assert.deepEqual(await store.detail(historyRecord.operation), historyRecord);
   await store.list("fixture-cursor", 3);
   assert.deepEqual(queries, [
     {
@@ -30,6 +34,10 @@ test("operation history uses only parameterized read functions and redacts datab
     {
       text: "SELECT berth_executor.history_detail($1) AS result",
       values: ["fixture-operation"],
+    },
+    {
+      text: "SELECT berth_executor.history_detail($1) AS result",
+      values: [historyRecord.operation],
     },
     {
       text: "SELECT berth_executor.history_page($1,$2) AS result",

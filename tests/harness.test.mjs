@@ -689,10 +689,11 @@ test("history boundaries permit only the read composition and reject provider or
   const sources = {
     "src/application/history/index.ts":
       'import "./api.js"; import "./runtime.js";',
-    "src/application/history/api.ts": "",
+    "src/application/history/api.ts":
+      'import type { HistoryRead } from "./contract.js";',
     "src/application/history/contract.ts": 'import "effect/Schema";',
     "src/application/history/runtime.ts":
-      'import type { HistoryRead } from "./api.js"; import "../retained-trial-ledger/history.js";',
+      'import type { HistoryRead } from "./contract.js"; import "../retained-trial-ledger/history.js";',
     [`${adapter}history.ts`]:
       'import "../../storage/postgres/runtime-access.js"; import "../history/contract.js"; import "./sql.js";',
     [`${adapter}inventory.ts`]:
@@ -734,6 +735,15 @@ test("history boundaries permit only the read composition and reject provider or
     [
       "src/application/history/runtime.ts",
       'import "../retained-trial-ledger/retry.js";',
+    ],
+    [
+      "src/application/history/runtime.ts",
+      'import type { HistoryRead } from "./api.js";',
+    ],
+    ["src/application/history/contract.ts", 'import "./api.js";'],
+    [
+      `${adapter}history.ts`,
+      'import type { HistoryRead } from "../history/api.js";',
     ],
     [
       "src/application/inventory/contract.ts",
