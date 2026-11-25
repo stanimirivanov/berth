@@ -5,6 +5,10 @@ browser access token and sends a separate service token to Neon. The Neon handle
 projects retained records from SQL. Its public invocation URL still receives
 traffic directly, but a request without the service token cannot read history.
 
+The release steps on this page apply to standalone History. For the combined
+Infrastructure and History release, follow the
+[read-only Free-plan qualification and rollback runbook](../docs/trial/read-only-release.md).
+
 ## Verify locally
 
 From the repository root, run `pnpm ui:install` and `pnpm check` using the pinned
