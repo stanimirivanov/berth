@@ -51,6 +51,33 @@ test("architecture checks all module syntax and rejects runtime administrator ac
   );
 });
 
+test("History preview composes its read API and runtime without private-file helpers", () => {
+  const preview = "scripts/history-server.ts";
+  const composition = [
+    'import { readFile } from "node:fs/promises";',
+    'import { createServer } from "node:http";',
+    'import { resolve } from "node:path";',
+    'import { historyApi } from "../src/application/history/api.ts";',
+    'import { historyReader } from "../src/application/history/runtime.ts";',
+  ].join("\n");
+  const files = {
+    [preview]: composition,
+    "scripts/oci-files.ts": "",
+    "src/application/history/api.ts": "",
+    "src/application/history/runtime.ts": "",
+  };
+  assert.deepEqual(analyze(files), []);
+  const findings = analyze({
+    ...files,
+    [preview]: `${composition}\nimport { readPrivateText } from "./oci-files.ts";`,
+  });
+  assert.ok(
+    findings.some(
+      (finding) => finding.file === preview && finding.rule === "architecture",
+    ),
+  );
+});
+
 test("runtime cycles fail while type-only cycles do not", () => {
   const files = {
     "scripts/a.ts": 'import "./b.js";',

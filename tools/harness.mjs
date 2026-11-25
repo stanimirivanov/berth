@@ -521,17 +521,22 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
             "architecture",
             "Only the hosted composition root may import the handler and synthetic engine; never import admin tooling.",
           );
-        if (
+        if (file === "scripts/history-server.ts") {
+          if (
+            resolved !== "src/application/history/api.ts" &&
+            resolved !== "src/application/history/runtime.ts"
+          )
+            fail(
+              node,
+              "architecture",
+              "The History preview may import only its History API and runtime as local modules.",
+            );
+        } else if (
           file.startsWith("scripts/") &&
           !(
             resolved.startsWith("scripts/") ||
             resolved === "neon.ts" ||
-            resolved === "src/trial/deployment.ts" ||
-            (file === "scripts/history-server.ts" &&
-              [
-                "src/application/history/api.ts",
-                "src/application/history/runtime.ts",
-              ].includes(resolved))
+            resolved === "src/trial/deployment.ts"
           )
         )
           fail(
