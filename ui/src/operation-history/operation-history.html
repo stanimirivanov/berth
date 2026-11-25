@@ -92,15 +92,12 @@
                     @for (item of group.items; track item.operation) {
                       <a #operationRow mat-list-item lines="3" class="operation-row" [id]="item.operation"
                         href="/operations/{{ item.operation }}" [routerLink]="['/operations', item.operation]"
-                        [activated]="operation() === item.operation"
-                        [attr.aria-labelledby]="item.operation + '-title'"
-                        attr.aria-describedby="{{ item.operation }}-state {{ item.operation }}-summary">
-                        <span matListItemTitle class="operation-id" [id]="item.operation + '-title'">{{ item.operation }}</span>
-                        <span matListItemLine class="operation-summary" [id]="item.operation + '-state'">
-                          <strong class="status">{{ item.outcome }}</strong>
-                          <time [attr.datetime]="item.startedAt">{{ item.startedAt | date: 'medium' : 'UTC' }} UTC</time>
+                        [activated]="operation() === item.operation">
+                        <span matListItemTitle class="operation-id">{{ item.operation }}</span>
+                        <span matListItemLine class="operation-summary">
+                          <strong class="status">{{ item.outcome }}</strong>&ngsp;<time [attr.datetime]="item.startedAt">{{ item.startedAt | date: 'medium' : 'UTC' }} UTC</time>
                         </span>
-                        <span matListItemLine class="operation-summary" [id]="item.operation + '-summary'">Phase: {{ item.phase ?? 'Not recorded' }} · Unresolved mutations: {{ item.unresolved.mutations }}</span>
+                        <span matListItemLine class="operation-summary">Phase: {{ item.phase ?? 'Not recorded' }} · Unresolved mutations: {{ item.unresolved.mutations }}</span>
                       </a>
                     }
                   </mat-nav-list>

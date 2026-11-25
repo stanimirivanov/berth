@@ -296,7 +296,7 @@ test("history supports authenticated pagination, selection, retained expiry, key
   ).toBeVisible();
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history", exact: true }).click();
-  await page.getByRole("link", { name: first, exact: true }).focus();
+  await page.getByRole("link", { name: first }).focus();
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("heading", { name: "Operation details" }),
@@ -322,16 +322,12 @@ test("history supports authenticated pagination, selection, retained expiry, key
     fullPage: true,
   });
   await page.getByRole("button", { name: "Older operations" }).click();
-  await expect(
-    page.getByRole("link", { name: second, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: second })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Older operations" }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Newest operations" }).click();
-  await expect(
-    page.getByRole("link", { name: first, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: first })).toBeVisible();
   expect(
     await page.evaluate(() => [localStorage.length, sessionStorage.length]),
   ).toEqual([0, 0]);
@@ -488,9 +484,7 @@ test("disconnect discards late responses and page reload requires access again",
   await page.getByRole("button", { name: "Disconnect" }).click();
   release?.();
   await expect(page.getByLabel("History access token")).toHaveValue("");
-  await expect(
-    page.getByRole("link", { name: first, exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("link", { name: first })).toHaveCount(0);
   await openHistory(page);
   await expect(page.getByLabel("History access token")).toHaveValue("");
 });
@@ -597,7 +591,7 @@ test("a pending obsolete detail yields to the latest selection before the queued
   await openHistory(page);
   await page.getByLabel("History access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Load history" }).click();
-  await page.getByRole("link", { name: first, exact: true }).click();
+  await page.getByRole("link", { name: first }).click();
   try {
     await expect
       .poll(() => requests)
@@ -605,9 +599,7 @@ test("a pending obsolete detail yields to the latest selection before the queued
     await page
       .getByRole("button", { name: "Refresh history" })
       .click({ timeout: 1500 });
-    await page
-      .getByRole("link", { name: second, exact: true })
-      .click({ timeout: 1500 });
+    await page.getByRole("link", { name: second }).click({ timeout: 1500 });
     expect(requests).toEqual(["/api/history", `/api/history/${first}`]);
   } finally {
     held.resolve();
@@ -621,9 +613,7 @@ test("a pending obsolete detail yields to the latest selection before the queued
     replacement.resolve();
   }
   await expect(detail.getByText("Operation not found.")).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: second, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: second })).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Selected operation" }).getByText(first),
   ).toHaveCount(0);
@@ -789,7 +779,7 @@ test("the Review inbox groups attention separately and leads detail with every r
   await expect(other.getByRole("link", { name: first })).toHaveCount(0);
   const operation = attention
     .getByRole("navigation", { name: "Needs attention" })
-    .getByRole("link", { name: first, exact: true });
+    .getByRole("link", { name: first });
   await expect(
     other
       .getByRole("navigation", { name: "Other operations" })
@@ -798,7 +788,9 @@ test("the Review inbox groups attention separately and leads detail with every r
   await expect(
     operation.getByText(/Phase: cleanup · Unresolved mutations: 1/),
   ).toBeVisible();
-  await expect(operation).toHaveAccessibleDescription(/active.*Phase: cleanup/);
+  await expect(operation).toHaveAccessibleName(
+    `${first} active Nov 20, 2026, 6:50:00 AM UTC Phase: cleanup · Unresolved mutations: 1`,
+  );
   await expect(operation).toHaveAttribute("href", `/operations/${first}`);
   await operation.focus();
   await operation.press("Enter");
@@ -1046,6 +1038,7 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
   expect(pagesHeaders).toContain(`Content-Security-Policy: ${policy}\n`);
   const token = page.getByLabel("History access token");
   const detail = page.getByRole("region", { name: "Selected operation" });
+  const updates = page.locator("#history-detail-updates[aria-live=polite]");
   const detailHeading = detail.getByRole("heading", {
     name: "Operation details",
   });
@@ -1081,7 +1074,6 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
     await expect(detailHeading).toHaveAccessibleDescription(
       "Loading operation details…",
     );
-    const updates = page.locator("#history-detail-updates[aria-live=polite]");
     await expect(detail).toHaveAttribute("aria-busy", "true");
     await expect(updates).toHaveText("Loading operation details…");
     expect(
@@ -1095,6 +1087,7 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
     detailReply.resolve();
   }
 
+  await expect(updates).toHaveText("Operation details updated.");
   await expect(detail.getByText(first, { exact: true })).toBeVisible();
   await expect(detailHeading).not.toHaveAttribute("aria-describedby");
   await expect
