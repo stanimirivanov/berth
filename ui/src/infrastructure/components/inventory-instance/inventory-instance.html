@@ -1,0 +1,32 @@
+@let row = instance();
+<a mat-list-item class="inventory-row" href="/operations" [routerLink]="['/operations', row.operation]" [attr.aria-label]="reviewLabel()">
+<div class="instance-heading">
+  <h3>{{ row.displayName }}</h3>
+  <span class="presence" [class.uncertain]="row.presence === 'uncertain'">
+    {{ row.presence === "uncertain" ? "Uncertain" : "Verified present" }}
+  </span>
+</div>
+<dl class="instance-evidence">
+  <div><dt>Region</dt><dd>{{ row.region }}</dd></div>
+  <div>
+    <dt>Observed</dt>
+    <dd><time [attr.datetime]="row.observedAt">{{ row.observedAt | date: "medium" }}</time></dd>
+  </div>
+  @if (row.presence === "uncertain") {
+    <div>
+      <dt>Last verified present</dt>
+      <dd>
+        @if (row.lastVerifiedAt; as verified) {
+          <time [attr.datetime]="verified">{{ verified | date: "medium" }}</time>
+        } @else {
+          No verified observation
+        }
+      </dd>
+    </div>
+  }
+</dl>
+@if (row.presence === "uncertain") {
+  <p class="uncertainty">{{ row.uncertainty === "delete-unresolved" ? "Deletion remains unresolved." : "Creation remains unresolved." }}</p>
+}
+<span class="review-label">Review operation</span>
+</a>

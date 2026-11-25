@@ -50,7 +50,7 @@ loading text alongside progress.
 
 ## Browser owner session
 
-History and the upcoming Inventory UI use the shell’s owner session. The
+History and Infrastructure use the shell’s owner session. The
 session keeps one bearer token in tab memory and verifies it only after a
 current protected read decodes successfully. A failed first read leaves
 access unverified and can be retried. A detail 404 remains a History result.
@@ -60,6 +60,9 @@ synchronous clear handler with the session to erase protected snapshots and
 queued reads on disconnect or denial. Check request identity before applying
 an awaited reply. History keeps its serial dispatch and saved-detail priority.
 Leaving History discards pending pane requests and preserves settled snapshots.
+Infrastructure preserves its loaded rows during pagination and failed refreshes.
+When a refresh has more pages, previously loaded instances remain visible
+until the refreshed traversal reaches its end.
 The Inventory integration will keep the offering catalog visible regardless
 of protected access.
 

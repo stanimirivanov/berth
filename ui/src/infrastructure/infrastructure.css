@@ -1,3 +1,55 @@
 berth-infrastructure {
   display: block;
+  .inventory-access form,
+  .offering-header,
+  .offering-meters,
+  .inventory-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+  }
+  .inventory-access,
+  .inventory-offering {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 1rem;
+  }
+  .inventory-access {
+    margin-bottom: 1.25rem;
+  }
+  .inventory-access mat-form-field {
+    flex: 1;
+    min-width: min(100%, 18rem);
+  }
+  .offering-header {
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  h2,
+  .offering-header p {
+    margin: 0;
+  }
+  .offering-meters {
+    margin: 1rem 0;
+  }
+  .offering-meters dd {
+    margin: 0;
+  }
+  .fetched,
+  .offering-meters dd {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+  .coverage {
+    background: var(--warn);
+    padding: 0.5rem 0.75rem;
+  }
+  [role="alert"] {
+    color: var(--error);
+  }
+  .inventory-instances {
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+  }
 }
