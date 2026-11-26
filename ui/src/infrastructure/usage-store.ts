@@ -4,19 +4,24 @@ import {
   signalStore,
   withComputed,
   withMethods,
+  withProps,
   withState,
 } from "@ngrx/signals";
 import { OWNER_SESSION } from "../owner-access/owner-session";
-import type { UsageState } from "./hosting-usage-contract";
+import {
+  readUsageSnapshot,
+  usageFileLimit,
+  usageTargetFingerprint,
+} from "./hosting-usage-contract";
+import type { UsageState } from "./hosting-usage-model";
 import {
   applyUsageSnapshot,
   failedUsageImport,
   hostingUsageRows,
-  readUsageSnapshot,
   usageExpiresAt,
-  usageFileLimit,
-} from "./hosting-usage-contract";
+} from "./hosting-usage-model";
 
+/** State owned by the verified tab, with a clock for reading expiry. */
 interface State {
   snapshot: UsageState | null;
   clock: number;
@@ -26,6 +31,18 @@ interface State {
 /** Keep imports and expiry independent of the History and Inventory workflows. */
 export const UsageStore = signalStore(
   withState<State>({ snapshot: null, clock: 0, status: "idle" }),
+  withProps(() => {
+    const tags = inject(DOCUMENT).head.querySelectorAll<HTMLMetaElement>(
+      'meta[name="berth-usage-target"]',
+    );
+    const target = tags.item(0)?.content;
+    const expectedTarget =
+      tags.length === 1 && usageTargetFingerprint(target) ? target : null;
+    return {
+      _expectedTarget: expectedTarget,
+      targetConfigured: expectedTarget !== null,
+    };
+  }),
   withComputed(({ snapshot, clock }) => ({
     rows: computed(() => hostingUsageRows(snapshot(), clock())),
   })),
@@ -60,7 +77,11 @@ export const UsageStore = signalStore(
 
     return {
       async refresh(file: File) {
-        if (owner.status() !== "verified" || store.status() === "loading") {
+        if (
+          !store._expectedTarget ||
+          owner.status() !== "verified" ||
+          store.status() === "loading"
+        ) {
           return;
         }
         const job = ++attempt;
@@ -79,6 +100,9 @@ export const UsageStore = signalStore(
             document.location.origin,
             clock,
           );
+          if (snapshot.target !== store._expectedTarget) {
+            throw Error();
+          }
           patchState(store, {
             snapshot: applyUsageSnapshot(store.snapshot(), snapshot),
             clock,

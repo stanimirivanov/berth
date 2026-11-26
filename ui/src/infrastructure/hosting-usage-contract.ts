@@ -74,9 +74,12 @@ export const hostingMeters = [
   },
 ] as const;
 
+/** A supported Free-plan quota with a fixed scope, unit and reset policy. */
 export type HostingMeter = (typeof hostingMeters)[number];
+/** Stable keys for the complete quota inventory, including unavailable meters. */
 export type HostingMeterId = HostingMeter["id"];
 
+/** Accepted Console surface for each meter that can be recorded on the Free plan. */
 export const usageSources = {
   "cloudflare-requests": "cloudflare-account-console",
   "neon-compute": "neon-project-console",
@@ -84,8 +87,11 @@ export const usageSources = {
   "neon-organization-storage": "neon-organization-console",
 } as const;
 
+/** Meters with a supported provider evidence source in summary version 1. */
 export type RecordedMeterId = keyof typeof usageSources;
+/** The evidence surface for a meter, including the optional Neon project GET. */
 type UsageSource = (typeof usageSources)[RecordedMeterId] | "neon-project-api";
+/** Redacted collection outcomes that can be shown without raw provider details. */
 export type UsageIssue =
   | "unavailable"
   | "refresh-failed"
@@ -94,14 +100,16 @@ export type UsageIssue =
   | "precision"
   | "period";
 
+/** Maximum summary file length in bytes before the browser reads or parses it. */
 export const usageFileLimit = 16_384;
-export const usageFreshness = 2 * 60 * 60 * 1000;
 
+/** Canonical UTC interval with an inclusive start and exclusive end. */
 export interface UsagePeriod {
   start: string;
   end: string;
 }
 
+/** A numeric total or conservative upper bound with source, dates and scope. */
 export interface UsageReading {
   value: number;
   precision: "exact" | "upper-bound";
@@ -111,9 +119,12 @@ export interface UsageReading {
   period: UsagePeriod | null;
 }
 
+/** A validated reading or a fixed issue code for an attempted refresh. */
 export type UsageOutcome = UsageReading | { issue: UsageIssue };
+/** Sparse readings and failures. Omitted meters were outside the refresh. */
 type Metrics = Partial<Record<RecordedMeterId, UsageOutcome>>;
 
+/** Version 1 wire summary with a site origin and hashed provider target. */
 export interface UsageSnapshot {
   version: 1;
   origin: string;
@@ -122,16 +133,7 @@ export interface UsageSnapshot {
   metrics: Metrics;
 }
 
-interface RetainedReading {
-  reading: UsageReading | null;
-  issue: UsageIssue | null;
-}
-
-export interface UsageState extends Omit<UsageSnapshot, "metrics"> {
-  metrics: Partial<Record<RecordedMeterId, RetainedReading>>;
-}
-
-/** Inspect parsed input without accepting arrays, primitives or arbitrary fields. */
+/** Narrow a decoded object to named fields that callers still need to validate. */
 export function usageRecord(input: unknown): Record<string, unknown> | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return null;
@@ -171,6 +173,15 @@ export function usageOrigin(input: unknown): input is string {
   } catch {
     return false;
   }
+}
+
+/** Accept the canonical lowercase SHA-256 representation of a hosting target. */
+export function usageTargetFingerprint(input: unknown): input is string {
+  return (
+    typeof input === "string" &&
+    input.length === 64 &&
+    /^[a-f0-9]{64}$/.test(input)
+  );
 }
 
 /** Derive the exact quota window from the request observation's UTC day. */
@@ -269,7 +280,7 @@ export function readUsageOutcome(
   };
 }
 
-/** Validate a bounded import's version, site, target, timestamp and allowed readings. */
+/** Decode a summary for the given origin and validate its target fingerprint format. */
 export function readUsageSnapshot(
   input: unknown,
   origin: string,
@@ -291,8 +302,7 @@ export function readUsageSnapshot(
     snapshot.version !== 1 ||
     !usageOrigin(snapshot.origin) ||
     snapshot.origin !== origin ||
-    typeof snapshot.target !== "string" ||
-    !/^[a-f0-9]{64}$/.test(snapshot.target) ||
+    !usageTargetFingerprint(snapshot.target) ||
     !usageTimestamp(snapshot.generatedAt) ||
     Date.parse(snapshot.generatedAt) > now
   ) {
@@ -312,145 +322,3 @@ export function readUsageSnapshot(
     metrics: clean,
   };
 }
-
-/** Preserve valid readings when a refresh fails or supplies conflicting evidence. */
-export function applyUsageSnapshot(
-  previous: UsageState | null,
-  snapshot: UsageSnapshot,
-): UsageState {
-  if (
-    previous &&
-    (previous.origin !== snapshot.origin ||
-      previous.target !== snapshot.target ||
-      previous.generatedAt > snapshot.generatedAt)
-  ) {
-    throw Error();
-  }
-
-  const metrics = { ...previous?.metrics };
-  for (const id of Object.keys(usageSources) as RecordedMeterId[]) {
-    const outcome = snapshot.metrics[id];
-    if (!outcome) {
-      continue;
-    }
-    const earlier = metrics[id]?.reading ?? null;
-    if ("issue" in outcome) {
-      metrics[id] = { reading: earlier, issue: outcome.issue };
-      continue;
-    }
-    if (earlier && outcome.observedAt < earlier.observedAt) {
-      continue;
-    }
-    if (
-      earlier?.period &&
-      outcome.period &&
-      (outcome.period.start < earlier.period.start ||
-        (outcome.period.start < earlier.period.end &&
-          (outcome.period.start !== earlier.period.start ||
-            outcome.period.end !== earlier.period.end)))
-    ) {
-      metrics[id] = { reading: earlier, issue: "period" };
-      continue;
-    }
-    metrics[id] = { reading: outcome, issue: null };
-  }
-
-  return { ...snapshot, metrics };
-}
-
-const issueText: Record<UsageIssue, string> = {
-  unavailable: "There is no qualifying reading yet.",
-  "refresh-failed": "The last refresh failed.",
-  unsupported:
-    "Neon did not return a supported compute total. Record a project Console reading when available.",
-  scope: "The evidence does not match the required target or scope.",
-  precision:
-    "The reported unit or precision does not establish usage or a defensible upper bound.",
-  period: "The evidence does not match the applicable quota period.",
-};
-
-/** An unreadable refresh makes previously retained readings stale until each recovers. */
-export function failedUsageImport(state: UsageState | null): UsageState | null {
-  if (!state) {
-    return null;
-  }
-  const metrics = { ...state.metrics };
-  for (const id of Object.keys(usageSources) as RecordedMeterId[]) {
-    const held = metrics[id];
-    if (held?.reading) {
-      metrics[id] = { reading: held.reading, issue: "refresh-failed" };
-    }
-  }
-  return { ...state, metrics };
-}
-
-/** Explain why a meter with no accepted Free source remains unknown. */
-function noReading(meter: HostingMeter): string {
-  if (meter.id === "neon-transfer") {
-    return "Available sources do not establish the project total across Postgres, Object Storage and Functions.";
-  }
-  if (meter.service === "Neon Functions") {
-    return "The verified Free sources do not provide project billing-period totals.";
-  }
-  return issueText.unavailable;
-}
-
-/** Find the first millisecond at which this reading will cease to be current. */
-export function usageExpiresAt(reading: UsageReading): number {
-  const ageLimit =
-    Date.parse(reading.dataThrough ?? reading.observedAt) + usageFreshness + 1;
-  return reading.period
-    ? Math.min(ageLimit, Date.parse(reading.period.end))
-    : ageLimit;
-}
-
-/** Derive current headroom and advisory warnings only from qualified readings. */
-export function hostingUsageRows(state: UsageState | null, now: number) {
-  return hostingMeters.map((meter) => {
-    const retained = (
-      state?.metrics as
-        | Partial<Record<HostingMeterId, RetainedReading>>
-        | undefined
-    )?.[meter.id];
-    const reading = retained?.reading ?? null;
-    const issue = retained?.issue;
-    const row = { ...meter, reading, remaining: null, warning: null };
-    if (!reading) {
-      return {
-        ...row,
-        status: "Unknown",
-        reason: issue ? issueText[issue] : noReading(meter),
-      };
-    }
-    if (issue) {
-      return { ...row, status: "Stale", reason: issueText[issue] };
-    }
-    if (reading.period && now >= Date.parse(reading.period.end)) {
-      return { ...row, status: "Stale", reason: "The quota period has ended." };
-    }
-    if (now >= usageExpiresAt(reading)) {
-      return {
-        ...row,
-        status: "Stale",
-        reason: "The reading is more than two hours old.",
-      };
-    }
-    const warning =
-      reading.value >= meter.limit
-        ? "Limit reached"
-        : reading.value >= meter.limit * 0.95
-          ? "Near limit"
-          : reading.value >= meter.limit * 0.8
-            ? "Approaching limit"
-            : null;
-    return {
-      ...row,
-      status: "Current",
-      reason: null,
-      remaining: Math.max(0, meter.limit - reading.value),
-      warning,
-    };
-  });
-}
-
-export type HostingUsageRow = ReturnType<typeof hostingUsageRows>[number];

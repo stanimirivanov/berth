@@ -5,6 +5,23 @@ Neon project and organization. Provider quotas can interrupt protected reads.
 The warnings are advisory. Operation admission, request budgets, the cleanup
 reserve and the historical partial/no-go verdict use their own evidence.
 
+## Configure the site target
+
+Confirm the Berth origin and the account, organization and project IDs from the
+intended deployment. Create a private collector input with those values and
+`"metrics": {}`. Run the collector once with only `--input-file`. The
+resulting summary's `target` field is the lowercase SHA-256 fingerprint to pin.
+
+Keep the verified fingerprint in the site's build configuration as
+`BERTH_USAGE_TARGET_FINGERPRINT` when building with `pnpm build:ui` or `pnpm build:ui:read-only`. The build publishes the
+fingerprint in the site's HTML. The browser checks the origin and the pinned
+target on every import, including the first. A build without a fingerprint
+disables summary import and explains the missing configuration.
+
+Routine refreshes import new files into the existing site without a rebuild
+or deployment. If the site's provider target changes, verify the new settings
+and update the pin in the next authorized build.
+
 ## Owner refresh
 
 1. In the provider Consoles, confirm the intended Cloudflare account and Neon
@@ -40,10 +57,10 @@ IDs and the returned billing-period boundaries. Neon documents
 snapshot. The collector also accepts `compute_unit_seconds` and requires the
 values to agree when both appear. It divides by 3,600 before threshold evaluation.
 Neon describes the project snapshot as approximate and intended for monitoring.
-The project's metadata update timestamp does not establish how far usage data
-has arrived. If the request fails and the same input supplies a qualified
-project Console reading, the collector includes that reading. To use the Console
-source alone, omit `--neon-key-file`.
+The API reading can lag underlying usage and does not report a data-through
+timestamp. With `--neon-key-file`, the result of the API refresh determines the
+compute outcome even if the input includes a project Console reading. Omit
+`--neon-key-file` to use a qualified project Console reading for compute.
 [Neon project details](https://neon.com/docs/reference/api/projects/get-project) ·
 [Neon Free usage fields](https://neon.com/docs/introduction/usage-calculations#tracking-usage-on-the-free-plan)
 
@@ -118,9 +135,9 @@ Console inputs. For example, a `neon-compute` Console reading must include
 if those are the provider's dates. Omit a meter if you did not refresh it.
 Supply `null` for a meter whose Console reading you attempted to obtain but
 could not qualify. Import a summary after an unsuccessful Neon request to see
-that attempt reflected as **Stale** for any retained compute value. Select
-**Disconnect** before intentionally starting a different hosting target at the
-same origin.
+that attempt reflected as **Stale** for any retained compute value. A file with
+a different target is rejected, and any retained readings are shown as
+**Stale**.
 
 ## Reading the panel
 

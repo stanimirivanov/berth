@@ -88,6 +88,7 @@
 
 <berth-hosting-usage
   [verified]="owner.status() === 'verified'"
+  [targetConfigured]="usage.targetConfigured"
   [rows]="usage.rows()"
   [status]="usage.status()"
   (summary)="usage.refresh($event)" />

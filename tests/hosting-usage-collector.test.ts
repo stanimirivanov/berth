@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { collectHostingUsage } from "../scripts/hosting-usage.ts";
+import {
+  applyUsageSnapshot,
+  hostingUsageRows,
+} from "../ui/src/infrastructure/hosting-usage-model.ts";
 
 const target = {
   cloudflareAccount: "fixture-account",
@@ -231,4 +235,51 @@ test("unexpected, failed, large and wrong-period Neon responses fail without lea
       end: "2026-12-01T00:00:00.000Z",
     },
   });
+});
+
+test("a failed Neon refresh makes earlier compute stale even when the input includes an older Console reading", async () => {
+  const prior = await collectHostingUsage(
+    { origin, target, metrics: {} },
+    {
+      clock,
+      neonKey: fixtureToken,
+      send: async () => Response.json({ project }),
+    },
+  );
+  const previous = applyUsageSnapshot(null, prior);
+  const refreshedAt = Date.parse("2026-11-30T23:30:00.000Z");
+  const next = await collectHostingUsage(
+    {
+      origin,
+      target,
+      metrics: {
+        "neon-compute": {
+          target: target.neonProject,
+          unit: "CU-hours",
+          source: "neon-project-console",
+          value: 70,
+          precision: "exact",
+          observedAt: "2026-11-30T23:00:00.000Z",
+          period: {
+            start: "2026-11-01T00:00:00.000Z",
+            end: "2026-12-01T00:00:00.000Z",
+          },
+        },
+      },
+    },
+    {
+      clock: () => refreshedAt,
+      neonKey: fixtureToken,
+      send: async () => new Response(null, { status: 503 }),
+    },
+  );
+  const compute = hostingUsageRows(
+    applyUsageSnapshot(previous, next),
+    refreshedAt,
+  ).find((row) => row.id === "neon-compute");
+
+  assert.equal(compute?.status, "Stale");
+  assert.equal(compute?.reading?.value, 287_999 / 3600);
+  assert.equal(compute?.remaining, null);
+  assert.match(compute.reason ?? "", /last refresh failed/i);
 });

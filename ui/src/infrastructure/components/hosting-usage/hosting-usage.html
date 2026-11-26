@@ -2,10 +2,14 @@
   <h2 id="hosting-usage-title">Usage and free-plan headroom</h2>
   @if (verified()) {
     <p>Provider quotas can interrupt protected reads. These readings are advisory.</p>
-    <p id="usage-refresh-help">Run the local usage collector, then choose its summary file.</p>
+    @if (targetConfigured()) {
+      <p id="usage-refresh-help">Run the local usage collector, then choose its summary file.</p>
+    } @else {
+      <p id="usage-refresh-help" role="status">Usage refresh is unavailable until this site has a hosting target configured.</p>
+    }
     <label for="usage-summary">Refresh usage from summary</label>
     <input #summaryInput id="usage-summary" type="file" accept=".json,application/json"
-      aria-describedby="usage-refresh-help" [disabled]="status() === 'loading'"
+      aria-describedby="usage-refresh-help" [disabled]="!targetConfigured() || status() === 'loading'"
       (change)="select(summaryInput)" />
     @if (status() === "loading") {
       <p role="status">Reading usage summary…</p>

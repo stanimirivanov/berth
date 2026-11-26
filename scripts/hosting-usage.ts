@@ -17,21 +17,26 @@ import {
 } from "../ui/src/infrastructure/hosting-usage-contract.ts";
 import { readPrivateText } from "./oci-files.ts";
 
+/** Owner-verified provider identifiers in the canonical fingerprint order. */
 interface UsageTarget {
   cloudflareAccount: string;
   neonOrganization: string;
   neonProject: string;
 }
 
+/** Clock and transport for an explicit project refresh. A null key selects Console-only collection. */
 interface Collector {
   clock: () => number;
   neonKey: string | null;
   send: typeof fetch;
 }
 
+/** Maximum streamed Neon response size in bytes. */
 const providerBodyLimit = 65_536;
+/** Bound provider identifiers before comparing scope or constructing a request URL. */
 const targetKey = /^[a-z0-9][a-z0-9_-]{0,127}$/;
 
+/** Identify which owner-provided ID qualifies each Console reading. */
 const targetFor = {
   "cloudflare-requests": "cloudflareAccount",
   "neon-compute": "neonProject",
@@ -244,7 +249,7 @@ async function neonReading(
   }
 }
 
-/** Return only validated readings and fixed issue codes for the supplied deployment. */
+/** Export validated readings, preserving the result of any requested Neon compute refresh. */
 export async function collectHostingUsage(
   input: unknown,
   collector: Collector,
@@ -253,15 +258,10 @@ export async function collectHostingUsage(
   const generatedAt = new Date(collector.clock()).toISOString();
   const results: UsageSnapshot["metrics"] = {};
   for (const id of Object.keys(usageSources) as RecordedMeterId[]) {
-    if (Object.hasOwn(metrics, id)) {
+    if (id === "neon-compute" && collector.neonKey !== null) {
+      results[id] = await neonReading(target, collector);
+    } else if (Object.hasOwn(metrics, id)) {
       results[id] = consoleReading(id, metrics[id], target, generatedAt);
-    }
-  }
-  if (collector.neonKey !== null) {
-    const computed = await neonReading(target, collector);
-    const ownerReading = results["neon-compute"];
-    if (!("issue" in computed) || !ownerReading || "issue" in ownerReading) {
-      results["neon-compute"] = computed;
     }
   }
   // Hash the canonical target only. Provider IDs and credentials remain in operator files.

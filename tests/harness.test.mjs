@@ -947,13 +947,14 @@ test("owner usage collector and browser share only the dependency-free usage con
     [collector]: 'import "../ui/src/infrastructure/hosting-usage-contract.ts";',
     "ui/src/infrastructure/usage-store.ts":
       'import "./hosting-usage-contract";',
+    "ui/src/infrastructure/hosting-usage-model.ts": "",
     "scripts/other.ts": "",
   };
   assert.deepEqual(analyze(files), []);
   assert.ok(
     analyze({
       ...files,
-      [contract]: 'import "../../../scripts/hosting-usage.ts";',
+      [contract]: 'import "./hosting-usage-model";',
     }).some(
       (finding) => finding.file === contract && finding.rule === "architecture",
     ),

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readUsageSnapshot } from "../ui/src/infrastructure/hosting-usage-contract.ts";
 import {
   applyUsageSnapshot,
   hostingUsageRows,
-  readUsageSnapshot,
-} from "../ui/src/infrastructure/hosting-usage-contract.ts";
+} from "../ui/src/infrastructure/hosting-usage-model.ts";
 
 const origin = "https://berth.example";
 const observedAt = "2026-11-30T22:00:00.000Z";

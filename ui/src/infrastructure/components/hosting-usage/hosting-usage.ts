@@ -7,8 +7,9 @@ import {
   output,
   ViewEncapsulation,
 } from "@angular/core";
-import type { HostingUsageRow } from "../../hosting-usage-contract";
+import type { HostingUsageRow } from "../../hosting-usage-model";
 
+/** Meters displayed together for one provider service and scope. */
 interface UsageGroup {
   label: string;
   rows: HostingUsageRow[];
@@ -25,6 +26,7 @@ interface UsageGroup {
 })
 export class HostingUsage {
   readonly verified = input.required<boolean>();
+  readonly targetConfigured = input.required<boolean>();
   readonly rows = input.required<HostingUsageRow[]>();
   readonly status = input.required<"idle" | "loading" | "loaded" | "failed">();
   readonly summary = output<File>();
@@ -35,7 +37,7 @@ export class HostingUsage {
     "neon-project-console": "Owner-recorded · Neon project Overview → Usage",
     "neon-organization-console":
       "Owner-recorded · Neon organization Projects → Usage",
-    "neon-project-api": "Neon project management API (approximate)",
+    "neon-project-api": "Neon project management API (approximate, may lag)",
   };
 
   protected readonly groups = computed(() => {
