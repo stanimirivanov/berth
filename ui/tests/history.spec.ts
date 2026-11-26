@@ -2,6 +2,13 @@ import { readFile } from "node:fs/promises";
 import { expect, type Page, test } from "@playwright/test";
 import { first, item, second } from "./history-fixture";
 
+const browserBuild =
+  process.env.BERTH_UI_READ_ONLY === "1" ? "read-only" : "history";
+const browserDirectory = new URL(
+  `../dist/${browserBuild}/browser/`,
+  import.meta.url,
+);
+
 /** Open the history screen through the application's main navigation. */
 async function openHistory(page: Page) {
   await page.goto("/");
@@ -190,14 +197,8 @@ test("preview separates static misses from history API errors", async ({
   expect(htmlResponse.ok()).toBe(true);
   const shell = await htmlResponse.text();
   const [rewrites, notFound] = await Promise.all([
-    readFile(
-      new URL("../dist/history/browser/_redirects", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../dist/history/browser/404.html", import.meta.url),
-      "utf8",
-    ),
+    readFile(new URL("_redirects", browserDirectory), "utf8"),
+    readFile(new URL("404.html", browserDirectory), "utf8"),
   ]);
   expect(rewrites.trim().split("\n")).toEqual([
     "/operations / 200",
@@ -229,7 +230,7 @@ test("the production CSP allows compiled component CSS and blocks unlisted inlin
   const response = await page.goto("/");
   const policy = response?.headers()["content-security-policy"] ?? "";
   const pagesHeaders = await readFile(
-    new URL("../dist/history/browser/_headers", import.meta.url),
+    new URL("_headers", browserDirectory),
     "utf8",
   );
   expect(pagesHeaders).toContain(`Content-Security-Policy: ${policy}\n`);
@@ -1036,7 +1037,7 @@ test("Material access on a saved link preserves the static CSP and keyboard subm
   expect(response?.status()).toBe(200);
   const policy = response?.headers()["content-security-policy"] ?? "";
   const pagesHeaders = await readFile(
-    new URL("../dist/history/browser/_headers", import.meta.url),
+    new URL("_headers", browserDirectory),
     "utf8",
   );
   expect(pagesHeaders).toContain(`Content-Security-Policy: ${policy}\n`);

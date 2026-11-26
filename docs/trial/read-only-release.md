@@ -105,8 +105,20 @@ pnpm dlx wrangler@4.168.0 pages functions build functions \
 The compiled route inventory should include `/api/history`,
 `/api/history/*`, `/api/inventory` and `/api/inventory/*`. Use
 `pnpm dlx wrangler@4.168.0 pages dev ./browser --compatibility-date 2024-11-11`
-from the same directory for local static and routing smoke checks. Use only
-synthetic fixtures for local binding checks.
+from the same directory to check static assets, security headers, saved links and
+404 routing over loopback HTTP. Successful protected reads require the canonical
+HTTPS origin and an upstream response. To exercise reads with the compiled Worker
+locally, supply a synthetic canonical HTTPS request URL and fixture bindings, and
+intercept the upstream fetch with a fake transport.
+
+The [History](../../tests/history-proxy.test.ts) and
+[Inventory](../../tests/inventory-proxy.test.ts) proxy tests run the Pages
+entrypoints with synthetic HTTPS requests and fake upstream transports backed by
+the Neon response handlers. `pnpm test:ui:read-only` runs the
+[read-only browser tests](../../ui/tests/read-only.spec.ts) against the staged
+browser output with intercepted History and Inventory responses. The
+[History accessibility checks](../../ui/README.md#history-accessibility-qualification)
+use the same candidate and CSP.
 
 History enters a read-only transaction and calls only the bounded History page
 and detail projections. Its `berth_runtime` login still has retained executor

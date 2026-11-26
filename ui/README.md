@@ -42,12 +42,12 @@ loading text alongside progress.
 The production Chromium suite runs full-page axe scans for the History access
 prompt, populated Review inbox, loaded operation detail, and recoverable refresh
 error with retained rows. Any reported WCAG 2.2 A or AA violation fails the suite.
-Each state uses synthetic History responses and the production CSP.
-Run just these scans after building the backend and UI.
+Each state uses synthetic History responses and the production CSP. Run the
+scans against the read-only Pages candidate from the repository root.
 
 ```bash
-pnpm build && pnpm build:ui
-pnpm test:ui history-accessibility
+pnpm build && pnpm build:ui:read-only
+BERTH_UI_READ_ONLY=1 pnpm test:ui history-accessibility
 ```
 
 Release qualification stays pending until the release candidate passes the
@@ -59,15 +59,15 @@ announces and where keyboard focus lands.
 
 ### Desktop screen-reader pass
 
-Build as above and start the screen reader in a desktop session. Use one desktop
-browser and screen-reader combination. Firefox with Orca is the Linux option. The
-commands below run the existing browser scenarios against loopback with
-synthetic responses and a fixture token. Install the selected browser and
-substitute its Playwright name for `firefox` if using a different combination.
+Build the read-only candidate as above and start the screen reader in a desktop
+session. Firefox with Orca is the Linux option. The commands below run the five
+scenarios against that candidate on loopback with synthetic responses and a
+fixture token. For another desktop combination, install the selected browser
+and substitute its Playwright name for `firefox`.
 
 ```bash
 pnpm --dir ui exec playwright install firefox
-pnpm test:ui history.spec.ts --browser firefox --debug -g 'Material access on a saved link|loading, empty, unavailable|detail refresh retains|malformed operation links|returning from desktop detail'
+BERTH_UI_READ_ONLY=1 pnpm test:ui history.spec.ts --browser firefox --debug -g 'Material access on a saved link|loading, empty, unavailable|detail refresh retains|malformed operation links|returning from desktop detail'
 ```
 
 Use **Step over** in Playwright Inspector until it pauses at an assertion
