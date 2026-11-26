@@ -7,6 +7,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from "@angular/router";
 import { createInventoryReader } from "./infrastructure/inventory-data-access";
 import { INVENTORY_READER } from "./infrastructure/inventory-reader";
 import { InventoryStore } from "./infrastructure/inventory-store";
+import { UsageStore } from "./infrastructure/usage-store";
 import { createHistoryReader } from "./operation-history/history-data-access";
 import { HISTORY_READER } from "./operation-history/history-reader";
 import { HistoryStore } from "./operation-history/history-store";
@@ -33,6 +34,7 @@ import {
       deps: [OWNER_SESSION],
     },
     InventoryStore,
+    UsageStore,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./app.html",

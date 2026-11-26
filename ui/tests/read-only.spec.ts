@@ -44,6 +44,12 @@ test("the read-only browser artifact opens retained reads without Retry provisio
     page.getByRole("heading", { name: "Alpha bucket" }),
   ).toBeVisible();
 
+  await expect(
+    page
+      .getByRole("region", { name: "Usage and free-plan headroom" })
+      .getByLabel("Refresh usage from summary"),
+  ).toBeVisible();
+
   const response = await page.goto(`/operations/${first}`);
   expect(response?.status()).toBe(200);
   expect(response?.headers()["content-security-policy"]).toContain(

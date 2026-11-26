@@ -17,14 +17,17 @@ import { MatProgressBarModule } from "@angular/material/progress-bar";
 import { RouterLink } from "@angular/router";
 import { OWNER_SESSION } from "../owner-access/owner-session";
 import { offerings } from "./catalog";
+import { HostingUsage } from "./components/hosting-usage/hosting-usage";
 import { InventoryInstance } from "./components/inventory-instance/inventory-instance";
 import { InventoryStore } from "./inventory-store";
+import { UsageStore } from "./usage-store";
 
 /** Present the public catalog and coordinate protected reads for the landing page. */
 @Component({
   selector: "berth-infrastructure",
   imports: [
     DatePipe,
+    HostingUsage,
     InventoryInstance,
     MatButtonModule,
     MatCard,
@@ -42,6 +45,7 @@ import { InventoryStore } from "./inventory-store";
 export class Infrastructure {
   protected readonly owner = inject(OWNER_SESSION);
   protected readonly store = inject(InventoryStore);
+  protected readonly usage = inject(UsageStore);
   protected readonly offerings = offerings;
   protected readonly token = signal("");
 
