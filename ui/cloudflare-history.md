@@ -12,13 +12,14 @@ Infrastructure and History release, follow the
 ## Verify locally
 
 From the repository root, run `pnpm ui:install` and `pnpm check` using the pinned
-toolchain. The history proxy tests exercise both Pages entrypoints against the
-real Neon response handler with injected local data. The Angular build copies
-`_routes.json` and `_headers` into `ui/dist/history/browser`. Only the History, Inventory and Retry API paths and their descendants invoke
-Pages Functions. The optional Retry binding stays unset during a read-only release.
-Inventory uses the [dedicated read bindings](../docs/trial/managed-inventory-api.md#bindings-and-database-access).
-Static UI requests
-bypass the Function and receive the static security headers. The build emits
+toolchain. The history proxy tests exercise the Pages entrypoints against the
+real Neon response handler with injected local data. `pnpm build:ui:read-only`
+stages the Pages root at `ui/dist/read-only` with `browser/`, `functions/` and
+`edge/`. History and Inventory paths invoke the two read proxies. Retry is
+absent from both the browser and Functions. Inventory uses its
+[dedicated read bindings](../docs/trial/managed-inventory-api.md#bindings-and-database-access).
+Static UI requests bypass the Functions and receive the static security headers.
+The build emits
 scoped rewrites for `/operations` and `/operations/:operation`. A top-level
 `404.html` keeps other missing documents and assets at HTTP 404. The history
 API catch-all keeps deeper misses in JSON.
@@ -72,13 +73,13 @@ existing managed domain.
 [Pages custom domains](https://developers.cloudflare.com/pages/configuration/custom-domains/) ·
 [Rate limiting](https://developers.cloudflare.com/waf/rate-limiting-rules/)
 
-After authorization, build from the repository root with `pnpm build:ui`.
-This generates the CSP hashes in the output `_headers`. Publish that file
-with the browser assets from the same build. From
-`ui/`, use Wrangler `pages deploy dist/history/browser --project-name YOUR_PROJECT --branch main`
-so Wrangler discovers `ui/functions/`. Use the project's configured production
-branch if it differs from `main`. Dashboard drag-and-drop uploads omit Pages
-Function compilation. [Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/#functions)
+Build from the repository root with `pnpm build:ui:read-only`. This generates
+the CSP hashes in the staged `browser/_headers`. After authorization, change
+into `ui/dist/read-only` and run
+`wrangler pages deploy ./browser --project-name YOUR_PROJECT --branch main`
+so Wrangler discovers the staged `functions/`. Use the project's configured
+production branch if it differs from `main`. Dashboard drag-and-drop uploads
+omit Pages Function compilation. [Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/#functions)
 
 ## Verify and roll back
 

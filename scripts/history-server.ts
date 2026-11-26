@@ -8,7 +8,9 @@ const api = historyApi(
   process.env.BERTH_HISTORY_TOKEN ?? "",
   historyReader(process.env),
 );
-const directory = resolve("ui/dist/history/browser");
+const browserBuild =
+  process.env.BERTH_UI_READ_ONLY === "1" ? "read-only" : "history";
+const directory = resolve("ui/dist", browserBuild, "browser");
 const htmlType = "text/html; charset=utf-8";
 const types: Record<string, string> = {
   html: htmlType,

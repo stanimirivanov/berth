@@ -1,8 +1,8 @@
 # Angular operation history
 
-A private, read-only history screen using Angular 22 and NgRx Signal Store.
-No operation can be created, resumed, cleaned up or settled from this screen.
-The visible partial/no-go verdict remains independent of stored lifecycle outcomes.
+Infrastructure and Operation history use Angular 22 and NgRx Signal Store.
+The read-only Pages release displays retained evidence. The visible
+partial/no-go verdict remains independent of stored lifecycle outcomes.
 
 ## Local build and verification
 
@@ -23,9 +23,13 @@ CI installs Chromium and runs the same checks. The UI is a separate package beca
 Angular 22 requires TypeScript 6; the Node trial keeps TypeScript 7. Versions and
 both lockfiles are pinned. Dependency lifecycle scripts remain explicitly disabled.
 
-Use `pnpm build:ui` to produce preview and release assets together with their
-CSP hashes. The loopback server reads the generated Pages `_headers` file
-when serving HTML.
+`pnpm build:ui` builds the full application, including Retry provisioning, for
+local preview, the existing browser suite and separately authorized packaging.
+Use `pnpm build:ui:read-only` to stage the browser and read Functions under
+`ui/dist/read-only`. `pnpm check` builds and tests both variants. Each browser
+build ships with its own CSP hashes in `_headers`. The loopback server uses
+that file when serving HTML. Follow the
+[read-only release runbook](../docs/trial/read-only-release.md) for Pages packaging.
 
 The history access form and loading indicators use pinned Angular Material.
 The build links the theme as same-origin CSS and hashes runtime component

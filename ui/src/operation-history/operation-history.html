@@ -132,28 +132,32 @@
             }
             @if (detail(); as detail) {
               @let selected = detail.record;
-              <section [class.attention-reasons]="reasons().length > 0" [attr.aria-label]="reasons().length ? 'Attention reasons' : 'Retry access'">
-                @if (reasons().length) {
-                  <h3>Needs attention</h3>
-                  <ul>
-                    @for (reason of reasons(); track reason.message) {
-                      <li>{{ reason.message }}</li>
+              @if (reasons().length || retryAccessLabel) {
+                <section [class.attention-reasons]="reasons().length > 0" [attr.aria-label]="reasons().length ? 'Attention reasons' : retryAccessLabel">
+                  @if (reasons().length) {
+                    <h3>Needs attention</h3>
+                    <ul>
+                      @for (reason of reasons(); track reason.message) {
+                        <li>{{ reason.message }}</li>
+                      }
+                    </ul>
+                    <div class="owner-procedures">
+                      @for (link of recoveryLinks(); track link.url) {
+                        <a href="{{ link.url }}" rel="noreferrer">{{ link.label }}</a>
+                      }
+                    </div>
+                  }
+                  @if (retryAccessLabel) {
+                    @for (record of [selected]; track record.operation) {
+                      <berth-retry-panel
+                        [operation]="record.operation"
+                        [originalExpired]="retryOriginalExpired()"
+                        [originalCleanup]="record.cleanupRequested || record.phase === 'cleanup'"
+                      />
                     }
-                  </ul>
-                  <div class="owner-procedures">
-                    @for (link of recoveryLinks(); track link.url) {
-                      <a href="{{ link.url }}" rel="noreferrer">{{ link.label }}</a>
-                    }
-                  </div>
-                }
-                @for (record of [selected]; track record.operation) {
-                  <berth-retry-panel
-                    [operation]="record.operation"
-                    [originalExpired]="retryOriginalExpired()"
-                    [originalCleanup]="record.cleanupRequested || record.phase === 'cleanup'"
-                  />
-                }
-              </section>
+                  }
+                </section>
+              }
               <p><small>Last fetched <time [attr.datetime]="detail.fetchedAt">{{ detail.fetchedAt | date: 'medium' : 'UTC' }} UTC</time></small></p>
               <p class="mono">{{ selected.operation }}</p>
               <h3>Recorded lifecycle state</h3>

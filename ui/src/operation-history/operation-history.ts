@@ -176,6 +176,7 @@ export class OperationHistory {
     return detail ? attentionReasons(detail.record, this.now()) : [];
   });
 
+  protected readonly retryAccessLabel = RetryPanel.accessLabel;
   protected readonly retryOriginalExpired = computed(() => {
     const detail = this.detail();
     return detail !== null && Date.parse(detail.record.expiresAt) <= this.now();
