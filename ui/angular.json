@@ -41,6 +41,15 @@
                 },
                 "fonts": false
               }
+            },
+            "read-only": {
+              "outputPath": "dist/read-only",
+              "fileReplacements": [
+                {
+                  "replace": "src/operation-history/retry/retry-panel.ts",
+                  "with": "src/operation-history/read-only/retry-panel.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"

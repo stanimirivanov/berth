@@ -34,6 +34,7 @@ import { RetryStore } from "./retry-store";
   encapsulation: ViewEncapsulation.None,
 })
 export class RetryPanel {
+  static readonly accessLabel = "Retry access";
   protected readonly store = inject(RetryStore);
   readonly operation = input.required<string>();
   readonly originalExpired = input.required<boolean>();

@@ -72,12 +72,13 @@ navigating away, expiry, or a Retry access denial clears them. History remains
 accessible through its independent read credential. Disconnecting from History
 or losing its access also clears the Retry panel.
 
-For a separately approved Retry deployment, set the production Pages binding
-`BERTH_RETRY_NEON_ORIGIN` to the HTTPS origin of the dedicated Retry Function.
+For a separately approved Retry deployment, use `pnpm build:ui` and package
+`dist/history/browser` from `ui/` with its `functions/`. Set the production
+Pages binding `BERTH_RETRY_NEON_ORIGIN` to the HTTPS origin of the dedicated Retry Function.
 Keep this distinct from the History and Inventory upstream origins. Use the
-existing canonical `BERTH_HISTORY_SITE_ORIGIN` binding. Leave Retry unset for a
-read-only release and leave preview bindings unset. Pages forwards the separate
-Retry owner credential or short-lived session only to the fixed Retry routes.
+existing canonical `BERTH_HISTORY_SITE_ORIGIN` binding. Leave preview bindings
+unset. The [read-only Pages package](read-only-release.md#prepare-the-candidate)
+omits Retry. Pages forwards the separate Retry owner credential or short-lived session only to the fixed Retry routes.
 The Neon Function verifies both credentials. Pages needs no additional secret
 and forwards no cookie, History credential, body, or retry attempt. The static
 production CSP keeps `connect-src 'self'`.

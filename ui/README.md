@@ -1,8 +1,8 @@
 # Angular operation history
 
-A private, read-only history screen using Angular 22 and NgRx Signal Store.
-No operation can be created, resumed, cleaned up or settled from this screen.
-The visible partial/no-go verdict remains independent of stored lifecycle outcomes.
+Infrastructure and Operation history use Angular 22 and NgRx Signal Store.
+The read-only Pages release displays retained evidence. The visible
+partial/no-go verdict remains independent of stored lifecycle outcomes.
 
 ## Local build and verification
 
@@ -23,9 +23,13 @@ CI installs Chromium and runs the same checks. The UI is a separate package beca
 Angular 22 requires TypeScript 6; the Node trial keeps TypeScript 7. Versions and
 both lockfiles are pinned. Dependency lifecycle scripts remain explicitly disabled.
 
-Use `pnpm build:ui` to produce preview and release assets together with their
-CSP hashes. The loopback server reads the generated Pages `_headers` file
-when serving HTML.
+`pnpm build:ui` builds the full application, including Retry provisioning, for
+local preview, the existing browser suite and separately authorized packaging.
+Use `pnpm build:ui:read-only` to stage the browser and read Functions under
+`ui/dist/read-only`. `pnpm check` builds and tests both variants. Each browser
+build ships with its own CSP hashes in `_headers`. The loopback server uses
+that file when serving HTML. Follow the
+[read-only release runbook](../docs/trial/read-only-release.md) for Pages packaging.
 
 The history access form and loading indicators use pinned Angular Material.
 The build links the theme as same-origin CSS and hashes runtime component
@@ -38,12 +42,12 @@ loading text alongside progress.
 The production Chromium suite runs full-page axe scans for the History access
 prompt, populated Review inbox, loaded operation detail, and recoverable refresh
 error with retained rows. Any reported WCAG 2.2 A or AA violation fails the suite.
-Each state uses synthetic History responses and the production CSP.
-Run just these scans after building the backend and UI.
+Each state uses synthetic History responses and the production CSP. Run the
+scans against the read-only Pages candidate from the repository root.
 
 ```bash
-pnpm build && pnpm build:ui
-pnpm test:ui history-accessibility
+pnpm build && pnpm build:ui:read-only
+BERTH_UI_READ_ONLY=1 pnpm test:ui history-accessibility
 ```
 
 Release qualification stays pending until the release candidate passes the
@@ -55,15 +59,15 @@ announces and where keyboard focus lands.
 
 ### Desktop screen-reader pass
 
-Build as above and start the screen reader in a desktop session. Use one desktop
-browser and screen-reader combination. Firefox with Orca is the Linux option. The
-commands below run the existing browser scenarios against loopback with
-synthetic responses and a fixture token. Install the selected browser and
-substitute its Playwright name for `firefox` if using a different combination.
+Build the read-only candidate as above and start the screen reader in a desktop
+session. Firefox with Orca is the Linux option. The commands below run the five
+scenarios against that candidate on loopback with synthetic responses and a
+fixture token. For another desktop combination, install the selected browser
+and substitute its Playwright name for `firefox`.
 
 ```bash
 pnpm --dir ui exec playwright install firefox
-pnpm test:ui history.spec.ts --browser firefox --debug -g 'Material access on a saved link|loading, empty, unavailable|detail refresh retains|malformed operation links|returning from desktop detail'
+BERTH_UI_READ_ONLY=1 pnpm test:ui history.spec.ts --browser firefox --debug -g 'Material access on a saved link|loading, empty, unavailable|detail refresh retains|malformed operation links|returning from desktop detail'
 ```
 
 Use **Step over** in Playwright Inspector until it pauses at an assertion

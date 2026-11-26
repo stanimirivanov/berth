@@ -11,7 +11,9 @@
   "scripts": {
     "start": "ng serve --host 127.0.0.1",
     "build": "ng build && node ../tools/build-ui-csp.mjs",
-    "test": "playwright test"
+    "build:read-only": "ng build --configuration production,read-only && node ../tools/build-ui-csp.mjs read-only && node ../tools/stage-read-only-pages.mjs",
+    "test": "playwright test",
+    "test:read-only": "playwright test --config playwright.read-only.config.ts"
   },
   "dependencies": {
     "@angular/cdk": "22.3.0",

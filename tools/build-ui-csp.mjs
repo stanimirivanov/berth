@@ -191,7 +191,11 @@ export function renderStyleHeaders(template, chunks) {
 /** Generate the published header rules from the browser build without changing its assets. */
 function writeStyleHeaders() {
   const ui = fileURLToPath(new URL("../ui/", import.meta.url));
-  const directory = resolve(ui, "dist/history/browser");
+  const target = process.argv[2] ?? "history";
+  if (target !== "history" && target !== "read-only") {
+    throw new Error("Unknown Angular browser build.");
+  }
+  const directory = resolve(ui, "dist", target, "browser");
   const chunks = readdirSync(directory, {
     recursive: true,
     withFileTypes: true,

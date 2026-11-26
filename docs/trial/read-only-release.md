@@ -69,12 +69,14 @@ the first-release fallback.
    Migration 011 and the Retry runtime are outside this release.
 2. Build from the repository root with `pnpm ui:install`, `pnpm check` and
    `pnpm build:inventory`. Check `dist/history.zip` and `dist/inventory.zip` and
-   record their SHA-256 hashes alongside the candidate commit. Keep the generated
-   `ui/dist/history/browser` directory intact, including its CSP `_headers`,
-   `_redirects`, and `_routes.json`. Retain a digest manifest of that directory
-   and the Pages Function sources under `ui/functions` and `ui/edge`. Record the
-   Wrangler version used to build the Pages Functions. Verify the local artifact
-   and bindings before approving the exact candidate for upload.
+   record their SHA-256 hashes alongside the candidate commit. The UI gate runs
+   `pnpm build:ui:read-only` and tests the resulting package. Keep the generated
+   `ui/dist/read-only` Pages root intact and retain a digest manifest of its
+   `browser/`, `functions/` and `edge/` directories. The browser files include
+   the generated CSP `_headers`, saved-link `_redirects`, and read-only
+   `_routes.json`. The Functions directory contains only the History and Inventory
+   handlers. Record the Wrangler version used to compile the Pages Functions and
+   verify the local artifact and bindings before approving upload.
 3. Prepare the binding maps for two dedicated Neon read Functions without
    triggers. On History use
    only the restricted `berth_runtime` credentials in **both** `DATABASE_URL` and
@@ -87,6 +89,36 @@ the first-release fallback.
    candidate and record the results with the release evidence before requesting
    upload approval. Follow the
    [History accessibility qualification](../../ui/README.md#history-accessibility-qualification).
+
+From the staged Pages root, compile the Functions with the Wrangler version
+recorded for the candidate. The example uses the version used for local
+qualification.
+
+```bash
+cd ui/dist/read-only
+scratch=$(mktemp -d)
+pnpm dlx wrangler@4.168.0 pages functions build functions \
+  --outdir "$scratch/worker" --output-routes-path "$scratch/routes.json" \
+  --compatibility-date 2024-11-11
+```
+
+The compiled route inventory should include `/api/history`,
+`/api/history/*`, `/api/inventory` and `/api/inventory/*`. Use
+`pnpm dlx wrangler@4.168.0 pages dev ./browser --compatibility-date 2024-11-11`
+from the same directory to check static assets, security headers, saved links and
+404 routing over loopback HTTP. Successful protected reads require the canonical
+HTTPS origin and an upstream response. To exercise reads with the compiled Worker
+locally, supply a synthetic canonical HTTPS request URL and fixture bindings, and
+intercept the upstream fetch with a fake transport.
+
+The [History](../../tests/history-proxy.test.ts) and
+[Inventory](../../tests/inventory-proxy.test.ts) proxy tests run the Pages
+entrypoints with synthetic HTTPS requests and fake upstream transports backed by
+the Neon response handlers. `pnpm test:ui:read-only` runs the
+[read-only browser tests](../../ui/tests/read-only.spec.ts) against the staged
+browser output with intercepted History and Inventory responses. The
+[History accessibility checks](../../ui/README.md#history-accessibility-qualification)
+use the same candidate and CSP.
 
 History enters a read-only transaction and calls only the bounded History page
 and detail projections. Its `berth_runtime` login still has retained executor
@@ -116,11 +148,11 @@ redacted results before opening owner access.
    default Neon Function origins. Set `BERTH_HISTORY_UPSTREAM_TOKEN` and
    `BERTH_INVENTORY_UPSTREAM_TOKEN` as secrets matching their respective Neon
    bindings. Leave protected preview bindings unset.
-3. Use the approved artifact without rebuilding. From the candidate's `ui/`
-   directory, run `wrangler pages deploy dist/history/browser --project-name "$PAGES_PROJECT" --branch "$PAGES_PRODUCTION_BRANCH"`
-   with the recorded Wrangler version and approved Direct Upload project and
-   production branch. This includes the tracked Pages Functions. Record the
-   returned production deployment ID.
+3. Use the approved artifact without rebuilding. Change into the staged Pages
+   root, `ui/dist/read-only`, so Wrangler discovers its staged `functions/`.
+   With the recorded Wrangler version and approved project and branch, run
+   `wrangler pages deploy ./browser --project-name "$PAGES_PROJECT" --branch "$PAGES_PRODUCTION_BRANCH"`.
+   Record the returned production deployment ID.
    [Pages Direct Upload](https://developers.cloudflare.com/pages/get-started/direct-upload/#functions)
 
 
