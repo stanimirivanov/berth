@@ -1,6 +1,6 @@
 import { Client, type ClientConfig } from "pg";
 
-/** Connection settings validated by Inventory or Retry before they open a hosted session. */
+/** Connection settings validated by a retained adapter before opening a hosted session. */
 export interface HostedPostgresConfig extends ClientConfig {
   requireChannelBinding: boolean;
 }

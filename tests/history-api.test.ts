@@ -75,9 +75,9 @@ test("history reader checks identity in a read-only transaction, closes on error
   );
   const env = {
     DATABASE_URL:
-      "postgresql://berth_runtime:fixture@ep-fixture.neon.tech/neondb",
+      "postgresql://berth_history_runtime:fixture@ep-fixture.aws.neon.tech/neondb",
     DATABASE_URL_UNPOOLED:
-      "postgresql://berth_runtime:fixture@ep-fixture.neon.tech/neondb",
+      "postgresql://berth_history_runtime:fixture@ep-fixture.aws.neon.tech/neondb",
   };
   let closed = 0;
   const queries: string[] = [];

@@ -733,7 +733,7 @@ test("History and Retry composition can use retained capabilities but cannot imp
     [
       "history",
       "historyReader",
-      "../../storage/postgres/runtime-access.js",
+      "./hosted-postgres.js",
       'return { list: () => db.query("SELECT berth_executor.history_page(null,20)") };',
       "historyReader({}).list();",
     ],
@@ -785,11 +785,12 @@ test("history boundaries permit only the read composition and reject provider or
     "src/application/history/runtime.ts":
       'import type { HistoryRead } from "./contract.js"; import "../retained-trial-ledger/history.js";',
     [`${adapter}history.ts`]:
-      'import "../../storage/postgres/runtime-access.js"; import "../history/contract.js"; import "./sql.js";',
+      'import "./hosted-postgres.js"; import "../history/contract.js"; import "./sql.js";',
     [`${adapter}inventory.ts`]:
       'import "../inventory/contract.js"; import "./sql.js"; const query = "SELECT berth_inventory.inventory_page($1,$2)";',
     [`${adapter}retry.ts`]: 'import "../retry/contract.js"; import "./sql.js";',
     [`${adapter}sql.ts`]: "",
+    [`${adapter}hosted-postgres.ts`]: 'import "pg";',
     "src/application/inventory/contract.ts": 'import "effect/Schema";',
     "src/application/retry/contract.ts": "",
     "src/storage/postgres/runtime-access.ts": "",
@@ -841,6 +842,15 @@ test("history boundaries permit only the read composition and reject provider or
     ],
     [`${adapter}inventory.ts`, 'import "../../trial/executor-store.js";'],
     [`${adapter}history.ts`, 'import "../../trial/executor-security.js";'],
+    [
+      `${adapter}history.ts`,
+      'import "../../storage/postgres/runtime-access.js";',
+    ],
+    [`${adapter}history.ts`, 'import "pg";'],
+    [
+      "src/application/history/runtime.ts",
+      'import "../retained-trial-ledger/hosted-postgres.js";',
+    ],
     [
       "src/storage/postgres/runtime-access.ts",
       'import "../../trial/executor.js";',

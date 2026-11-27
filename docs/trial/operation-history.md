@@ -8,11 +8,20 @@ criteria.
 ## Install and consume
 
 - Migration `008_operation_history.sql` requires the dedicated `neondb_owner`
-  connection to `neondb`, after migrations 001/002. Installation is an explicit
-  owner action; this PR installs nothing on Neon and changes no historical rows.
-- The retained adapter creates a restricted `berth_runtime` connection for each
-  read. It sets a statement timeout and a client deadline, then checks the login
-  in a read-only transaction before accessing the History projection.
+  connection to `neondb` after migrations 001/002. Before a separately approved
+  History cutover, create the login as a PostgreSQL administrator with
+  `CREATE ROLE berth_history_runtime LOGIN NOINHERIT;` and set its password
+  with the interactive `psql` command `\password berth_history_runtime`. Use a
+  fresh independent password. Give the login zero role memberships, including
+  managed administrator roles. Apply `013_history_reader.sql` as `neondb_owner`
+  after 008 to grant schema usage and the two projection calls.
+- Set both `DATABASE_URL` and `DATABASE_URL_UNPOOLED` to the same direct
+  `berth_history_runtime` connection URL for `neondb`. Keep the URL in secret
+  bindings. The adapter verifies TLS and enforces SCRAM channel binding when
+  the URL specifies `channel_binding=require`. It checks the authenticated login
+  and effective privileges in a bounded read-only transaction before each query.
+  The login needs database CONNECT and cannot have CREATE or TEMP privileges,
+  application table privileges, or any extra callable non-system SQL routine.
 - `historyReader(env).list()` returns `{ items, next }`, default 20 records,
   maximum 50. Rows sort by start timestamp descending, then operation UUID
   descending. Pass `next` as the next call's `before` cursor. The cursor is the
@@ -34,11 +43,11 @@ Application counters are **not provider usage or remaining free allowances**.
 No raw reason, provider/credential identity, target names, ownership tags,
 receipts, request payloads or Alchemy state is exposed.
 
-The SQL private projection is not granted to runtime or PUBLIC. Only the bounded
-page and detail SECURITY DEFINER entrypoints are granted to runtime; all table
-access remains denied. Fixed search paths and schema-qualified relations prevent
-caller objects from substituting for protected data. Indexes support the keyset
-order and per-operation request counts.
+The dedicated login can execute the bounded page and detail SECURITY DEFINER
+entrypoints. PostgreSQL denies the private projection, direct application table
+access and executor calls even in a read-write session. Fixed search paths and
+schema-qualified relations protect the queries. Indexes support the keyset order
+and per-operation request counts.
 
 Pagination is a browsing view, not a cross-request immutable snapshot: later
 outcome/counter changes may appear on later reads. New records may appear ahead of
@@ -58,9 +67,12 @@ pnpm build:live-executor
 
 Use a fresh disposable PostgreSQL fixture initialized by `test:setup-db`.
 The history regression is included in the existing admission CI gate. It checks
-restricted read-only transactions, UUID tie-break pagination, expired and
-needs-reconciliation records, nullable phase, redaction, invalid input, private
-function/table denial, PUBLIC ACLs and unchanged durable evidence before/after.
+read-only transactions, UUID tie-break pagination, expired and
+needs-reconciliation records, nullable phase, redaction, invalid input and
+unchanged durable evidence. A real dedicated login in a read-write session must
+be denied direct reads and writes, temporary tables, private and executor
+functions, and switching to the trial role. The adapter rejects role membership,
+column grants, a PUBLIC executor grant and missing projection grants.
 No live credentials, cloud resources or new trial are needed. Independent owner
 cleanup and the historical 160/40 reserve remain separate and unchanged.
 

@@ -59,8 +59,9 @@ the first-release fallback.
 ## Prepare the candidate
 
 1. Confirm the dedicated database and applied migration history on the intended
-   branch. History needs migration `008_operation_history.sql` and its documented
-   prerequisites. Inventory needs the retained ledger and Inventory migrations
+   branch. A new History bundle needs the dedicated login and migration
+   `013_history_reader.sql` after `008_operation_history.sql`. Inventory needs the
+   retained ledger and Inventory migrations
    `009_managed_inventory.sql` and `010_inventory_evidence.sql`. Install any
    missing prerequisites in dependency order as the dedicated owner after approval.
    Preserve existing records. Use the
@@ -79,7 +80,7 @@ the first-release fallback.
    verify the local artifact and bindings before approving upload.
 3. Prepare the binding maps for two dedicated Neon read Functions without
    triggers. On History use
-   only the restricted `berth_runtime` credentials in **both** `DATABASE_URL` and
+   the same direct `berth_history_runtime` URL in **both** `DATABASE_URL` and
    `DATABASE_URL_UNPOOLED`. On Inventory use `berth_inventory_runtime` and set
    both default URLs and `BERTH_INVENTORY_DATABASE_URL` to the same restricted
    connection. Use `BERTH_HISTORY_TOKEN` and `BERTH_INVENTORY_TOKEN` for distinct
@@ -120,10 +121,10 @@ browser output with intercepted History and Inventory responses. The
 [History accessibility checks](../../ui/README.md#history-accessibility-qualification)
 use the same candidate and CSP.
 
-History enters a read-only transaction and calls only the bounded History page
-and detail projections. Its `berth_runtime` login still has retained executor
-grants at the database layer. Treat this as an explicit residual risk for the
-release decision. Never reuse that login for Inventory. Inventory assumes
+History enters a read-only transaction and checks the dedicated login can call
+only the bounded History page and detail projections. A previously deployed
+History bundle may still use `berth_runtime`, which has executor grants. Record
+the installed bundle and login during release qualification. Inventory assumes
 `berth_inventory_reader` within a read-only transaction after checking the login
 and grants. The Inventory login and reader have no authority to mutate records
 or call the executor. Verify actual privileges on the target branch and retain
@@ -182,6 +183,12 @@ redacted results before opening owner access.
   timestamps.
 
 ## Shut down access or roll back
+
+For a History login cutover, retain the prior History bundle and its private
+binding map as a pair. If History fails smoke checks after the cutover, restore
+that bundle with its matching bindings and verify the History list and saved
+detail link. Migration 013 is additive. A Pages rollback alone cannot switch
+the History Function or its database credentials.
 
 1. Stop further smoke tests and record UTC time, candidate commit, deployed
    versions and the reason for stopping. Preserve dated evidence privately.
