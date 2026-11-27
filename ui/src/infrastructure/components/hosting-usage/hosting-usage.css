@@ -1,0 +1,44 @@
+berth-hosting-usage {
+  display: block;
+  margin-block-start: 1.25rem;
+
+  .hosting-usage {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 1rem;
+  }
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+  }
+  label {
+    display: block;
+    font-weight: 600;
+  }
+  input {
+    max-inline-size: 100%;
+  }
+  .hosting-usage-group {
+    border-block-start: 1px solid var(--line);
+    margin-block-start: 1rem;
+    padding-block-start: 1rem;
+  }
+  .hosting-usage-meter {
+    margin-block-start: 1rem;
+  }
+  dt {
+    font-weight: 600;
+  }
+  dd {
+    margin: 0 0 0.25rem;
+    overflow-wrap: anywhere;
+  }
+  .hosting-usage-warning {
+    background: var(--warn);
+    padding: 0.5rem 0.75rem;
+  }
+  .hosting-usage-note {
+    color: var(--muted);
+  }
+}

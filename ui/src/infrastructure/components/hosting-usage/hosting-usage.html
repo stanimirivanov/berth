@@ -1,0 +1,83 @@
+<section class="hosting-usage" aria-labelledby="hosting-usage-title">
+  <h2 id="hosting-usage-title">Usage and free-plan headroom</h2>
+  @if (verified()) {
+    <p>Provider quotas can interrupt protected reads. These readings are advisory.</p>
+    @if (targetConfigured()) {
+      <p id="usage-refresh-help">Run the local usage collector, then choose its summary file.</p>
+    } @else {
+      <p id="usage-refresh-help" role="status">Usage refresh is unavailable until this site has a hosting target configured.</p>
+    }
+    <label for="usage-summary">Refresh usage from summary</label>
+    <input #summaryInput id="usage-summary" type="file" accept=".json,application/json"
+      aria-describedby="usage-refresh-help" [disabled]="!targetConfigured() || status() === 'loading'"
+      (change)="select(summaryInput)" />
+    @if (status() === "loading") {
+      <p role="status">Reading usage summary…</p>
+    } @else if (status() === "loaded") {
+      <p role="status">Usage summary loaded.</p>
+    } @else if (status() === "failed") {
+      <p role="alert">Usage refresh failed. Choose a valid summary for this site and target.</p>
+    }
+    <p class="hosting-usage-note">Neon Console readings can lag by about an hour and may stop updating for inactive projects. Cloudflare request readings can lag account activity.</p>
+    @for (group of groups(); track group.label) {
+      <section class="hosting-usage-group">
+        <h3>{{ group.label }}</h3>
+        @for (row of group.rows; track row.id) {
+          <div class="hosting-usage-meter">
+            <h4>{{ row.title }}</h4>
+            <p><strong>{{ row.status }}</strong> @if (row.reason) { {{ row.reason }} }</p>
+            <dl>
+              <dt>Free allowance</dt>
+              <dd>{{ row.limit | number }} {{ row.unit }}
+                @switch (row.period) {
+                  @case ("utc-day") { per UTC day }
+                  @case ("billing") { per billing period }
+                  @case ("continuous") { continuous limit }
+                }
+              </dd>
+              @if (row.reading; as reading) {
+                @if (reading.precision === "upper-bound") {
+                  <dt>{{ row.status === "Stale" ? "Last usage upper bound" : "Usage upper bound" }}</dt>
+                  <dd>{{ reading.value }} {{ row.unit }}</dd>
+                } @else {
+                  <dt>{{ row.status === "Stale" ? "Last observed usage" : "Observed usage" }}</dt>
+                  <dd>{{ reading.value | number: "1.0-8" }} {{ row.unit }}</dd>
+                }
+                <dt>Source</dt><dd>{{ sources[reading.source] }}</dd>
+                <dt>Observed</dt>
+                <dd><time [attr.datetime]="reading.observedAt">{{ reading.observedAt | date: "medium" : "UTC" }} UTC</time></dd>
+                @if (reading.dataThrough) {
+                  <dt>Data through</dt>
+                  <dd><time [attr.datetime]="reading.dataThrough">{{ reading.dataThrough | date: "medium" : "UTC" }} UTC</time></dd>
+                }
+                @if (reading.period; as period) {
+                  <dt>Quota period</dt>
+                  <dd>
+                    <time [attr.datetime]="period.start">{{ period.start | date: "medium" : "UTC" }} UTC</time>
+                    to <time [attr.datetime]="period.end">{{ period.end | date: "medium" : "UTC" }} UTC</time>
+                  </dd>
+                }
+                @if (row.remaining !== null) {
+                  @if (reading.precision === "upper-bound") {
+                    <dt>Conservative headroom</dt>
+                    <dd>At least {{ conservativeHeadroom(row.remaining) | number: "1.0-8" }} {{ row.unit }}</dd>
+                  } @else {
+                    <dt>Remaining allowance</dt>
+                    <dd>{{ row.remaining | number: "1.0-8" }} {{ row.unit }}</dd>
+                  }
+                }
+              }
+            </dl>
+            @if (row.warning) {
+              <p class="hosting-usage-warning">
+                <strong>{{ row.warning }}{{ row.reading?.precision === "upper-bound" ? " (based on upper bound)" : "" }}</strong>
+              </p>
+            }
+          </div>
+        }
+      </section>
+    }
+  } @else {
+    <p>Usage requires verified Owner access.</p>
+  }
+</section>

@@ -151,6 +151,7 @@ const declarationFile = /\.d\.[cm]?ts$/;
 const angularFeaturePath = /^ui\/src\/(?<owner>[^/]+)\/(?<module>.+)$/;
 const angularPrivateLayer =
   /(?:^(?:state|data-access)\/|(?:^|\/|-)(?:store|data-access|reader)(?:\.d)?(?:\.(?:[cm]?[jt]s|tsx|jsx))?$)/;
+const hostingUsageContract = "ui/src/infrastructure/hosting-usage-contract.ts";
 const angularCompositionRoots = new Set(["ui/src/app.ts", "ui/src/main.ts"]);
 
 /** Identify ESM forwarding and direct exports of private imports.
@@ -317,6 +318,14 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
      * @param {ts.Node} node @param {ts.Node|undefined} target @param {boolean} typeOnly
      */
     function dependency(node, target, typeOnly) {
+      if (file === hostingUsageContract) {
+        fail(
+          node,
+          "architecture",
+          "The hosting usage contract is shared with the owner collector and must remain dependency-free.",
+        );
+        return;
+      }
       if (!target || !ts.isStringLiteralLike(target)) {
         if (production || web)
           fail(
@@ -537,6 +546,8 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
         } else if (
           file.startsWith("scripts/") &&
           !(
+            (file === "scripts/hosting-usage.ts" &&
+              resolved === hostingUsageContract) ||
             resolved.startsWith("scripts/") ||
             resolved === "neon.ts" ||
             resolved === "src/trial/deployment.ts"
@@ -545,7 +556,7 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
           fail(
             node,
             "architecture",
-            "Scripts may compose scripts, deployment configuration and the environment allowlist only.",
+            "Scripts may compose scripts, the approved shared usage contract, deployment configuration and the environment allowlist only.",
           );
         if (!typeOnly) graph.get(file)?.push(resolved);
       } else if (

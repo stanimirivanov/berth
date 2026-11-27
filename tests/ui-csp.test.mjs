@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   componentStyleHashes,
   renderStyleHeaders,
+  renderUsageTarget,
 } from "../tools/build-ui-csp.mjs";
 
 const component =
@@ -84,4 +85,32 @@ test("the Pages CSP build hashes literal CSS in the optimized Material component
       /Unsupported Angular AOT|ViewEncapsulation.None/,
     );
   }
+});
+
+test("the browser build pins at most one validated usage fingerprint in the HTML head", () => {
+  const html =
+    "<!doctype html><html><head><title>Berth</title></head><body></body></html>";
+  const fingerprint = "a1".repeat(32);
+  assert.equal(renderUsageTarget(html, undefined), html);
+  const pinned = renderUsageTarget(html, fingerprint);
+  assert.equal(
+    pinned,
+    html.replace(
+      "</head>",
+      `<meta name="berth-usage-target" content="${fingerprint}"></head>`,
+    ),
+  );
+  for (const invalid of [
+    "",
+    fingerprint.toUpperCase(),
+    fingerprint.slice(1),
+    `${fingerprint}\n`,
+    '"><script>unexpected</script>',
+  ]) {
+    assert.throws(
+      () => renderUsageTarget(html, invalid),
+      /BERTH_USAGE_TARGET_FINGERPRINT/,
+    );
+  }
+  assert.throws(() => renderUsageTarget(pinned, fingerprint), /HTML head/);
 });

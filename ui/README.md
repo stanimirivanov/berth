@@ -37,6 +37,12 @@ styles. Material motion is disabled for the static CSP. Keep the visible
 loading text alongside progress.
 [Material qualification](../docs/research/angular-material-pages-csp.md)
 
+## Hosting usage
+
+After verifying Owner access, Infrastructure accepts a validated summary from
+the local owner collector. See [Hosting usage and Free-plan headroom](../docs/trial/hosting-usage.md)
+for the refresh procedure and the evidence accepted by each metric.
+
 ## History accessibility qualification
 
 The production Chromium suite runs full-page axe scans for the History access

@@ -188,8 +188,32 @@ export function renderStyleHeaders(template, chunks) {
   return output;
 }
 
-/** Generate the published header rules from the browser build without changing its assets. */
-function writeStyleHeaders() {
+/** Pin the independently configured hosting target without publishing provider identifiers.
+ * @param {string} html Angular's generated index document.
+ * @param {string|undefined} fingerprint Optional public SHA-256 target fingerprint.
+ */
+export function renderUsageTarget(html, fingerprint) {
+  if (fingerprint === undefined) return html;
+  if (fingerprint.length !== 64 || !/^[a-f0-9]{64}$/.test(fingerprint)) {
+    throw new Error(
+      "BERTH_USAGE_TARGET_FINGERPRINT must be a lowercase SHA-256 fingerprint.",
+    );
+  }
+  const headEnd = "</head>";
+  if (
+    html.split(headEnd).length !== 2 ||
+    html.includes('name="berth-usage-target"')
+  ) {
+    throw new Error("Expected one Angular HTML head without a usage target.");
+  }
+  return html.replace(
+    headEnd,
+    `<meta name="berth-usage-target" content="${fingerprint}">${headEnd}`,
+  );
+}
+
+/** Finalize the published CSP and optional usage target for either browser build. */
+function finalizeBrowserBuild() {
   const ui = fileURLToPath(new URL("../ui/", import.meta.url));
   const target = process.argv[2] ?? "history";
   if (target !== "history" && target !== "read-only") {
@@ -203,15 +227,21 @@ function writeStyleHeaders() {
     .filter((entry) => entry.isFile() && entry.name.endsWith(".js"))
     .map((entry) => readFileSync(join(entry.parentPath, entry.name), "utf8"));
   const template = readFileSync(resolve(ui, "public/_headers"), "utf8");
+  const indexPath = resolve(directory, "index.html");
+  const fingerprint = process.env.BERTH_USAGE_TARGET_FINGERPRINT;
+  const index = renderUsageTarget(readFileSync(indexPath, "utf8"), fingerprint);
   writeFileSync(
     resolve(directory, "_headers"),
     renderStyleHeaders(template, chunks),
   );
+  if (fingerprint !== undefined) {
+    writeFileSync(indexPath, index);
+  }
 }
 
 if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  writeStyleHeaders();
+  finalizeBrowserBuild();
 }

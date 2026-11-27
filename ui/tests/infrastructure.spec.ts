@@ -42,16 +42,16 @@ test("Infrastructure shows the catalog before access and links retained instance
   await page.getByLabel("Owner access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Connect" }).click();
   await expect(page.getByText("Inventory coverage incomplete")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 3 })).toHaveText([
-    "Zeta bucket",
-    "Alpha bucket",
-    "Beta bucket",
-  ]);
+  await expect(
+    page
+      .getByRole("region", { name: "OCI Object Storage bucket" })
+      .getByRole("heading", { level: 3 }),
+  ).toHaveText(["Zeta bucket", "Alpha bucket", "Beta bucket"]);
   await expect(page.getByText("Deletion remains unresolved.")).toBeVisible();
   await expect(page.getByText("No known instances")).toHaveCount(0);
   await expect(
     page.getByText("Not yet available", { exact: true }),
-  ).toHaveCount(3);
+  ).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
     390,
   );
@@ -113,16 +113,21 @@ test("Infrastructure preserves rows on paging and refresh failures and reconcile
     page.getByRole("heading", { name: verified.displayName }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Retry", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 3 })).toHaveText([
-    "Zeta bucket",
-    "Alpha bucket",
-  ]);
+  await expect(
+    page
+      .getByRole("region", { name: "OCI Object Storage bucket" })
+      .getByRole("heading", { level: 3 }),
+  ).toHaveText(["Zeta bucket", "Alpha bucket"]);
 
   await expect(stamp).toHaveAttribute("datetime", fetchedAt ?? "");
   await page.getByRole("button", { name: "Refresh inventory" }).click();
   await expect(page.getByRole("alert")).toContainText("may be out of date");
   await expect(stamp).toHaveAttribute("datetime", fetchedAt ?? "");
-  await expect(page.getByRole("heading", { level: 3 })).toHaveCount(2);
+  await expect(
+    page
+      .getByRole("region", { name: "OCI Object Storage bucket" })
+      .getByRole("heading", { level: 3 }),
+  ).toHaveCount(2);
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(
     page.getByText(

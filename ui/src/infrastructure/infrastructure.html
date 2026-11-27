@@ -31,9 +31,7 @@
       <p><strong>Trial feasibility</strong> Partial / no-go</p>
     </header>
     <dl class="offering-meters">
-      <div><dt>Usage</dt><dd>Not yet available</dd></div>
       <div><dt>Cost</dt><dd>Not yet available</dd></div>
-      <div><dt>Free-plan headroom</dt><dd>Not yet available</dd></div>
     </dl>
     @if (owner.canRead()) {
       @if (store.loading(); as loading) {
@@ -87,3 +85,10 @@
   </mat-card>
   </section>
 }
+
+<berth-hosting-usage
+  [verified]="owner.status() === 'verified'"
+  [targetConfigured]="usage.targetConfigured"
+  [rows]="usage.rows()"
+  [status]="usage.status()"
+  (summary)="usage.refresh($event)" />

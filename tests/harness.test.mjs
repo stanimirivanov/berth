@@ -938,3 +938,31 @@ test("retry boundaries permit the read-only observer and reject executor couplin
     );
   }
 });
+
+test("owner usage collector and browser share only the dependency-free usage contract", () => {
+  const contract = "ui/src/infrastructure/hosting-usage-contract.ts";
+  const collector = "scripts/hosting-usage.ts";
+  const files = {
+    [contract]: "",
+    [collector]: 'import "../ui/src/infrastructure/hosting-usage-contract.ts";',
+    "ui/src/infrastructure/usage-store.ts":
+      'import "./hosting-usage-contract";',
+    "ui/src/infrastructure/hosting-usage-model.ts": "",
+    "scripts/other.ts": "",
+  };
+  assert.deepEqual(analyze(files), []);
+  assert.ok(
+    analyze({
+      ...files,
+      [contract]: 'import "./hosting-usage-model";',
+    }).some(
+      (finding) => finding.file === contract && finding.rule === "architecture",
+    ),
+  );
+  assert.ok(
+    analyze({ ...files, "scripts/other.ts": files[collector] }).some(
+      (finding) =>
+        finding.file === "scripts/other.ts" && finding.rule === "architecture",
+    ),
+  );
+});

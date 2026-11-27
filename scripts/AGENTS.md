@@ -17,3 +17,9 @@ PostgreSQL integration suite without any Neon or OCI secrets.
 `history-server.ts` is the narrow loopback-only preview exception: it may compose
 `src/application/history/api.ts` and `src/application/history/runtime.ts`, never the live executor or an OCI port.
 It serves the built UI and private read API at one origin; no credential-file reads.
+
+`hosting-usage.ts` is the owner-only hosting allowance collector. It makes a
+bounded Neon project read and accepts private Console inputs. It may import
+the dependency-free versioned usage contract under Infrastructure. Only validated
+summaries are exported for browser import. See
+[Hosting usage and Free-plan headroom](../docs/trial/hosting-usage.md).
