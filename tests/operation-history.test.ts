@@ -3,10 +3,29 @@ import test from "node:test";
 import { historyReader } from "../src/application/retained-trial-ledger/history.ts";
 import { historyRecord } from "./fixtures/history-record.ts";
 
+test("History rejects credentials for the retained trial executor before opening a session", async () => {
+  const legacy =
+    "postgresql://berth_runtime:fixture@ep-fixture.aws.neon.tech/neondb";
+  const dedicated =
+    "postgresql://berth_history_runtime:fixture@ep-fixture.aws.neon.tech/neondb";
+  for (const [pooled, unpooled] of [
+    [legacy, legacy],
+    [legacy, dedicated],
+    [dedicated, legacy],
+  ]) {
+    const history = historyReader(
+      { DATABASE_URL: pooled, DATABASE_URL_UNPOOLED: unpooled },
+      () => assert.fail("History opened a session with executor credentials"),
+    );
+    await assert.rejects(history.list(), /Restricted connection required/);
+  }
+});
+
 test("operation history uses only parameterized read functions and redacts database failures", async () => {
   const queries: { text: string; values: unknown[] | undefined }[] = [];
   const page = { items: [], next: null };
-  const url = "postgresql://berth_runtime:fixture@ep-fixture.neon.tech/neondb";
+  const url =
+    "postgresql://berth_history_runtime:fixture@ep-fixture.aws.neon.tech/neondb";
   const env = { DATABASE_URL: url, DATABASE_URL_UNPOOLED: url };
   const store = historyReader(env, () => ({
     async connect() {},

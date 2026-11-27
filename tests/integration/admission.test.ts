@@ -2155,27 +2155,45 @@ test("issue76 singleton binds exact owner preparation while malformed evidence l
   });
 });
 
-test("read-only operation history paginates retained evidence without exposing raw state or changing budgets", async () => {
+test("read-only operation history paginates retained evidence without exposing raw state or changing budgets", async (t) => {
   await reviewedAdmission(async (owner, db, operation) => {
+    const local = {
+      host: "127.0.0.1",
+      port: Number(process.env.BERTH_TEST_POSTGRES_PORT),
+      database: "neondb",
+      password: "berth-test-only",
+    };
+    const admin = new Client({ ...local, user: "postgres" });
+    await admin.connect();
+    let roleCreated = false;
+    t.after(async () => {
+      try {
+        if (roleCreated) await admin.query("DROP ROLE berth_history_runtime");
+      } finally {
+        await admin.end();
+      }
+    });
+    await admin.query(
+      "CREATE ROLE berth_history_runtime LOGIN NOINHERIT PASSWORD 'berth-test-only'",
+    );
+    roleCreated = true;
     await owner.query(
       await readFile("migrations/008_operation_history.sql", "utf8"),
+    );
+    await owner.query(
+      await readFile("migrations/013_history_reader.sql", "utf8"),
     );
     const { historyReader } = await import(
       "../../src/application/retained-trial-ledger/history.ts"
     );
+    const runtime = { ...local, user: "berth_history_runtime" };
     const url =
-      "postgresql://berth_runtime:fixture@ep-fixture.neon.tech/neondb";
+      "postgresql://berth_history_runtime:fixture@ep-fixture.aws.neon.tech/neondb";
     const historyTransactionModes: unknown[] = [];
     const store = historyReader(
       { DATABASE_URL: url, DATABASE_URL_UNPOOLED: url },
       () => {
-        const connection = new Client({
-          host: "127.0.0.1",
-          port: Number(process.env.BERTH_TEST_POSTGRES_PORT),
-          database: "neondb",
-          user: "berth_runtime",
-          password: "test-runtime-only",
-        });
+        const connection = new Client(runtime);
         return {
           connect: () => connection.connect(),
           end: () => connection.end(),
@@ -2320,5 +2338,58 @@ test("read-only operation history paginates retained evidence without exposing r
     assert.equal(grants.length, 3);
     assert.ok(grants.every((row) => row.public_execute === false));
     assert.deepEqual(await snapshot(), before);
+
+    const login = new Client(runtime);
+    await login.connect();
+    try {
+      const mode = await login.query("SHOW transaction_read_only");
+      assert.equal(mode.rows[0]?.transaction_read_only, "off");
+      for (const sql of [
+        "SELECT * FROM berth_ledger.trials",
+        "UPDATE berth_ledger.trials SET normal_used=0",
+        "CREATE TEMP TABLE forbidden (id int)",
+        "SELECT berth_executor.history_record(NULL)",
+        "SELECT berth_executor.cleanup(NULL)",
+        "SET ROLE berth_runtime",
+      ]) {
+        await assert.rejects(login.query(sql), { code: "42501" });
+      }
+    } finally {
+      await login.end();
+    }
+
+    const boundary = /History database privilege boundary failed/;
+    await admin.query(
+      "GRANT berth_runtime TO berth_history_runtime WITH INHERIT FALSE, SET TRUE",
+    );
+    await assert.rejects(store.list(), boundary);
+    await admin.query("REVOKE berth_runtime FROM berth_history_runtime");
+    await owner.query(
+      "GRANT SELECT (normal_used) ON berth_ledger.trials TO berth_history_runtime",
+    );
+    await assert.rejects(store.list(), boundary);
+    await owner.query(
+      "REVOKE SELECT (normal_used) ON berth_ledger.trials FROM berth_history_runtime",
+    );
+    await owner.query(
+      "GRANT EXECUTE ON FUNCTION berth_executor.cleanup(uuid) TO PUBLIC",
+    );
+    await assert.rejects(store.detail(ids[2] as string), boundary);
+    await owner.query(
+      "REVOKE EXECUTE ON FUNCTION berth_executor.cleanup(uuid) FROM PUBLIC",
+    );
+    await owner.query(
+      "REVOKE EXECUTE ON FUNCTION berth_executor.history_detail(uuid) FROM berth_history_runtime",
+    );
+    await assert.rejects(store.list(), boundary);
+    await owner.query(
+      "GRANT EXECUTE ON FUNCTION berth_executor.history_detail(uuid) TO berth_history_runtime",
+    );
+    assert.deepEqual(await store.detail(ids[2] as string), detail);
+    const prior = await db.query(
+      "SELECT berth_executor.history_detail($1) AS result",
+      [ids[2]],
+    );
+    assert.equal(prior.rows[0]?.result.operation, detail.operation);
   });
 });
