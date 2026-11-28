@@ -89,6 +89,32 @@ test("uses the single verified home region and tenancy-root bytes counter for th
   );
 });
 
+test("only an in-window IMF-fixdate qualifies as OCI response time", async () => {
+  for (const [date, valid] of [
+    ["Sat, 28 Nov 2026 10:00:00 GMT", true],
+    ["Sat, 28 Nov 2026 09:59:30 GMT", true],
+    ["2026-11-28T10:00:00.000Z", false],
+    ["Fri, 28 Nov 2026 10:00:00 GMT", false],
+    ["Sat, 28 Nov 2026 09:59:29 GMT", false],
+    ["Sat, 28 Nov 2026 10:00:01 GMT", false],
+  ] as const) {
+    const { collect } = collector([
+      Response.json(home),
+      Response.json(
+        { used: 46_377, available: 21_474_790_103 },
+        { headers: { date } },
+      ),
+    ]);
+    const evidence = await collect();
+    assert.equal(
+      evidence.gap,
+      valid ? "accounting-cutoff-unverified" : "response-time-unverified",
+      date,
+    );
+    assert.equal(evidence.reading?.accountingCutoff ?? null, null);
+  }
+});
+
 test("the pinned OCI signer signs both fixed GETs with the configured identity", async () => {
   const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const fingerprint = createHash("md5")

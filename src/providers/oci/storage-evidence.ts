@@ -177,16 +177,17 @@ export function ociStorageEvidence(
       regionVerified = true;
       const result = await inspect(limits.href, signal);
       const used = usedBytes(result.value);
-      const cutoff = Date.parse(result.date ?? "");
+      const responded = Date.parse(result.date ?? "");
       const observed = now();
       if (observed >= accountUntil)
         return { gap: "account-unverified", reading: null };
       if (used === undefined)
         return { gap: "storage-coverage-unverified", reading: null };
       if (
-        !Number.isFinite(cutoff) ||
-        cutoff < started - 30_000 ||
-        cutoff > observed
+        !Number.isFinite(responded) ||
+        responded < started - 30_000 ||
+        responded > observed ||
+        new Date(responded).toUTCString() !== result.date
       )
         return { gap: "response-time-unverified", reading: null };
       return {
@@ -196,11 +197,11 @@ export function ociStorageEvidence(
           usedBytes: used,
           limitBytes: storageAllowance,
           source: "OCI",
-          respondedAt: new Date(cutoff).toISOString(),
+          respondedAt: new Date(responded).toISOString(),
           accountingCutoff: null,
           observedAt: new Date(observed).toISOString(),
           expiresAt: new Date(
-            Math.min(cutoff + 2 * hour, accountUntil),
+            Math.min(responded + 2 * hour, accountUntil),
           ).toISOString(),
         },
       };

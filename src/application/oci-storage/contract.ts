@@ -2,10 +2,10 @@ import type {
   StorageGap,
   StorageReading,
   StorageSnapshot,
-} from "../../../ui/contracts/oci-storage.ts";
+} from "../../../contracts/oci-storage.ts";
 
-export type { StorageSnapshot } from "../../../ui/contracts/oci-storage.ts";
-export { storageAllowance } from "../../../ui/contracts/oci-storage.ts";
+export type { StorageSnapshot } from "../../../contracts/oci-storage.ts";
+export { storageAllowance } from "../../../contracts/oci-storage.ts";
 
 /** One refresh returns qualified or provisional evidence, or an explicit gap. */
 export type StorageEvidence =

@@ -30,15 +30,21 @@ export const OciStorageStore = signalStore(
   withState(initial),
   withComputed(({ snapshot, clock }) => {
     const expiry = computed(() => {
-      const reading = snapshot()?.reading;
-      return reading ? Date.parse(reading.expiresAt) : null;
+      const stamp = snapshot()?.reading?.expiresAt;
+      return stamp ? Date.parse(stamp) : Infinity;
+    });
+    const pendingDeadline = computed(() => {
+      const stamp = snapshot()?.provenance?.pending?.overdueAt;
+      return stamp ? Date.parse(stamp) : Infinity;
     });
     return {
-      expiry,
-      expired: computed(() => {
-        const deadline = expiry();
-        return deadline !== null && clock() >= deadline;
-      }),
+      expired: computed(() => clock() >= expiry()),
+      overdue: computed(() => clock() >= pendingDeadline()),
+      nextDeadline: computed(() =>
+        Math.min(
+          ...[expiry(), pendingDeadline()].filter((value) => value > clock()),
+        ),
+      ),
     };
   }),
   withMethods((store) => {
@@ -55,11 +61,11 @@ export const OciStorageStore = signalStore(
     });
 
     effect((onCleanup) => {
-      const expiry = store.expiry();
-      if (expiry === null || store.clock() >= expiry) {
+      const deadline = store.nextDeadline();
+      if (!Number.isFinite(deadline)) {
         return;
       }
-      const delay = Math.min(2_147_483_647, Math.max(0, expiry - Date.now()));
+      const delay = Math.min(2_147_483_647, Math.max(0, deadline - Date.now()));
       const timer = setTimeout(
         () => patchState(store, { clock: Date.now() }),
         delay,

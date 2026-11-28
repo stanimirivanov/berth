@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test";
 import { inventoryPage, verified } from "./inventory-fixture";
 
 const observedAt = "2026-11-28T14:12:00.000Z";
-const respondedAt = "2026-11-28T14:00:00.000Z";
+const respondedAt = "2026-11-28T14:01:00.000Z";
+const cutoffAt = "2026-11-28T14:00:00.000Z";
 const expiresAt = "2026-11-28T16:00:00.000Z";
 const token = "h".repeat(40);
 
@@ -16,7 +17,7 @@ function storageReading(usedBytes = 4_000_000_000) {
       limitBytes: 20_000_000_000,
       observedAt,
       respondedAt,
-      accountingCutoff: respondedAt,
+      accountingCutoff: cutoffAt,
       expiresAt,
       source: "OCI",
     },
@@ -233,11 +234,140 @@ test("OCI reported bytes without an accounting cutoff leave remaining allowance 
   await openInfrastructure(page);
   await connect(page);
   const storage = storagePanel(page);
-  await expect(storage.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(
+    storage.getByRole("status").getByText("Unknown", { exact: true }),
+  ).toBeVisible();
   await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
   await expect(
     storage.getByText("Remaining allowance", { exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
+  await expect(storage.getByText("Near limit")).toHaveCount(0);
+});
+
+test("reported-only bytes stay visible and headroom stays unknown when the observation becomes stale", async ({
+  page,
+}) => {
+  const observed = storageReading(19_000_000_000);
+  const reported = {
+    ...observed,
+    gap: "accounting-cutoff-unverified",
+    reading: { ...observed.reading, accountingCutoff: null },
+  };
+  let saved: unknown = reported;
+  let unavailable = false;
+  await page.route("**/api/inventory/oci-storage", (route) =>
+    route.fulfill(unavailable ? { status: 503 } : { json: saved }),
+  );
+  await openInfrastructure(page);
+  await connect(page);
+  const storage = storagePanel(page);
+  const refresh = storage.getByRole("button", { name: "Refresh OCI storage" });
+  const status = storage.getByRole("status");
+
+  await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
+  await expect(storage.getByText("Near limit")).toHaveCount(0);
+
+  saved = { ...reported, gap: "oci-unavailable" };
+  await refresh.click();
+  await expect(status.getByText("Stale", { exact: true })).toBeVisible();
+  await expect(status).toContainText(
+    "OCI could not provide a storage reading.",
+  );
+  await expect(storage.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
+  await expect(storage.getByText("Near limit")).toHaveCount(0);
+
+  saved = reported;
+  await refresh.click();
+  await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
+  unavailable = true;
+  await refresh.click();
+  await expect(status.getByText("Stale", { exact: true })).toBeVisible();
+  await expect(status).toContainText(
+    "Saved OCI storage evidence could not be read.",
+  );
+  await expect(storage.getByText("Unknown", { exact: true })).toBeVisible();
+
+  unavailable = false;
+  await refresh.click();
+  await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
+  await page.clock.fastForward(2 * 60 * 60 * 1000 + 1);
+  await expect(status.getByText("Stale", { exact: true })).toBeVisible();
+  await expect(status).toContainText("The saved OCI reading has expired.");
+  await expect(storage.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
+  await expect(storage.getByText("Near limit")).toHaveCount(0);
+});
+
+test("a pending collection keeps its previous observation and becomes stale at its own deadline", async ({
+  page,
+}) => {
+  const attemptedAt = "2026-11-28T14:15:00.000Z";
+  const startedAt = "2026-11-28T14:17:00.000Z";
+  const overdueAt = "2026-11-28T14:17:10.000Z";
+  const previous = storageReading();
+  const provenance = {
+    lastSettledAttemptAt: observedAt,
+    pending: { startedAt, overdueAt },
+  };
+  let saved: unknown = { ...previous, attemptedAt, provenance };
+  await page.route("**/api/inventory/oci-storage", (route) =>
+    route.fulfill({ json: saved }),
+  );
+  await openInfrastructure(page);
+  await connect(page);
+  const storage = storagePanel(page);
+  const status = storage.getByRole("status");
+
+  await expect(status.getByText("Current", { exact: true })).toBeVisible();
+  await expect(status).toContainText("Collection pending.");
+  await expect(
+    storage.getByText("Previous observation", { exact: true }),
+  ).toBeVisible();
+  await expect(storage.getByText("16 GB", { exact: true })).toBeVisible();
+  await expect(storage.getByText("Last settled collection slot")).toBeVisible();
+  await expect(
+    storage.locator(`time[datetime="${attemptedAt}"]`),
+  ).toBeVisible();
+  await expect(storage.locator(`time[datetime="${startedAt}"]`)).toBeVisible();
+  await expect(storage.locator(`time[datetime="${cutoffAt}"]`)).toBeVisible();
+  await expect(storage.locator(`time[datetime="${expiresAt}"]`)).toBeVisible();
+
+  await page.clock.pauseAt(new Date(startedAt));
+  await page.clock.runFor(9_999);
+  await expect(status).toContainText("Collection pending.");
+  await page.clock.runFor(20);
+  await expect(status).toContainText("Collection overdue.");
+  await expect(status.getByText("Stale", { exact: true })).toBeVisible();
+  await expect(
+    storage.getByText("Previous observation", { exact: true }),
+  ).toBeVisible();
+  await expect(storage.getByText("4 GB", { exact: true })).toBeVisible();
+  await expect(storage.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(storage.getByText("16 GB", { exact: true })).toHaveCount(0);
+  await expect(storage.locator(`time[datetime="${cutoffAt}"]`)).toBeVisible();
+  await expect(storage.locator(`time[datetime="${expiresAt}"]`)).toBeVisible();
+
+  await page.clock.resume();
+  saved = {
+    ...previous,
+    attemptedAt,
+    provenance: {
+      ...provenance,
+      pending: { ...provenance.pending, overdueAt: "2026-11-28T14:18:00.000Z" },
+    },
+    gap: "accounting-cutoff-unverified",
+    reading: {
+      ...previous.reading,
+      usedBytes: 19_000_000_000,
+      accountingCutoff: null,
+    },
+  };
+  await storage.getByRole("button", { name: "Refresh OCI storage" }).click();
+  await expect(status).toContainText("Collection pending.");
+  await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
   await expect(storage.getByText("Near limit")).toHaveCount(0);
 });
 

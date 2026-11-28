@@ -1,4 +1,4 @@
-import { decodeStorageSnapshot } from "../../../ui/contracts/oci-storage.ts";
+import { decodeStorageSnapshot } from "../../../contracts/oci-storage.ts";
 import type {
   StorageEvidence,
   StorageRepository,

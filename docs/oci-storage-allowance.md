@@ -33,31 +33,58 @@ conservative decimal 20 GB Always Free allowance and the warning band. The manag
   using 20,000,000,000 bytes and the used field. Regional administrative quotas
   can impose additional restrictions. [Quota definition][quota] ·
   [Hierarchy rules][hierarchy] · [SDK response model][response]
-- The Limits response's HTTP date establishes when OCI served the current-usage
-  observation. The API exposes no accounting watermark or lag guarantee.
-  The collector records the observed bytes with the missing-cutoff gap. The
-  panel keeps remaining allowance Unknown and suppresses warnings for this
-  observation until qualifying evidence is available. Live qualification must
-  separately establish acceptable storage and request headroom. There is no
-  conversion from accumulated GB-months to current stored bytes.
+- The Limits response's HTTP `Date` establishes when OCI served the observation.
+  The collector accepts canonical IMF-fixdate in GMT, including a matching
+  weekday, within the inclusive window from 30 seconds before collection started
+  through the local observation time. The API exposes no accounting watermark
+  or lag guarantee. The collector records the reported bytes with the
+  missing-cutoff gap. The panel keeps remaining allowance Unknown and suppresses
+  warnings until qualifying evidence is available. Live qualification must
+  separately establish acceptable storage and request headroom.
+  [HTTP Date format][http-date]
 - Retained check #76 used 46,377 bytes and independently found a non-Berth
   Standard bucket of that size in an earlier inventory. The comparison did not
   exercise every tier or multipart accounting. It is the positive transport fixture,
   not current headroom. [Dated issue #76 evidence][historical]
-- Multiple subscribed regions, incomplete data, missing timestamps, or an
-  expired account assertion give Unknown when there is no earlier reading.
-  A failed refresh preserves the earlier observation as Stale. A successful
-  reading expires at the earlier of two hours after the provider date and
-  expiry of the plan evidence.
+- Missing qualifying evidence gives Unknown when there is no earlier reading.
+  Fresh reported-only evidence also shows Unknown headroom. Expiry, failed
+  collection, or failed saved read marks retained bytes Stale. The reported
+  observation expires at the earlier of two hours after the OCI response time
+  and expiry of the plan evidence.
+
+## Collection provenance
+
+The saved response keeps the latest scheduled slot (`attemptedAt`), its
+separate last settled outcome (`gap`), and the retained observation (`reading`).
+When available, `provenance.lastSettledAttemptAt` identifies the scheduled slot
+that produced the settled outcome. `provenance.pending` carries the database
+claim time and its deadline for an unsettled latest slot. Deliveries can lag
+their scheduled slot, so the deadline starts at the database claim.
+
+The panel labels retained evidence as the previous observation during a pending
+collection. A fresh and qualified previous observation may still show its
+remaining allowance and warning band. The observation keeps its original cutoff
+and expiry. A collection
+becomes overdue after ten seconds from claim. This covers the collector's
+four-second bound, one second for a new database connection, two queries of up
+to 1.5 seconds each during finish, and margin for dispatch and cleanup. Overdue
+status marks a retained reading Stale and suppresses headroom and warnings.
+The deadline governs the display. A finish can settle only its own latest claim.
+
+Earlier response shapes remain readable. A legacy row settled before upgrade
+has a known scheduled slot. A legacy unsettled row has an unknown claim time,
+deadline, and last settled slot. The panel displays its collection outcome as
+unknown and treats any retained reading as Stale.
 
 ## Local verification and release prerequisites
 
 Run `pnpm build:oci-storage` to build the dedicated Neon bundle locally.
 Run `pnpm test:oci-storage-db` with `BERTH_TEST_POSTGRES_PORT` set to a fresh
 disposable loopback PostgreSQL instance to verify migration and slot admission.
-Migration 014 expects a dedicated `berth_oci_storage_runtime` login with no
-granted roles. The migration only grants the scheduled claim, settlement, and
-snapshot functions. Bind `BERTH_OCI_STORAGE_DATABASE_URL`, matching any
+Apply migration 014 for a fresh database and migration 015 for collection
+provenance. Migration 014 expects a dedicated `berth_oci_storage_runtime` login
+with no granted roles and only grants the scheduled claim, settlement, and
+snapshot functions. Migration 015 preserves those grants. Bind `BERTH_OCI_STORAGE_DATABASE_URL`, matching any
 injected database URLs, and a dedicated `BERTH_OCI_STORAGE_TOKEN` for the
 Function. Pages uses `BERTH_OCI_STORAGE_NEON_ORIGIN` and
 `BERTH_OCI_STORAGE_UPSTREAM_TOKEN` with the existing owner access bindings.
@@ -71,6 +98,7 @@ plus bounded database calls. A database claim suppresses duplicate delivery
 before OCI dispatch; the collector does not retry, follow redirects, or
 traverse pagination. No provisioned-resource write is exposed by the collector.
 
+[http-date]: https://httpwg.org/specs/rfc9110.html#http.date
 [free]: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
 [billing]: https://docs.oracle.com/en-us/iaas/Content/GSG/Concepts/console_topic-AccountCenter-Billing.htm
 [quota]: https://docs.oracle.com/en-us/iaas/Content/Quotas/Concepts/resourcequotas_topic-Object_Storage_Quotas.htm
