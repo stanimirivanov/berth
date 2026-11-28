@@ -28,6 +28,13 @@ function storagePanel(page: Page) {
   return page.getByRole("region", { name: "OCI Object Storage allowance" });
 }
 
+function collectionStatus(page: Page) {
+  return page
+    .getByRole("region", { name: "OCI allowances", exact: true })
+    .getByRole("status")
+    .filter({ hasText: /^Collection / });
+}
+
 function refreshAllowances(page: Page) {
   return page.getByRole("button", { name: "Refresh OCI allowances" });
 }
@@ -315,7 +322,30 @@ test("a pending collection keeps its previous observation and becomes stale at i
     lastSettledAttemptAt: observedAt,
     pending: { startedAt, overdueAt },
   };
-  let saved: unknown = { ...previous, attemptedAt, provenance };
+  let saved: unknown = {
+    ...previous,
+    attemptedAt,
+    provenance,
+    monthly: {
+      requests: {
+        gap: null,
+        reading: {
+          sku: "B91627",
+          used: 40_000,
+          source: "OCI Usage API",
+          coverage: "complete",
+          periodStart: "2026-11-01T00:00:00.000Z",
+          periodEnd: "2026-12-01T00:00:00.000Z",
+          observedAt,
+          respondedAt,
+          reportedThrough: cutoffAt,
+          accountingCutoff: cutoffAt,
+          expiresAt,
+        },
+      },
+      outbound: { gap: "usage-coverage-unverified", reading: null },
+    },
+  };
   await page.route("**/api/inventory/oci-storage", (route) =>
     route.fulfill({ json: saved }),
   );
@@ -323,9 +353,14 @@ test("a pending collection keeps its previous observation and becomes stale at i
   await connect(page);
   const storage = storagePanel(page);
   const status = storage.getByRole("status");
+  const requests = page.getByRole("region", {
+    name: "OCI Object Storage API requests",
+  });
 
   await expect(status.getByText("Current", { exact: true })).toBeVisible();
-  await expect(status).toContainText("Collection pending.");
+  await expect(requests.getByRole("status")).toContainText("Current");
+  await expect(requests).toContainText("10,000 requests");
+  await expect(collectionStatus(page)).toContainText("Collection pending.");
   await expect(
     storage.getByText("Previous observation", { exact: true }),
   ).toBeVisible();
@@ -340,10 +375,14 @@ test("a pending collection keeps its previous observation and becomes stale at i
 
   await page.clock.pauseAt(new Date(startedAt));
   await page.clock.runFor(9_999);
-  await expect(status).toContainText("Collection pending.");
+  await expect(collectionStatus(page)).toContainText("Collection pending.");
   await page.clock.runFor(20);
-  await expect(status).toContainText("Collection overdue.");
+  await expect(collectionStatus(page)).toHaveText("Collection overdue.");
   await expect(status.getByText("Stale", { exact: true })).toBeVisible();
+  await expect(requests.getByRole("status")).toContainText("Stale");
+  await expect(requests).toHaveAccessibleDescription("Collection overdue.");
+  await expect(requests).toContainText("Unknown");
+  await expect(requests).not.toContainText("threshold reached");
   await expect(
     storage.getByText("Previous observation", { exact: true }),
   ).toBeVisible();
@@ -369,7 +408,7 @@ test("a pending collection keeps its previous observation and becomes stale at i
     },
   };
   await refreshAllowances(page).click();
-  await expect(status).toContainText("Collection pending.");
+  await expect(collectionStatus(page)).toContainText("Collection pending.");
   await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
   await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
   await expect(storage.getByText("Near limit")).toHaveCount(0);
@@ -406,7 +445,7 @@ test("a new pending slot preserves the stale status of an overdue collection's p
   await expect(storage.getByText("Near limit")).toBeVisible();
   await page.clock.pauseAt(new Date(firstClaim));
   await page.clock.runFor(10_020);
-  await expect(status).toContainText("Collection overdue.");
+  await expect(collectionStatus(page)).toContainText("Collection overdue.");
   await expect(status.getByText("Stale", { exact: true })).toBeVisible();
 
   saved = {
@@ -425,7 +464,7 @@ test("a new pending slot preserves the stale status of an overdue collection's p
   await page.clock.setSystemTime(new Date(nextClaim));
   await page.clock.resume();
   await refreshAllowances(page).click();
-  await expect(status).toContainText("Collection pending.");
+  await expect(collectionStatus(page)).toContainText("Collection pending.");
   await expect(status.getByText("Stale", { exact: true })).toBeVisible();
   await expect(storage.getByText("Previous observation")).toBeVisible();
   await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
@@ -453,7 +492,9 @@ test("a legacy unsettled slot shows an unknown outcome without treating prior us
   const status = storage.getByRole("status");
   const refresh = refreshAllowances(page);
 
-  await expect(status).toContainText("Collection outcome unknown.");
+  await expect(collectionStatus(page)).toContainText(
+    "Collection outcome unknown.",
+  );
   await expect(status.getByText("Stale", { exact: true })).toBeVisible();
   await expect(storage.getByText("Unsettled collection slot")).toBeVisible();
   await expect(storage.getByText("Previous observation")).toBeVisible();
@@ -465,7 +506,9 @@ test("a legacy unsettled slot shows an unknown outcome without treating prior us
   saved = { attemptedAt, gap: null, reading: null };
   await refresh.click();
   await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
-  await expect(status).toContainText("Collection outcome unknown.");
+  await expect(collectionStatus(page)).toContainText(
+    "Collection outcome unknown.",
+  );
   await expect(storage.getByText("Previous observation")).toHaveCount(0);
 
   saved = settled;
@@ -502,10 +545,10 @@ test("the storage deadline still takes effect after the browser clock moves back
   await page.clock.pauseAt(new Date("2026-11-28T14:12:05.000Z"));
   await page.clock.setSystemTime(new Date(observedAt));
   await page.clock.runFor(5_020);
-  await expect(status).toContainText("Collection pending.");
+  await expect(collectionStatus(page)).toContainText("Collection pending.");
 
   await page.clock.runFor(5_000);
-  await expect(status).toContainText("Collection overdue.");
+  await expect(collectionStatus(page)).toContainText("Collection overdue.");
   await expect(status.getByText("Stale", { exact: true })).toBeVisible();
   await expect(storage.getByText("16 GB", { exact: true })).toHaveCount(0);
 });

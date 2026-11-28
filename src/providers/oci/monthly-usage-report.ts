@@ -1,16 +1,17 @@
 import {
+  isOutboundUsageSku,
   type MonthlyEvidence,
   type MonthlyOutcome,
   type MonthlyReading,
   missingMonthlyEvidence,
   outboundZones,
+  requestUsageSku,
   type UsageSku,
 } from "../../application/oci-storage/contract.ts";
 
 const day = 86_400_000;
-const requestSku = "B91627";
 const reportLimit = 200;
-const skus = [requestSku, ...Object.keys(outboundZones)];
+const skus = [requestUsageSku, ...Object.keys(outboundZones)];
 
 /** A validated response and billing month establish provenance without establishing a cutoff. */
 type ReportBasis = Pick<
@@ -93,8 +94,8 @@ function reportedUsage(
     gap: "usage-coverage-unverified",
     reading: null,
   } as const;
-  const unit = sku === requestSku ? "10K Requests" : "GB";
-  const power = sku === requestSku ? 4 : 3;
+  const unit = sku === requestUsageSku ? "10K Requests" : "GB";
+  const power = sku === requestUsageSku ? 4 : 3;
   const start = Date.parse(basis.periodStart);
   const days = new Set<number>();
   let used = 0;
@@ -148,12 +149,9 @@ function monthlyReport(
   for (const item of items) {
     const row = asRecord(item);
     const sku = row?.skuPartNumber;
-    if (row && sku === requestSku) {
+    if (row && sku === requestUsageSku) {
       requestRows.push(row);
-    } else if (
-      row &&
-      (sku === "B88327" || sku === "B93455" || sku === "B93456")
-    ) {
+    } else if (row && isOutboundUsageSku(sku)) {
       outboundRows.push(row);
       zones.add(sku);
     } else {
@@ -162,7 +160,7 @@ function monthlyReport(
   }
   const zone = zones.values().next().value;
   return {
-    requests: reportedUsage(requestRows, requestSku, through, basis),
+    requests: reportedUsage(requestRows, requestUsageSku, through, basis),
     outbound:
       zone && zones.size === 1
         ? reportedUsage(outboundRows, zone, through, basis)

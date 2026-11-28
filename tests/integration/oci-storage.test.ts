@@ -112,7 +112,11 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       "REVOKE SELECT ON berth_oci_allowances.storage FROM berth_oci_storage_runtime",
     );
 
-    const first = new Date().toISOString();
+    // Keep the simulated slots in one UTC minute inside the database's live claim window.
+    const fixtureTime = Math.floor(Date.now() / 60_000) * 60_000 - 30_000;
+    const fixtureSlot = (seconds: number) =>
+      new Date(fixtureTime + seconds * 1000).toISOString();
+    const first = fixtureSlot(0);
     assert.deepEqual(
       (
         await Promise.all([repository.claim(first), repository.claim(first)])
@@ -179,7 +183,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       "UPDATE berth_oci_allowances.storage SET attempted_at = attempted_at - interval '1 hour' WHERE tenancy = $1",
       [tenancy],
     );
-    const next = new Date().toISOString();
+    const next = fixtureSlot(1);
     assert.equal(await repository.claim(next), true);
     await repository.finish(first, { gap: "oci-unavailable", reading: null });
     const pendingResponse = await readSaved();
@@ -213,7 +217,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
        WHERE tenancy = $1`,
       [tenancy],
     );
-    const rollover = new Date().toISOString();
+    const rollover = fixtureSlot(2);
     assert.equal(await repository.claim(rollover), true);
     await repository.finish(next, { gap: "oci-unavailable", reading: null });
     const replacement = await (await readSaved()).json();
@@ -232,7 +236,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
        WHERE tenancy = $1`,
       [tenancy],
     );
-    const inherited = new Date().toISOString();
+    const inherited = fixtureSlot(3);
     assert.equal(await repository.claim(inherited), true);
     await repository.finish(rollover, {
       gap: "oci-unavailable",
@@ -258,7 +262,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       reading,
       provenance: { lastSettledAttemptAt: inherited, pending: null },
     });
-    const legacyReplacement = new Date().toISOString();
+    const legacyReplacement = fixtureSlot(4);
     const migrated = makeRepository(legacyPending);
     assert.equal(await migrated.claim(legacyReplacement), true);
     const migratedSnapshot = await migrated.read();
@@ -271,13 +275,12 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       "UPDATE berth_oci_allowances.storage SET attempted_at = attempted_at - interval '1 hour' WHERE tenancy = $1",
       [tenancy],
     );
-    const delivery = new Date().toISOString();
-    const date = new Date(delivery);
-    date.setUTCDate(1);
-    date.setUTCHours(0, 0, 0, 0);
-    const periodStart = date.toISOString();
-    date.setUTCMonth(date.getUTCMonth() + 1);
-    const periodEnd = date.toISOString();
+    const delivery = fixtureSlot(5);
+    const date = new Date(fixtureTime);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const periodStart = new Date(Date.UTC(year, month, 1)).toISOString();
+    const periodEnd = new Date(Date.UTC(year, month + 1, 1)).toISOString();
     const monthly = {
       requests: {
         gap: null,
@@ -386,8 +389,8 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       "UPDATE berth_oci_allowances.storage SET attempted_at = attempted_at - interval '1 hour' WHERE tenancy = $1",
       [tenancy],
     );
-    const update = new Date().toISOString();
-    await repository.claim(update);
+    const update = fixtureSlot(6);
+    assert.equal(await repository.claim(update), true);
     await assert.rejects(
       repository.finish(update, {
         gap: "oci-unavailable",

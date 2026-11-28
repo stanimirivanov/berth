@@ -9,12 +9,16 @@ import {
 } from "@angular/core";
 import { MatButtonModule } from "@angular/material/button";
 import {
-  type MonthlyGap,
   type MonthlyMeter,
-  monthlyAllowance,
   outboundZones,
+  requestUsageSku,
   type StorageSnapshot,
 } from "../../../../contracts/oci-storage";
+import {
+  type CollectionView,
+  type MonthlyMeterView,
+  warningThreshold,
+} from "../../oci-allowance-model";
 
 const monthlyMeters = [
   {
@@ -31,24 +35,24 @@ const monthlyMeters = [
   },
 ] as const;
 
-/** Use the same warning thresholds for each qualified OCI allowance reading. */
-function warningBand(used: number, limit: number) {
-  const fraction = used / limit;
-  if (fraction >= 1) {
-    return "Limit reached (100% threshold reached)";
-  }
-  if (fraction >= 0.95) {
-    return "Near limit (95% threshold reached)";
-  }
-  return fraction >= 0.8 ? "Approaching limit (80% threshold reached)" : null;
-}
+const warningMessage = {
+  80: "Approaching limit (80% threshold reached)",
+  95: "Near limit (95% threshold reached)",
+  100: "Limit reached (100% threshold reached)",
+};
 
-/** Summarize the latest settled gap without implying that any unreported usage was zero. */
-function monthlyGapMessage(
+/** Explain the monthly observation's status and the latest settled gap in owner-facing terms. */
+function monthlyReasonMessage(
   meter: MonthlyMeter,
-  gap: MonthlyGap | null | undefined,
+  reason: MonthlyMeterView["reason"],
 ) {
-  switch (gap) {
+  switch (reason) {
+    case "saved-read-unavailable":
+      return "Saved OCI monthly evidence could not be read.";
+    case "previous-period":
+      return "Previous billing period.";
+    case "expired":
+      return "The saved OCI reading has expired.";
     case "account-unverified":
       return "Always Free account eligibility could not be verified.";
     case "oci-unavailable":
@@ -65,7 +69,7 @@ function monthlyGapMessage(
       return "OCI reports usage without a verified accounting cutoff.";
     case null:
       return null;
-    default:
+    case "no-reading":
       return "No qualifying OCI monthly reading has been saved.";
   }
 }
@@ -81,10 +85,11 @@ function monthlyGapMessage(
 })
 export class OciStorageAllowance {
   readonly snapshot = input.required<StorageSnapshot | null>();
+  readonly collection = input.required<CollectionView | null>();
+  readonly monthlyReadings =
+    input.required<Record<MonthlyMeter, MonthlyMeterView>>();
   readonly unavailable = input.required<boolean>();
-  readonly clock = input.required<number>();
   readonly expired = input.required<boolean>();
-  readonly overdue = input.required<boolean>();
   readonly loading = input.required<boolean>();
   readonly refresh = output<void>();
 
@@ -92,23 +97,20 @@ export class OciStorageAllowance {
   protected readonly pending = computed(
     () => this.snapshot()?.provenance?.pending,
   );
-  protected readonly collectionStatus = computed(() => {
-    const attempt = this.pending();
-    if (!attempt) {
-      return null;
+  protected readonly collectionMessage = computed(() => {
+    const collection = this.loading() ? null : this.collection();
+    switch (collection?.status) {
+      case "unknown":
+        return "Collection outcome unknown.";
+      case "overdue":
+        return "Collection overdue.";
+      case "pending":
+        return collection.previousObservationStale
+          ? "Collection pending. Previous observations remain stale after an earlier unsettled collection."
+          : "Collection pending.";
+      default:
+        return null;
     }
-    if (!attempt.startedAt) {
-      return "Collection outcome unknown.";
-    }
-    return this.overdue() ? "Collection overdue." : "Collection pending.";
-  });
-  protected readonly previousCollectionStale = computed(() => {
-    const pending = this.pending();
-    return (
-      this.overdue() ||
-      pending?.startedAt === null ||
-      pending?.previousObservationStale === true
-    );
   });
   protected readonly stale = computed(() => {
     const value = this.reading();
@@ -117,7 +119,7 @@ export class OciStorageAllowance {
       value !== null &&
       (this.unavailable() ||
         this.expired() ||
-        this.previousCollectionStale() ||
+        this.collection()?.previousObservationStale === true ||
         (gap != null &&
           (gap !== "accounting-cutoff-unverified" ||
             value.accountingCutoff !== null)))
@@ -182,45 +184,25 @@ export class OciStorageAllowance {
     if (!value?.accountingCutoff || this.stale()) {
       return null;
     }
-    return warningBand(value.usedBytes, value.limitBytes);
+    const warning = warningThreshold(value.usedBytes, value.limitBytes);
+    return warning === null ? null : warningMessage[warning];
   });
 
   protected readonly monthly = computed(() =>
     monthlyMeters.map((display) => {
-      const outcome = this.snapshot()?.monthly?.[display.meter];
-      const value = outcome?.reading ?? null;
-      const cutoff = value?.accountingCutoff ?? null;
-      const previousPeriod =
-        value && this.clock() >= Date.parse(value.periodEnd);
-      const expired = value && this.clock() >= Date.parse(value.expiresAt);
-      const gap = outcome?.gap;
-      const stale =
-        value &&
-        (this.unavailable() ||
-          expired ||
-          this.previousCollectionStale() ||
-          (gap != null &&
-            (gap !== "accounting-cutoff-unverified" || cutoff !== null)));
-      const limit = monthlyAllowance[display.meter];
-      const current = value && cutoff !== null && !stale;
-      let reason = monthlyGapMessage(display.meter, gap);
-      if (this.unavailable()) {
-        reason = "Saved OCI monthly evidence could not be read.";
-      } else if (previousPeriod) {
-        reason = "Previous billing period.";
-      } else if (expired) {
-        reason = "The saved OCI reading has expired.";
-      }
+      const { reading, status, reason, remaining, warning } =
+        this.monthlyReadings()[display.meter];
       return {
         ...display,
-        value,
-        status: stale ? "Stale" : current ? "Current" : "Unknown",
-        reason,
-        zone: value && value.sku !== "B91627" ? outboundZones[value.sku] : null,
-        remaining: current
-          ? Math.max(0, limit - value.used) / display.divisor
-          : null,
-        warning: current ? warningBand(value.used, limit) : null,
+        reading,
+        status,
+        reason: monthlyReasonMessage(display.meter, reason),
+        zone:
+          reading && reading.sku !== requestUsageSku
+            ? outboundZones[reading.sku]
+            : null,
+        remaining: remaining === null ? null : remaining / display.divisor,
+        warning: warning === null ? null : warningMessage[warning],
       };
     }),
   );

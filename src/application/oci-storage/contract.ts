@@ -15,7 +15,9 @@ export type {
   UsageSku,
 } from "../../../contracts/oci-storage.ts";
 export {
+  isOutboundUsageSku,
   outboundZones,
+  requestUsageSku,
   storageAllowance,
   usagePeriod,
 } from "../../../contracts/oci-storage.ts";

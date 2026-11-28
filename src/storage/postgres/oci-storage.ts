@@ -110,7 +110,7 @@ export function storageRepository(
         ),
       );
     },
-    /** Charge one refresh slot durably before performing either OCI read. */
+    /** Charge one refresh slot durably before issuing any OCI reads for the collection. */
     async claim(attemptedAt: string) {
       const result = await query(
         "SELECT berth_oci_allowances.claim_storage($1, $2) AS result",

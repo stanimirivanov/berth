@@ -9,4 +9,5 @@ export {
   decodeStorageSnapshot,
   monthlyAllowance,
   outboundZones,
+  requestUsageSku,
 } from "../../contracts/oci-storage.js";

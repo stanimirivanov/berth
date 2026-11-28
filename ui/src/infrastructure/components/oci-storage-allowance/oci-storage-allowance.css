@@ -14,6 +14,9 @@ berth-oci-storage-allowance {
   h2 {
     margin: 0;
   }
+  #oci-collection-status:empty {
+    margin: 0;
+  }
   dt {
     font-weight: 600;
   }

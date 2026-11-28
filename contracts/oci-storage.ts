@@ -28,11 +28,21 @@ export const outboundZones = {
   B93456: "Middle East and Africa",
 } as const;
 
+/** The billed SKU for Object Storage API request usage. */
+export const requestUsageSku = "B91627";
+
+/** Admit only the reviewed outbound origin-zone SKUs. */
+export function isOutboundUsageSku(
+  value: unknown,
+): value is keyof typeof outboundZones {
+  return typeof value === "string" && Object.hasOwn(outboundZones, value);
+}
+
 /** The monthly billing meters tracked independently of point-in-time storage. */
 export type MonthlyMeter = "requests" | "outbound";
 
 /** Identifies the billed request meter or one outbound origin zone. */
-export type UsageSku = "B91627" | keyof typeof outboundZones;
+export type UsageSku = typeof requestUsageSku | keyof typeof outboundZones;
 
 /** A fixed reason why a dated monthly reading cannot establish remaining allowance. */
 export type MonthlyGap =
@@ -175,10 +185,11 @@ function monthlyReading(value: unknown, meter: MonthlyMeter): MonthlyReading {
     accountingCutoff,
     expiresAt,
   } = record(value);
+  const validSku =
+    (sku === requestUsageSku && meter === "requests") ||
+    (isOutboundUsageSku(sku) && meter === "outbound");
   if (
-    (meter === "requests"
-      ? sku !== "B91627"
-      : sku !== "B88327" && sku !== "B93455" && sku !== "B93456") ||
+    !validSku ||
     typeof used !== "number" ||
     !Number.isSafeInteger(used) ||
     used < 0 ||
@@ -212,7 +223,7 @@ function monthlyReading(value: unknown, meter: MonthlyMeter): MonthlyReading {
   )
     throw Error("Invalid monthly OCI period");
   return {
-    sku: sku as UsageSku,
+    sku,
     used,
     source,
     periodStart,
