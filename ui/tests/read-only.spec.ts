@@ -148,6 +148,13 @@ test("the staged Pages root publishes only History and Inventory Functions", asy
     exclude: [],
   });
 
+  expect(await readFile(join(root, "contracts/oci-storage.ts"), "utf8")).toBe(
+    await readFile(
+      resolve(import.meta.dirname, "../../contracts/oci-storage.ts"),
+      "utf8",
+    ),
+  );
+
   const assets = await readdir(join(root, "browser"), { recursive: true });
   const scripts = assets.filter((asset) => asset.endsWith(".js"));
   expect(scripts.length).toBeGreaterThan(0);

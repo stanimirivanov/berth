@@ -7,6 +7,9 @@ import { storageRepository } from "../../src/storage/postgres/oci-storage.ts";
 import { onRequest } from "../../ui/functions/api/inventory/oci-storage.ts";
 
 const tenancy = "ocid1.tenancy.oc1..allowancesfixture";
+const legacySettled = "ocid1.tenancy.oc1..legacysettled";
+const legacyPending = "ocid1.tenancy.oc1..legacypending";
+const legacySlot = "2026-01-01T10:00:00.000Z";
 
 test("one hourly claim survives duplicate delivery and a failed refresh preserves the prior reading", async () => {
   const port = Number(process.env.BERTH_TEST_POSTGRES_PORT);
@@ -40,8 +43,23 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
     await admin.query(
       "CREATE ROLE berth_oci_storage_runtime LOGIN NOINHERIT PASSWORD 'berth-test-only'",
     );
+    await admin.query("CREATE ROLE berth_oci_storage_unrelated NOLOGIN");
     await owner.connect();
     await owner.query(await readFile("migrations/014_oci_storage.sql", "utf8"));
+    await owner.query(
+      "INSERT INTO berth_oci_allowances.storage (tenancy, attempted_at, settled, gap) VALUES" +
+        " ($1, $3, true, 'response-time-unverified'), ($2, $3, false, 'oci-unavailable')",
+      [legacySettled, legacyPending, legacySlot],
+    );
+    await owner.query(
+      await readFile("migrations/015_oci_storage_provenance.sql", "utf8"),
+    );
+    const unrelatedFunctions = await owner.query(
+      `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'berth_oci_allowances'
+         AND has_function_privilege('berth_oci_storage_unrelated', p.oid, 'EXECUTE')`,
+    );
+    assert.deepEqual(unrelatedFunctions.rows, []);
     await restricted.connect();
     await assert.rejects(
       restricted.query("SELECT * FROM berth_oci_allowances.storage"),
@@ -51,14 +69,31 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       restricted.query("DELETE FROM berth_oci_allowances.storage"),
       { code: "42501" },
     );
-    const repository = storageRepository(
-      tenancy,
-      {
-        BERTH_OCI_STORAGE_DATABASE_URL:
-          "postgresql://berth_oci_storage_runtime:fixture@ep-fixture.aws.neon.tech/neondb",
+    const makeRepository = (target: string) =>
+      storageRepository(
+        target,
+        {
+          BERTH_OCI_STORAGE_DATABASE_URL:
+            "postgresql://berth_oci_storage_runtime:fixture@ep-fixture.aws.neon.tech/neondb",
+        },
+        () => new Client(runtime),
+      );
+    const repository = makeRepository(tenancy);
+    assert.deepEqual(await makeRepository(legacySettled).read(), {
+      attemptedAt: legacySlot,
+      gap: "response-time-unverified",
+      reading: null,
+      provenance: { lastSettledAttemptAt: legacySlot, pending: null },
+    });
+    assert.deepEqual(await makeRepository(legacyPending).read(), {
+      attemptedAt: legacySlot,
+      gap: "oci-unavailable",
+      reading: null,
+      provenance: {
+        lastSettledAttemptAt: null,
+        pending: { startedAt: null, overdueAt: null },
       },
-      () => new Client(runtime),
-    );
+    });
     assert.deepEqual(await repository.read(), {
       attemptedAt: null,
       gap: null,
@@ -94,6 +129,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       attemptedAt: first,
       gap: null,
       reading,
+      provenance: { lastSettledAttemptAt: first, pending: null },
     });
     await repository.finish(first, {
       gap: "storage-coverage-unverified",
@@ -103,7 +139,36 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       attemptedAt: first,
       gap: null,
       reading,
+      provenance: { lastSettledAttemptAt: first, pending: null },
     });
+
+    const browserToken = "b".repeat(40);
+    const upstreamToken = "s".repeat(40);
+    const origin = "https://berth.example";
+    const pendingApi = ociStorageApi(
+      upstreamToken,
+      repository,
+      async () => {
+        throw Error("A saved read cannot collect");
+      },
+      "fixture-allowance-trigger",
+    );
+    const readSaved = () =>
+      onRequest(
+        {
+          request: new Request(`${origin}/api/inventory/oci-storage`, {
+            headers: { authorization: `Bearer ${browserToken}` },
+          }),
+          env: {
+            BERTH_HISTORY_SITE_ORIGIN: origin,
+            BERTH_HISTORY_ACCESS_TOKEN: browserToken,
+            BERTH_OCI_STORAGE_UPSTREAM_TOKEN: upstreamToken,
+            BERTH_OCI_STORAGE_NEON_ORIGIN:
+              "https://berthocistorage200.compute.aws.neon.tech",
+          },
+        },
+        (input, options) => pendingApi.fetch(new Request(input, options)),
+      );
 
     // Simulate the next hourly slot without changing the database wall clock.
     await owner.query(
@@ -112,11 +177,22 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
     );
     const next = new Date().toISOString();
     assert.equal(await repository.claim(next), true);
-    assert.deepEqual(await repository.read(), {
-      attemptedAt: next,
-      gap: null,
-      reading,
-    });
+    await repository.finish(first, { gap: "oci-unavailable", reading: null });
+    const pendingResponse = await readSaved();
+    assert.equal(pendingResponse.status, 200);
+    const pending = await pendingResponse.json();
+    assert.equal(pending.attemptedAt, next);
+    assert.equal(pending.gap, null);
+    assert.deepEqual(pending.reading, reading);
+    assert.equal(pending.provenance?.lastSettledAttemptAt, first);
+    const started = Date.parse(pending.provenance.pending.startedAt);
+    const deadline = Date.parse(pending.provenance.pending.overdueAt);
+    assert.ok(started >= Date.parse(next) && started <= Date.now());
+    assert.equal(deadline - started, 10_000);
+    assert.equal(
+      pending.provenance.pending.previousObservationStale,
+      undefined,
+    );
     await assert.rejects(
       repository.finish(next, {
         gap: null,
@@ -124,16 +200,67 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       }),
       /Invalid OCI storage reading/,
     );
-    assert.deepEqual(await repository.read(), {
-      attemptedAt: next,
-      gap: null,
-      reading,
-    });
+    assert.deepEqual(await (await readSaved()).json(), pending);
+
+    await owner.query(
+      `UPDATE berth_oci_allowances.storage
+       SET attempted_at = attempted_at - interval '1 hour',
+           claimed_at = clock_timestamp() - interval '10 seconds'
+       WHERE tenancy = $1`,
+      [tenancy],
+    );
+    const rollover = new Date().toISOString();
+    assert.equal(await repository.claim(rollover), true);
     await repository.finish(next, { gap: "oci-unavailable", reading: null });
+    const replacement = await (await readSaved()).json();
+    assert.equal(replacement.attemptedAt, rollover);
+    assert.equal(replacement.gap, null);
+    assert.deepEqual(replacement.reading, reading);
+    assert.equal(replacement.provenance.lastSettledAttemptAt, first);
+    assert.ok(replacement.provenance.pending.startedAt >= rollover);
+    assert.equal(replacement.provenance.pending.previousObservationStale, true);
+
+    // A rollover can replace a still-live claim near the next hour boundary.
+    await owner.query(
+      `UPDATE berth_oci_allowances.storage
+       SET attempted_at = attempted_at - interval '1 hour',
+           claimed_at = clock_timestamp()
+       WHERE tenancy = $1`,
+      [tenancy],
+    );
+    const inherited = new Date().toISOString();
+    assert.equal(await repository.claim(inherited), true);
+    await repository.finish(rollover, {
+      gap: "oci-unavailable",
+      reading: null,
+    });
+    const inheritedSnapshot = await (await readSaved()).json();
+    assert.equal(inheritedSnapshot.attemptedAt, inherited);
+    assert.equal(inheritedSnapshot.gap, null);
+    assert.deepEqual(inheritedSnapshot.reading, reading);
+    assert.equal(inheritedSnapshot.provenance.lastSettledAttemptAt, first);
+    assert.equal(
+      inheritedSnapshot.provenance.pending.previousObservationStale,
+      true,
+    );
+
+    await repository.finish(inherited, {
+      gap: "oci-unavailable",
+      reading: null,
+    });
     assert.deepEqual(await repository.read(), {
-      attemptedAt: next,
+      attemptedAt: inherited,
       gap: "oci-unavailable",
       reading,
+      provenance: { lastSettledAttemptAt: inherited, pending: null },
+    });
+    const legacyReplacement = new Date().toISOString();
+    const migrated = makeRepository(legacyPending);
+    assert.equal(await migrated.claim(legacyReplacement), true);
+    const migratedSnapshot = await migrated.read();
+    assert.equal(migratedSnapshot.provenance?.lastSettledAttemptAt, null);
+    assert.partialDeepStrictEqual(migratedSnapshot.provenance?.pending, {
+      previousObservationStale: true,
     });
     // Reopen the same-origin view after a simulated native delivery has settled.
     await owner.query(
@@ -141,22 +268,27 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       [tenancy],
     );
     const delivery = new Date().toISOString();
-    const browserToken = "b".repeat(40);
-    const upstreamToken = "s".repeat(40);
-    const origin = "https://berth.example";
     const api = ociStorageApi(
       upstreamToken,
       repository,
-      async () => ({
-        gap: null,
-        reading: {
-          ...reading,
-          observedAt: delivery,
-          respondedAt: delivery,
-          accountingCutoff: delivery,
-          expiresAt: new Date(Date.parse(delivery) + 7_200_000).toISOString(),
-        },
-      }),
+      async () => {
+        const current = await repository.read();
+        assert.equal(
+          current.provenance?.pending?.previousObservationStale,
+          undefined,
+        );
+        assert.equal(current.provenance?.lastSettledAttemptAt, inherited);
+        return {
+          gap: null,
+          reading: {
+            ...reading,
+            observedAt: delivery,
+            respondedAt: delivery,
+            accountingCutoff: delivery,
+            expiresAt: new Date(Date.parse(delivery) + 7_200_000).toISOString(),
+          },
+        };
+      },
       "fixture-allowance-trigger",
     );
     assert.equal(
@@ -196,6 +328,10 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
     assert.equal(snapshot.attemptedAt, delivery);
     assert.equal(snapshot.reading.usedBytes, 46_377);
     assert.equal(snapshot.reading.accountingCutoff, delivery);
+    assert.deepEqual(snapshot.provenance, {
+      lastSettledAttemptAt: delivery,
+      pending: null,
+    });
   } finally {
     await Promise.all([restricted.end(), owner.end(), admin.end()]);
   }

@@ -70,7 +70,8 @@
     "lint:angular": "biome check ui/eslint.angular.mjs && eslint --config ui/eslint.angular.mjs \"ui/src/**/*.ts\" \"ui/src/**/*.html\"",
     "lint:history-edge": "biome check ui/edge ui/functions ui/public/_routes.json && eslint ui/edge ui/functions",
     "build:oci-storage": "pnpm build && node dist/scripts/build-oci-storage.js",
-    "lint:contracts": "biome check ui/contracts && eslint ui/contracts",
+    "lint:contracts": "biome check ui/contracts && eslint ui/contracts && pnpm run lint:oci-storage-contract",
+    "lint:oci-storage-contract": "biome check contracts && eslint contracts",
     "test:oci-storage-db": "pnpm run build && node --test dist/tests/integration/oci-storage.test.js"
   },
   "dependencies": {

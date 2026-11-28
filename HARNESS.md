@@ -144,6 +144,9 @@ prefers an exact source file, then uses TypeScript's bundler rules, including
 Angular extensionless imports and Pages `.js` specifiers for TypeScript.
 Browser imports of Pages code, backend code and server tooling fail the
 boundary check even for types. Pages routes may import the same-origin proxy.
+OCI storage shares the dependency-free `contracts/oci-storage.ts` projection
+with the backend. The web re-export resolves to that source in development.
+Read-only staging copies the contract itself into the standalone Pages root.
 The graph uses the repository source inventory for local relative imports and
 explicit type syntax to distinguish erased edges. Builds still verify package
 resolution and bundling.

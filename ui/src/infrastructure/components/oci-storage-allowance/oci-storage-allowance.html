@@ -7,29 +7,64 @@
     } @else {
       <strong>{{ status() }}</strong>
       @if (reason(); as message) { {{ message }} }
+      @if (collectionStatus(); as collection) { {{ collection }} }
     }
   </p>
   @if (reading(); as value) {
+    @if (pending()) {
+      <h3>Previous observation</h3>
+    }
     <dl>
       <dt>{{ status() === "Current" ? "Used storage" : "Last reported usage" }}</dt>
       <dd>{{ value.usedBytes / gigabyte | number: "1.0-9" }} GB</dd>
-      @if (status() === "Current") {
-        <dt>Remaining allowance</dt>
-        <dd>{{ remaining() | number: "1.0-9" }} GB</dd>
-      }
+      <dt>Remaining allowance</dt>
+      <dd>
+        @if (remaining() !== null) {
+          {{ remaining() | number: "1.0-9" }} GB
+        } @else {
+          Unknown
+        }
+      </dd>
       <dt>Source</dt>
       <dd>{{ value.source }}</dd>
       <dt>Observed</dt>
       <dd><time [attr.datetime]="value.observedAt">{{ value.observedAt | date: "medium" : "UTC" }} UTC</time></dd>
       <dt>OCI response time</dt>
       <dd><time [attr.datetime]="value.respondedAt">{{ value.respondedAt | date: "medium" : "UTC" }} UTC</time></dd>
+      @if (value.accountingCutoff; as cutoff) {
+        <dt>Accounting cutoff</dt>
+        <dd><time [attr.datetime]="cutoff">{{ cutoff | date: "medium" : "UTC" }} UTC</time></dd>
+      }
+      <dt>Observation expiry</dt>
+      <dd><time [attr.datetime]="value.expiresAt">{{ value.expiresAt | date: "medium" : "UTC" }} UTC</time></dd>
     </dl>
     @if (warning(); as message) {
       <p class="oci-storage-warning"><strong>{{ message }}</strong></p>
     }
   }
-  @if (latestAttempt(); as attemptedAt) {
-    <p>Last collection attempt <time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></p>
+  @if (snapshot()?.provenance?.lastSettledAttemptAt; as settledAt) {
+    <p>Last settled collection slot <time [attr.datetime]="settledAt">{{ settledAt | date: "medium" : "UTC" }} UTC</time></p>
+  }
+  @if (pending(); as attempt) {
+    @if (settledReason(); as result) {
+      <p><strong>Last settled result</strong> {{ result }}</p>
+    }
+    <dl>
+      @if (snapshot()?.attemptedAt; as attemptedAt) {
+        <dt>Unsettled collection slot</dt>
+        <dd><time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></dd>
+      }
+      @if (attempt.startedAt; as startedAt) {
+        <dt>Collection started</dt>
+        <dd><time [attr.datetime]="startedAt">{{ startedAt | date: "medium" : "UTC" }} UTC</time></dd>
+      }
+      @if (attempt.overdueAt; as overdueAt) {
+        <dt>Collection deadline</dt>
+        <dd><time [attr.datetime]="overdueAt">{{ overdueAt | date: "medium" : "UTC" }} UTC</time></dd>
+      }
+    </dl>
+  } @else if (legacyAttempt(); as attemptedAt) {
+    <p>Recorded collection slot <time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></p>
   }
   <button mat-stroked-button type="button" [disabled]="loading()" (click)="refresh.emit()">Refresh OCI storage</button>
 </section>

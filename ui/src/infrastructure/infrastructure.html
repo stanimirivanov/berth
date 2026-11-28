@@ -90,6 +90,7 @@
   <berth-oci-storage-allowance
     [snapshot]="storage.snapshot()"
     [expired]="storage.expired()"
+    [overdue]="storage.overdue()"
     [unavailable]="storage.unavailable()"
     [loading]="storage.loading()"
     (refresh)="storage.refresh()" />

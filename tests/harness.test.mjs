@@ -976,3 +976,31 @@ test("owner usage collector and browser share only the dependency-free usage con
     ),
   );
 });
+
+test("OCI storage adapters share a neutral wire contract with no dependencies", () => {
+  const wire = "contracts/oci-storage.ts";
+  const bridge = "ui/contracts/oci-storage.ts";
+  const application = "src/application/oci-storage/contract.ts";
+  const files = {
+    [wire]: "",
+    [bridge]:
+      'export { decodeStorageSnapshot } from "../../contracts/oci-storage.js";',
+    [application]:
+      'export type { StorageSnapshot } from "../../../contracts/oci-storage.ts";',
+  };
+  assert.deepEqual(analyze(files), []);
+  for (const [file, source] of Object.entries({
+    [wire]: 'import "../ui/contracts/oci-storage.js";',
+    [bridge]:
+      'export type { StorageSnapshot } from "../../src/application/oci-storage/contract.js";',
+    [application]:
+      'export type { StorageSnapshot } from "../../../ui/contracts/oci-storage.ts";',
+  })) {
+    assert.ok(
+      analyze({ ...files, [file]: source }).some(
+        (finding) => finding.file === file && finding.rule === "architecture",
+      ),
+      file,
+    );
+  }
+});

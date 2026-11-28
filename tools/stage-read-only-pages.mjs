@@ -20,17 +20,18 @@ const routes = {
 };
 
 /** Copy an allowlisted source file with the same relative import layout.
- * @param {string} relativePath Repository-relative path within the UI package.
+ * @param {string} relativePath Target path within the Pages artifact.
+ * @param {string} source Source path for the artifact, defaulting to the UI source layout.
  */
-function stage(relativePath) {
+function stage(relativePath, source = resolve(ui, relativePath)) {
   const target = resolve(output, relativePath);
   mkdirSync(dirname(target), { recursive: true });
-  copyFileSync(resolve(ui, relativePath), target);
+  copyFileSync(source, target);
 }
 
 const include = [];
 stage("edge/read-proxy.ts");
-stage("contracts/oci-storage.ts");
+stage("contracts/oci-storage.ts", resolve(ui, "../contracts/oci-storage.ts"));
 for (const [capability, { handlers, dependencies }] of Object.entries(routes)) {
   const route = `/api/${capability}`;
   include.push(route, `${route}/*`);

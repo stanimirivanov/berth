@@ -162,6 +162,12 @@ test("saved operation signs in separately, checks once and recovers a lost appro
     page.getByText("Protected cleanup reserve", { exact: false }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Approve proposal" }).press("Enter");
+  // Wait for the lost response after the fixture has recorded the approval.
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "The response was interrupted." }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Check retry status" }),
   ).toBeVisible();

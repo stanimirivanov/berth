@@ -80,7 +80,7 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/providers/oci/storage-evidence.ts",
     "src/storage/postgres/oci-storage.ts",
   ],
-  "src/application/oci-storage/contract.ts": ["ui/contracts/oci-storage.ts"],
+  "src/application/oci-storage/contract.ts": ["contracts/oci-storage.ts"],
   "src/application/oci-storage/api.ts": [
     "src/application/oci-storage/contract.ts",
     "src/http/bounded-json.ts",
@@ -90,7 +90,7 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/http/bounded-json.ts",
   ],
   "src/storage/postgres/oci-storage.ts": [
-    "ui/contracts/oci-storage.ts",
+    "contracts/oci-storage.ts",
     "src/application/oci-storage/contract.ts",
     "src/application/retained-trial-ledger/hosted-postgres.ts",
   ],
@@ -170,7 +170,10 @@ export function privatePath(name) {
     );
 }
 
-const webSource = /^ui\/(?:src|edge|functions|contracts)\//;
+const storageWire = "contracts/oci-storage.ts";
+const storageWireReexport = "ui/contracts/oci-storage.ts";
+const webSource =
+  /^(?:ui\/(?:src|edge|functions|contracts)\/|contracts\/oci-storage\.ts$)/;
 const serverSource =
   /^(?:(?:src|scripts|tools|ui\/(?:edge|functions))(?:\/|$)|neon(?:\.[jt]s)?$)/;
 const declarationFile = /\.d\.[cm]?ts$/;
@@ -344,10 +347,7 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
      * @param {ts.Node} node @param {ts.Node|undefined} target @param {boolean} typeOnly
      */
     function dependency(node, target, typeOnly) {
-      if (
-        file === hostingUsageContract ||
-        file === "ui/contracts/oci-storage.ts"
-      ) {
+      if (file === hostingUsageContract || file === storageWire) {
         fail(
           node,
           "architecture",
@@ -369,6 +369,16 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
       const localPath = relative
         ? path.posix.join(path.posix.dirname(file), name.replaceAll("\\", "/"))
         : null;
+      if (
+        file === storageWireReexport &&
+        (!ts.isExportDeclaration(node) ||
+          localPath !== "contracts/oci-storage.js")
+      )
+        fail(
+          node,
+          "architecture",
+          "The OCI storage UI contract can only re-export its neutral wire contract.",
+        );
       if (checkImportSpelling && relative && !name.endsWith(".ts"))
         fail(
           node,
