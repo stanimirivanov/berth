@@ -82,3 +82,18 @@ export const retryFunction = {
   name: "Berth bounded retry reconciliation",
   source: "./src/application/retry/index.ts",
 };
+
+/** Dedicated OCI allowance reader and scheduled read-only collector. */
+export const ociStorageFunction = {
+  ...probeFunction,
+  slug: "berthocistorage200",
+  name: "Berth OCI storage allowance",
+  source: "./src/application/oci-storage/index.ts",
+};
+
+/** The reviewed schedule is disabled until an authorized deployment verifies the gateway. */
+export const ociStorageSchedule = {
+  ...executorSchedule,
+  function_slug: ociStorageFunction.slug,
+  schedule: { cron: "0 * * * *" },
+};

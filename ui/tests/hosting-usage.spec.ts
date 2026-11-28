@@ -30,8 +30,14 @@ test("Infrastructure imports owner-only hosting readings and keeps Inventory usa
   const reads: string[] = [];
   await page.clock.install({ time: new Date(observedAt) });
   await page.route("**/api/**", (route) => {
-    reads.push(new URL(route.request().url()).pathname);
-    return route.fulfill({ json: inventoryPage([verified]) });
+    const path = new URL(route.request().url()).pathname;
+    reads.push(path);
+    return route.fulfill({
+      json:
+        path === "/api/inventory"
+          ? inventoryPage([verified])
+          : { attemptedAt: null, gap: null, reading: null },
+    });
   });
   await serveUsageTarget(page, expectedTarget);
   await page.goto("/");
@@ -129,7 +135,10 @@ test("Infrastructure imports owner-only hosting readings and keeps Inventory usa
   await expect(
     page.getByRole("heading", { name: "Alpha bucket" }),
   ).toBeVisible();
-  expect(reads).toEqual(["/api/inventory"]);
+  expect(reads.toSorted()).toEqual([
+    "/api/inventory",
+    "/api/inventory/oci-storage",
+  ]);
 
   await input.setInputFiles(file(wrongTarget));
   await expect(usage.getByRole("alert")).toBeVisible();
@@ -179,7 +188,12 @@ test("Infrastructure explains when the site has no configured hosting target", a
   page,
 }) => {
   await page.route("**/api/**", (route) =>
-    route.fulfill({ json: inventoryPage([verified]) }),
+    route.fulfill({
+      json:
+        new URL(route.request().url()).pathname === "/api/inventory"
+          ? inventoryPage([verified])
+          : { attemptedAt: null, gap: null, reading: null },
+    }),
   );
   await serveUsageTarget(page);
   await page.goto("/");

@@ -19,7 +19,9 @@ import { OWNER_SESSION } from "../owner-access/owner-session";
 import { offerings } from "./catalog";
 import { HostingUsage } from "./components/hosting-usage/hosting-usage";
 import { InventoryInstance } from "./components/inventory-instance/inventory-instance";
+import { OciStorageAllowance } from "./components/oci-storage-allowance/oci-storage-allowance";
 import { InventoryStore } from "./inventory-store";
+import { OciStorageStore } from "./oci-storage-store";
 import { UsageStore } from "./usage-store";
 
 /** Present the public catalog and coordinate protected reads for the landing page. */
@@ -35,8 +37,10 @@ import { UsageStore } from "./usage-store";
     MatInputModule,
     MatListModule,
     MatProgressBarModule,
+    OciStorageAllowance,
     RouterLink,
   ],
+  providers: [OciStorageStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./infrastructure.html",
   styleUrl: "./infrastructure.css",
@@ -46,13 +50,17 @@ export class Infrastructure {
   protected readonly owner = inject(OWNER_SESSION);
   protected readonly store = inject(InventoryStore);
   protected readonly usage = inject(UsageStore);
+  protected readonly storage = inject(OciStorageStore);
   protected readonly offerings = offerings;
   protected readonly token = signal("");
 
   constructor() {
     effect(() => {
       if (this.owner.canRead()) {
-        untracked(() => this.store.open());
+        untracked(() => {
+          this.store.open();
+          void this.storage.refresh();
+        });
       }
     });
   }

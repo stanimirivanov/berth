@@ -10,8 +10,12 @@ const routes = {
     dependencies: ["history-proxy.ts"],
   },
   inventory: {
-    handlers: ["index.ts", "[[rest]].ts"],
-    dependencies: ["inventory-proxy.ts", "inventory-page.ts"],
+    handlers: ["index.ts", "[[rest]].ts", "oci-storage.ts"],
+    dependencies: [
+      "inventory-proxy.ts",
+      "inventory-page.ts",
+      "oci-storage-proxy.ts",
+    ],
   },
 };
 
@@ -26,6 +30,7 @@ function stage(relativePath) {
 
 const include = [];
 stage("edge/read-proxy.ts");
+stage("contracts/oci-storage.ts");
 for (const [capability, { handlers, dependencies }] of Object.entries(routes)) {
   const route = `/api/${capability}`;
   include.push(route, `${route}/*`);

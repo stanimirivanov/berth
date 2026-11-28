@@ -13,6 +13,9 @@ const inventoryCursor = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const token = /^[A-Za-z0-9_-]{32,128}$/;
 const maxBytes = 128 * 1024;
 
+/** Browser allowlist keys for protected read-only capabilities. */
+type ReadKind = "history" | "inventory" | "oci-storage";
+
 /** Accept only a canonical HTTPS origin, optionally with a trailing slash. */
 export function origin(value: string | undefined): URL {
   if (!value || !/^https:\/\/[a-z0-9.-]+\/?$/.test(value)) throw Error();
@@ -35,11 +38,8 @@ async function matches(actual: string, expected: string) {
 }
 
 /** Allow a UUID cursor and limit from 1 to 50 on list requests. */
-function validQuery(
-  url: URL,
-  detail: boolean,
-  kind: "history" | "inventory",
-): boolean {
+function validQuery(url: URL, detail: boolean, kind: ReadKind): boolean {
+  if (kind === "oci-storage") return !url.search;
   const cursor = kind === "history" ? "before" : "after";
   const cursorShape = kind === "history" ? uuid : inventoryCursor;
   if (url.search.length > 256 || (detail && url.search)) return false;
@@ -92,11 +92,12 @@ export async function readJson(response: Response): Promise<unknown> {
 /** Authorize a single same-origin read, then send one bounded request to the configured Neon Function. */
 export async function readProxy(
   request: Request,
-  kind: "history" | "inventory",
+  kind: ReadKind,
   config: ReadBindings,
   upstream: typeof fetch,
 ): Promise<Response> {
-  const root = `/api/${kind}`;
+  const root =
+    kind === "oci-storage" ? "/api/inventory/oci-storage" : `/api/${kind}`;
   const reply = (
     value: unknown,
     status = 200,

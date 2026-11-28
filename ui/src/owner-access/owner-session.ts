@@ -24,6 +24,7 @@ function protectedPath(path: string) {
     pathname + search === path &&
     (pathname === "/api/history" ||
       pathname === "/api/inventory" ||
+      (pathname === "/api/inventory/oci-storage" && !search) ||
       (pathname.startsWith(historyDetail) &&
         !search &&
         isOperationId(pathname.slice(historyDetail.length))))
