@@ -1,7 +1,7 @@
 # Narrow OCI provider
 
 `bucket.ts` owns intent/identity/configuration checks and the public Alchemy
-resource/provider. `client.ts` alone imports OCI SDK packages, pins the home-region
+resource/provider. `client.ts` alone imports the Object Storage client SDK, pins the home-region
 endpoint and dispatches each request through the mandatory budget port. No
 administrator, filesystem, environment reader or hosted handler belongs here.
 
@@ -21,3 +21,8 @@ checksum streaming and conditional object cleanup. It may import hashing/streams
 adapter; it cannot import SDKs directly. Reconciliation after a lost PUT requires
 precommitted pending intent, exact metadata/bytes and any saved revision. Never
 replay a pending absent upload. See docs/trial/oci-object-probe.md.
+
+`storage-evidence.ts` uses the OCI SDK signer for two bounded, fixed GETs
+for region subscriptions and tenancy-root storage allowance evidence.
+A response time does not establish an accounting cutoff. Retain the
+pinned signer transport fixture when changing the wire contract.

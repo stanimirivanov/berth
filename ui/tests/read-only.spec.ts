@@ -21,6 +21,10 @@ test("the read-only browser artifact opens retained reads without Retry provisio
     reads.push(url.pathname);
     if (url.pathname === "/api/inventory") {
       await route.fulfill({ json: inventoryPage([verified]) });
+    } else if (url.pathname === "/api/inventory/oci-storage") {
+      await route.fulfill({
+        json: { attemptedAt: null, gap: null, reading: null },
+      });
     } else if (url.pathname === "/api/history") {
       await route.fulfill({
         json: { items: [item(first), clean], next: null },
@@ -50,6 +54,10 @@ test("the read-only browser artifact opens retained reads without Retry provisio
       .getByLabel("Refresh usage from summary"),
   ).toBeVisible();
 
+  await expect(
+    page.getByRole("region", { name: "OCI Object Storage allowance" }),
+  ).toContainText("Unknown");
+
   const response = await page.goto(`/operations/${first}`);
   expect(response?.status()).toBe(200);
   expect(response?.headers()["content-security-policy"]).toContain(
@@ -63,7 +71,10 @@ test("the read-only browser artifact opens retained reads without Retry provisio
     "border-top-width",
     "1px",
   );
-  expect(reads).toEqual(["/api/inventory"]);
+  expect(reads.toSorted()).toEqual([
+    "/api/inventory",
+    "/api/inventory/oci-storage",
+  ]);
   await page.getByLabel("History access token").fill(token);
   await page.getByRole("button", { name: "Load history" }).click();
   await expect(
@@ -93,13 +104,14 @@ test("the read-only browser artifact opens retained reads without Retry provisio
     `/api/history/${first}`,
     `/api/history/${second}`,
     "/api/inventory",
+    "/api/inventory/oci-storage",
   ]);
 });
 
 test("the staged Pages root publishes only History and Inventory Functions", async () => {
   const root = resolve(import.meta.dirname, "../dist/read-only");
   const files = await Promise.all(
-    ["functions", "edge"].map(async (directory) => {
+    ["functions", "edge", "contracts"].map(async (directory) => {
       const entries = await readdir(join(root, directory), {
         recursive: true,
         withFileTypes: true,
@@ -110,15 +122,18 @@ test("the staged Pages root publishes only History and Inventory Functions", asy
     }),
   );
   expect(files.flat().sort()).toEqual([
+    "contracts/oci-storage.ts",
     "edge/history-proxy.ts",
     "edge/inventory-page.ts",
     "edge/inventory-proxy.ts",
+    "edge/oci-storage-proxy.ts",
     "edge/read-proxy.ts",
     "functions/api/history/[[rest]].ts",
     "functions/api/history/[operation].ts",
     "functions/api/history/index.ts",
     "functions/api/inventory/[[rest]].ts",
     "functions/api/inventory/index.ts",
+    "functions/api/inventory/oci-storage.ts",
   ]);
   expect(
     JSON.parse(await readFile(join(root, "browser/_routes.json"), "utf8")),

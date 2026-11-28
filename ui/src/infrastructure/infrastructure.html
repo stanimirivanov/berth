@@ -86,6 +86,15 @@
   </section>
 }
 
+@if (owner.canRead()) {
+  <berth-oci-storage-allowance
+    [snapshot]="storage.snapshot()"
+    [expired]="storage.expired()"
+    [unavailable]="storage.unavailable()"
+    [loading]="storage.loading()"
+    (refresh)="storage.refresh()" />
+}
+
 <berth-hosting-usage
   [verified]="owner.status() === 'verified'"
   [targetConfigured]="usage.targetConfigured"

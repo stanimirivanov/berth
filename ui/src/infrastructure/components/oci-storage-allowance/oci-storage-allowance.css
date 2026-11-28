@@ -1,0 +1,23 @@
+berth-oci-storage-allowance {
+  display: block;
+  margin-block-start: 1.25rem;
+
+  .oci-storage-panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 1rem;
+  }
+  h2 {
+    margin: 0;
+  }
+  dt {
+    font-weight: 600;
+  }
+  .oci-storage-warning {
+    background: var(--warn);
+    padding: 0.5rem 0.75rem;
+  }
+  dd {
+    margin: 0 0 0.25rem;
+  }
+}

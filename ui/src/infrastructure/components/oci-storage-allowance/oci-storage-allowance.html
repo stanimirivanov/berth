@@ -1,0 +1,35 @@
+<section class="oci-storage-panel" aria-labelledby="oci-storage-title">
+  <h2 id="oci-storage-title">OCI Object Storage allowance</h2>
+  <p>Shared across eligible storage tiers in the tenancy, including buckets outside Berth.</p>
+  <p role="status">
+    @if (loading()) {
+      Loading saved storage evidence…
+    } @else {
+      <strong>{{ status() }}</strong>
+      @if (reason(); as message) { {{ message }} }
+    }
+  </p>
+  @if (reading(); as value) {
+    <dl>
+      <dt>{{ status() === "Current" ? "Used storage" : "Last reported usage" }}</dt>
+      <dd>{{ value.usedBytes / gigabyte | number: "1.0-9" }} GB</dd>
+      @if (status() === "Current") {
+        <dt>Remaining allowance</dt>
+        <dd>{{ remaining() | number: "1.0-9" }} GB</dd>
+      }
+      <dt>Source</dt>
+      <dd>{{ value.source }}</dd>
+      <dt>Observed</dt>
+      <dd><time [attr.datetime]="value.observedAt">{{ value.observedAt | date: "medium" : "UTC" }} UTC</time></dd>
+      <dt>OCI response time</dt>
+      <dd><time [attr.datetime]="value.respondedAt">{{ value.respondedAt | date: "medium" : "UTC" }} UTC</time></dd>
+    </dl>
+    @if (warning(); as message) {
+      <p class="oci-storage-warning"><strong>{{ message }}</strong></p>
+    }
+  }
+  @if (latestAttempt(); as attemptedAt) {
+    <p>Last collection attempt <time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></p>
+  }
+  <button mat-stroked-button type="button" [disabled]="loading()" (click)="refresh.emit()">Refresh OCI storage</button>
+</section>

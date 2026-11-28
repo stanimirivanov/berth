@@ -7,6 +7,12 @@ import ts from "typescript-ast";
 /** Closed runtime owners; adding a module requires an explicit policy review. */
 const runtimePackages = {
   "src/http/empty-control.ts": [],
+  "src/http/bounded-json.ts": [],
+  "src/application/oci-storage/api.ts": ["node:crypto"],
+  "src/application/oci-storage/contract.ts": [],
+  "src/application/oci-storage/index.ts": [],
+  "src/providers/oci/storage-evidence.ts": ["node:crypto", "oci-common"],
+  "src/storage/postgres/oci-storage.ts": [],
   "src/application/retry/contract.ts": ["effect"],
   "src/application/retry/continuation.ts": ["effect"],
   "src/application/retry/api.ts": ["node:crypto"],
@@ -68,6 +74,26 @@ const runtimePackages = {
 
 /** Application imports are explicit, including type-only dependencies across its capability interfaces. */
 const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
+  "src/application/oci-storage/index.ts": [
+    "src/application/oci-storage/api.ts",
+    "src/application/oci-storage/contract.ts",
+    "src/providers/oci/storage-evidence.ts",
+    "src/storage/postgres/oci-storage.ts",
+  ],
+  "src/application/oci-storage/contract.ts": ["ui/contracts/oci-storage.ts"],
+  "src/application/oci-storage/api.ts": [
+    "src/application/oci-storage/contract.ts",
+    "src/http/bounded-json.ts",
+  ],
+  "src/providers/oci/storage-evidence.ts": [
+    "src/application/oci-storage/contract.ts",
+    "src/http/bounded-json.ts",
+  ],
+  "src/storage/postgres/oci-storage.ts": [
+    "ui/contracts/oci-storage.ts",
+    "src/application/oci-storage/contract.ts",
+    "src/application/retained-trial-ledger/hosted-postgres.ts",
+  ],
   "src/application/retry/index.ts": [
     "src/application/retry/api.ts",
     "src/application/retry/runtime.ts",
@@ -144,7 +170,7 @@ export function privatePath(name) {
     );
 }
 
-const webSource = /^ui\/(?:src|edge|functions)\//;
+const webSource = /^ui\/(?:src|edge|functions|contracts)\//;
 const serverSource =
   /^(?:(?:src|scripts|tools|ui\/(?:edge|functions))(?:\/|$)|neon(?:\.[jt]s)?$)/;
 const declarationFile = /\.d\.[cm]?ts$/;
@@ -318,11 +344,14 @@ export function analyze(files, { requireTsExtensions = false } = {}) {
      * @param {ts.Node} node @param {ts.Node|undefined} target @param {boolean} typeOnly
      */
     function dependency(node, target, typeOnly) {
-      if (file === hostingUsageContract) {
+      if (
+        file === hostingUsageContract ||
+        file === "ui/contracts/oci-storage.ts"
+      ) {
         fail(
           node,
           "architecture",
-          "The hosting usage contract is shared with the owner collector and must remain dependency-free.",
+          "Shared wire contracts must remain dependency-free.",
         );
         return;
       }

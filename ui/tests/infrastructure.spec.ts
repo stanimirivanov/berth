@@ -12,7 +12,7 @@ test("Infrastructure shows the catalog before access and links retained instance
     displayName: "Beta bucket",
   };
   let reads = 0;
-  await page.route("**/api/inventory**", (route) => {
+  await page.route(/\/api\/inventory\?/, (route) => {
     reads++;
     expect(route.request().headers().authorization).toBe(
       `Bearer ${"h".repeat(40)}`,
@@ -82,7 +82,7 @@ test("Infrastructure preserves rows on paging and refresh failures and reconcile
     { json: inventoryPage([]) },
   ];
   const cursors: (string | null)[] = [];
-  await page.route("**/api/inventory**", (route) => {
+  await page.route(/\/api\/inventory\?/, (route) => {
     cursors.push(new URL(route.request().url()).searchParams.get("after"));
     const response = responses.shift();
     expect(response).toBeDefined();
@@ -160,7 +160,7 @@ test("Infrastructure distinguishes loading, unavailable and incomplete empty inv
 }) => {
   const firstRead = Promise.withResolvers<void>();
   let reads = 0;
-  await page.route("**/api/inventory**", async (route) => {
+  await page.route(/\/api\/inventory\?/, async (route) => {
     reads++;
     if (reads === 1) {
       await firstRead.promise;
@@ -172,7 +172,11 @@ test("Infrastructure distinguishes loading, unavailable and incomplete empty inv
   await page.goto("/");
   await page.getByLabel("Owner access token").fill("h".repeat(40));
   await page.getByRole("button", { name: "Connect", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("Loading inventory…");
+  await expect(
+    page
+      .getByRole("region", { name: "OCI Object Storage bucket" })
+      .getByRole("status"),
+  ).toHaveText("Loading inventory…");
   await expect(
     page.getByRole("progressbar", { name: "Inventory read progress" }),
   ).toBeVisible();
@@ -193,7 +197,7 @@ for (const deniedStatus of [401, 403]) {
     page,
   }) => {
     let inventoryReads = 0;
-    await page.route("**/api/inventory**", (route) => {
+    await page.route(/\/api\/inventory\?/, (route) => {
       inventoryReads++;
       return route.fulfill(
         inventoryReads === 1

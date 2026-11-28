@@ -1,0 +1,88 @@
+import { DatePipe, DecimalPipe } from "@angular/common";
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  output,
+  ViewEncapsulation,
+} from "@angular/core";
+import { MatButtonModule } from "@angular/material/button";
+import type { StorageSnapshot } from "../../../../contracts/oci-storage";
+
+/** Present the tenancy-wide reading and let the owner reread the saved result. */
+@Component({
+  selector: "berth-oci-storage-allowance",
+  imports: [DatePipe, DecimalPipe, MatButtonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: "./oci-storage-allowance.html",
+  styleUrl: "./oci-storage-allowance.css",
+  encapsulation: ViewEncapsulation.None,
+})
+export class OciStorageAllowance {
+  readonly snapshot = input.required<StorageSnapshot | null>();
+  readonly unavailable = input.required<boolean>();
+  readonly expired = input.required<boolean>();
+  readonly loading = input.required<boolean>();
+  readonly refresh = output<void>();
+
+  protected readonly reading = computed(() => this.snapshot()?.reading ?? null);
+  protected readonly status = computed(() => {
+    if (!this.reading()?.accountingCutoff) {
+      return "Unknown";
+    }
+    return this.unavailable() || this.snapshot()?.gap || this.expired()
+      ? "Stale"
+      : "Current";
+  });
+  protected readonly reason = computed(() => {
+    if (this.unavailable()) {
+      return "Saved OCI storage evidence could not be read.";
+    }
+    switch (this.snapshot()?.gap) {
+      case "account-unverified":
+        return "Always Free account eligibility could not be verified.";
+      case "region-coverage-unverified":
+        return "OCI did not confirm that the home region covers the entire tenancy.";
+      case "accounting-cutoff-unverified":
+        return "OCI reports usage without an accounting cutoff. Remaining allowance is unknown.";
+      case "response-time-unverified":
+        return "OCI did not return a current response time.";
+      case "storage-coverage-unverified":
+        return "OCI did not return a qualifying tenancy-wide storage byte count.";
+      case "oci-unavailable":
+        return "OCI could not provide a storage reading.";
+    }
+    if (this.expired()) {
+      return "The saved OCI reading has expired.";
+    }
+    return this.reading()
+      ? null
+      : "No qualifying OCI storage reading has been saved.";
+  });
+  protected readonly latestAttempt = computed(() => {
+    const value = this.snapshot();
+    return value && (value.gap || !value.reading) ? value.attemptedAt : null;
+  });
+  protected readonly gigabyte = 1_000_000_000;
+  protected readonly remaining = computed(() => {
+    const value = this.reading();
+    return value && this.status() === "Current"
+      ? Math.max(0, value.limitBytes - value.usedBytes) / this.gigabyte
+      : null;
+  });
+  protected readonly warning = computed(() => {
+    const value = this.reading();
+    if (!value || this.status() !== "Current") {
+      return null;
+    }
+    const fraction = value.usedBytes / value.limitBytes;
+    if (fraction >= 1) {
+      return "Limit reached (100% threshold reached)";
+    }
+    if (fraction >= 0.95) {
+      return "Near limit (95% threshold reached)";
+    }
+    return fraction >= 0.8 ? "Approaching limit (80% threshold reached)" : null;
+  });
+}

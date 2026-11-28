@@ -64,11 +64,14 @@
     "history:serve": "pnpm build && node dist/scripts/history-server.js",
     "build:history": "pnpm build && node dist/scripts/build-history.js",
     "build:inventory": "pnpm build && node dist/scripts/build-inventory.js",
-    "lint:ui": "biome check ui/src ui/tests ui/*.ts ui/*.json && eslint ui/src ui/tests ui/*.ts && pnpm run lint:history-edge && pnpm run lint:angular",
+    "lint:ui": "biome check ui/src ui/tests ui/*.ts ui/*.json && eslint ui/src ui/tests ui/*.ts && pnpm run lint:history-edge && pnpm run lint:angular && pnpm run lint:contracts",
     "check:ui": "pnpm build:ui && pnpm build:history && pnpm test:ui && pnpm --dir ui audit --audit-level high && pnpm run check:ui:read-only",
     "check:ui:read-only": "pnpm build:ui:read-only && pnpm test:ui:read-only",
     "lint:angular": "biome check ui/eslint.angular.mjs && eslint --config ui/eslint.angular.mjs \"ui/src/**/*.ts\" \"ui/src/**/*.html\"",
-    "lint:history-edge": "biome check ui/edge ui/functions ui/public/_routes.json && eslint ui/edge ui/functions"
+    "lint:history-edge": "biome check ui/edge ui/functions ui/public/_routes.json && eslint ui/edge ui/functions",
+    "build:oci-storage": "pnpm build && node dist/scripts/build-oci-storage.js",
+    "lint:contracts": "biome check ui/contracts && eslint ui/contracts",
+    "test:oci-storage-db": "pnpm run build && node --test dist/tests/integration/oci-storage.test.js"
   },
   "dependencies": {
     "@effect/platform-node": "4.1.4",
