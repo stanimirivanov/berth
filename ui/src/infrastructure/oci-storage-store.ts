@@ -42,7 +42,12 @@ export const OciStorageStore = signalStore(
       overdue: computed(() => clock() >= pendingDeadline()),
       nextDeadline: computed(() =>
         Math.min(
-          ...[expiry(), pendingDeadline()].filter((value) => value > clock()),
+          ...[
+            expiry(),
+            pendingDeadline(),
+            Date.parse(snapshot()?.monthly?.requests.reading?.expiresAt ?? ""),
+            Date.parse(snapshot()?.monthly?.outbound.reading?.expiresAt ?? ""),
+          ].filter((value) => value > clock()),
         ),
       ),
     };

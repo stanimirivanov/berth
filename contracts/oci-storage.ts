@@ -21,6 +21,68 @@ export interface StorageReading {
   source: "OCI";
 }
 
+/** Reviewed outbound origin-zone SKUs and their visible provider scopes. */
+export const outboundZones = {
+  B88327: "North America, Europe and UK",
+  B93455: "APAC, Japan and South America",
+  B93456: "Middle East and Africa",
+} as const;
+
+/** The monthly billing meters tracked independently of point-in-time storage. */
+export type MonthlyMeter = "requests" | "outbound";
+
+/** Identifies the billed request meter or one outbound origin zone. */
+export type UsageSku = "B91627" | keyof typeof outboundZones;
+
+/** A fixed reason why a dated monthly reading cannot establish remaining allowance. */
+export type MonthlyGap =
+  | "account-unverified"
+  | "oci-unavailable"
+  | "response-time-unverified"
+  | "usage-coverage-unverified"
+  | "outbound-scope-unverified"
+  | "accounting-cutoff-unverified";
+
+/** Fixed monthly ceilings in requests and thousandths of a provider GB, respectively. */
+export const monthlyAllowance: Record<MonthlyMeter, number> = {
+  requests: 50_000,
+  outbound: 10_000_000,
+};
+
+/** Usage is an integer count of requests or thousandths of one provider GB, according to SKU. */
+export interface MonthlyReading {
+  sku: UsageSku;
+  used: number;
+  source: "OCI Usage API";
+  periodStart: string;
+  periodEnd: string;
+  observedAt: string;
+  respondedAt: string;
+  reportedThrough: string;
+  coverage: "partial" | "complete";
+  accountingCutoff: string | null;
+  expiresAt: string;
+}
+
+/** The last attempt and last usable observation may describe different collections. */
+export interface MonthlyOutcome {
+  gap: MonthlyGap | null;
+  reading: MonthlyReading | null;
+}
+
+/** Each meter retains its own gap even though both use the same collection slot. */
+export type MonthlyEvidence = Record<MonthlyMeter, MonthlyOutcome>;
+
+/** Get the bounds of the UTC billing month containing the given instant. */
+export function usagePeriod(at: number) {
+  const boundary = new Date(at);
+  boundary.setUTCDate(1);
+  boundary.setUTCHours(0, 0, 0, 0);
+  const periodStart = boundary.toISOString();
+  boundary.setUTCMonth(boundary.getUTCMonth() + 1);
+  return { periodStart, periodEnd: boundary.toISOString() };
+}
+
 /** Schedule provenance for the latest claim and the previous settled outcome. */
 export interface StorageProvenance {
   lastSettledAttemptAt: string | null;
@@ -37,6 +99,7 @@ export interface StorageSnapshot {
   gap: StorageGap | null;
   reading: StorageReading | null;
   provenance?: StorageProvenance;
+  monthly?: MonthlyEvidence;
 }
 
 /** Require an ordinary JSON object before reading interpreted fields. */
@@ -97,6 +160,100 @@ function reading(value: unknown): StorageReading {
   };
 }
 
+/** Validate units by SKU and require complete billing coverage before a cutoff can qualify. */
+function monthlyReading(value: unknown, meter: MonthlyMeter): MonthlyReading {
+  const {
+    sku,
+    used,
+    source,
+    periodStart,
+    periodEnd,
+    observedAt,
+    respondedAt,
+    reportedThrough,
+    coverage,
+    accountingCutoff,
+    expiresAt,
+  } = record(value);
+  if (
+    (meter === "requests"
+      ? sku !== "B91627"
+      : sku !== "B88327" && sku !== "B93455" && sku !== "B93456") ||
+    typeof used !== "number" ||
+    !Number.isSafeInteger(used) ||
+    used < 0 ||
+    source !== "OCI Usage API" ||
+    !timestamp(periodStart) ||
+    !timestamp(periodEnd) ||
+    !timestamp(observedAt) ||
+    !timestamp(respondedAt) ||
+    !timestamp(reportedThrough) ||
+    !timestamp(expiresAt) ||
+    (coverage !== "complete" && coverage !== "partial") ||
+    (coverage === "complete"
+      ? accountingCutoff !== reportedThrough
+      : accountingCutoff !== null || used === 0)
+  )
+    throw Error("Invalid monthly OCI reading");
+  const period = usagePeriod(Date.parse(observedAt));
+  const maxExpiry =
+    coverage === "complete"
+      ? Date.parse(observedAt) + 86_400_000
+      : Date.parse(respondedAt) + 7_200_000;
+  if (
+    periodStart !== period.periodStart ||
+    periodEnd !== period.periodEnd ||
+    reportedThrough <= periodStart ||
+    reportedThrough > respondedAt ||
+    respondedAt > observedAt ||
+    observedAt >= expiresAt ||
+    expiresAt > periodEnd ||
+    Date.parse(expiresAt) > maxExpiry
+  )
+    throw Error("Invalid monthly OCI period");
+  return {
+    sku: sku as UsageSku,
+    used,
+    source,
+    periodStart,
+    periodEnd,
+    observedAt,
+    respondedAt,
+    reportedThrough,
+    coverage,
+    accountingCutoff: coverage === "complete" ? reportedThrough : null,
+    expiresAt,
+  };
+}
+
+/** A complete retained reading can coexist with the previous attempt's failure. */
+function monthlyOutcome(value: unknown, meter: MonthlyMeter): MonthlyOutcome {
+  const { gap, reading } = record(value);
+  if (
+    gap !== null &&
+    gap !== "account-unverified" &&
+    gap !== "oci-unavailable" &&
+    gap !== "response-time-unverified" &&
+    gap !== "usage-coverage-unverified" &&
+    gap !== "accounting-cutoff-unverified" &&
+    !(meter === "outbound" && gap === "outbound-scope-unverified")
+  )
+    throw Error("Invalid monthly OCI gap");
+  const observation = reading === null ? null : monthlyReading(reading, meter);
+  if (gap === null && observation?.coverage !== "complete")
+    throw Error("Complete monthly OCI coverage is missing");
+  return { gap, reading: observation };
+}
+
+/** Read independently retained monthly meters when a newer collector has supplied them. */
+function decodeMonthly(value: unknown): MonthlyEvidence {
+  const { requests, outbound } = record(value);
+  return {
+    requests: monthlyOutcome(requests, "requests"),
+    outbound: monthlyOutcome(outbound, "outbound"),
+  };
+}
+
 /** Associate new provenance with the latest slot. A migrated pending claim may have no start time. */
 function decodeProvenance(
   value: unknown,
@@ -140,7 +297,13 @@ function decodeProvenance(
 
 /** Decode the saved result at each trust boundary and discard unknown attributes. */
 export function decodeStorageSnapshot(value: unknown): StorageSnapshot {
-  const { attemptedAt, gap, reading: saved, provenance } = record(value);
+  const {
+    attemptedAt,
+    gap,
+    reading: saved,
+    provenance,
+    monthly,
+  } = record(value);
   if (
     (attemptedAt !== null && !timestamp(attemptedAt)) ||
     (gap !== null &&
@@ -150,7 +313,8 @@ export function decodeStorageSnapshot(value: unknown): StorageSnapshot {
       gap !== "response-time-unverified" &&
       gap !== "accounting-cutoff-unverified" &&
       gap !== "oci-unavailable") ||
-    (attemptedAt === null && (gap !== null || saved !== null))
+    (attemptedAt === null &&
+      (gap !== null || saved !== null || monthly !== undefined))
   ) {
     throw Error("Invalid storage snapshot");
   }
@@ -177,5 +341,6 @@ export function decodeStorageSnapshot(value: unknown): StorageSnapshot {
     gap,
     reading: observation,
     ...(collection === undefined ? {} : { provenance: collection }),
+    ...(monthly === undefined ? {} : { monthly: decodeMonthly(monthly) }),
   };
 }

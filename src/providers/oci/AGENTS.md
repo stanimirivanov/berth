@@ -23,6 +23,9 @@ precommitted pending intent, exact metadata/bytes and any saved revision. Never
 replay a pending absent upload. See docs/trial/oci-object-probe.md.
 
 `storage-evidence.ts` uses the OCI SDK signer for two bounded, fixed GETs
-for region subscriptions and tenancy-root storage allowance evidence.
-A response time does not establish an accounting cutoff. Retain the
-pinned signer transport fixture when changing the wire contract.
+for region subscriptions and tenancy-root storage allowance evidence, plus
+one fixed read-only Usage API POST under the same scheduled claim and deadline.
+`monthly-usage-report.ts` decodes billed-SKU daily usage. Read the
+[OCI allowance evidence contract](../../../docs/oci-storage-allowance.md) when
+changing scope, units, freshness or cutoff handling. Retain the pinned signer
+transport fixture when changing the wire contract.

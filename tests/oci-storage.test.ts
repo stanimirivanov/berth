@@ -33,6 +33,7 @@ function collector(responses: Response[], account: unknown = eligibility) {
       },
     },
     async (url, options) => {
+      if (options?.method === "POST") return availability({ items: [] });
       assert.equal(options?.method, "GET");
       assert.equal(options.redirect, "error");
       assert.equal(
@@ -61,7 +62,7 @@ function availability(
 
 test("uses the single verified home region and tenancy-root bytes counter for the shared allowance", async () => {
   const { collect, urls } = collector([Response.json(home), availability()]);
-  assert.deepEqual(await collect(), {
+  assert.partialDeepStrictEqual(await collect(), {
     gap: "accounting-cutoff-unverified",
     reading: {
       source: "OCI",
@@ -87,6 +88,200 @@ test("uses the single verified home region and tenancy-root bytes counter for th
     [...(urls[1]?.searchParams ?? [])],
     [["compartmentId", tenancy]],
   );
+});
+
+test("one signed tenancy query retains reported request and outbound quantities without inferring accounting completeness", async () => {
+  const responses = [
+    Response.json(home),
+    availability(),
+    new Response(
+      '{"items":[' +
+        '{"skuPartNumber":"B91627","unit":"10K Requests","computedQuantity":0.0085000000000000001,"timeUsageStarted":"2026-11-01T00:00:00Z","timeUsageEnded":"2026-11-02T00:00:00Z"},' +
+        '{"skuPartNumber":"B88327","unit":"GB","computedQuantity":0.00000000101,"timeUsageStarted":"2026-11-27T00:00:00Z","timeUsageEnded":"2026-11-28T00:00:00Z"}' +
+        "]}",
+      { headers: { date: new Date(now).toUTCString() } },
+    ),
+  ];
+  const observed: string[] = [];
+  const collect = ociStorageEvidence(
+    { tenancy, region },
+    eligibility,
+    {
+      async signHttpRequest(request) {
+        if (request.method === "POST") {
+          assert.equal(typeof request.body, "string");
+          observed.push(String(request.body));
+        }
+      },
+    },
+    async (url, options) => {
+      if (options?.method === "POST") {
+        assert.equal(
+          String(url),
+          "https://usageapi.eu-frankfurt-1.oci.oraclecloud.com/20200107/usage?limit=200",
+        );
+        assert.equal(options.body, observed[0]);
+        assert.deepEqual(JSON.parse(String(options.body)), {
+          tenantId: tenancy,
+          timeUsageStarted: "2026-11-01T00:00:00.000Z",
+          timeUsageEnded: "2026-11-28T00:00:00.000Z",
+          granularity: "DAILY",
+          queryType: "USAGE_ONLY",
+          isAggregateByTime: false,
+          groupBy: ["skuPartNumber", "unit"],
+          filter: {
+            operator: "OR",
+            dimensions: ["B91627", "B88327", "B93455", "B93456"].map(
+              (value) => ({ key: "skuPartNumber", value }),
+            ),
+          },
+        });
+        assert.equal(options.redirect, "error");
+        assert.ok(options.signal);
+      }
+      const response =
+        options?.method === "POST" ? responses.pop() : responses.shift();
+      assert.ok(response);
+      return response;
+    },
+    () => now,
+  );
+  const common = {
+    periodStart: "2026-11-01T00:00:00.000Z",
+    periodEnd: "2026-12-01T00:00:00.000Z",
+    accountingCutoff: null,
+    source: "OCI Usage API",
+    coverage: "partial",
+    respondedAt: iso(now),
+    observedAt: iso(now),
+    expiresAt: iso(now + 7_200_000),
+  };
+  assert.partialDeepStrictEqual(await collect(), {
+    gap: "accounting-cutoff-unverified",
+    monthly: {
+      requests: {
+        gap: "accounting-cutoff-unverified",
+        reading: {
+          ...common,
+          sku: "B91627",
+          used: 86,
+          reportedThrough: "2026-11-02T00:00:00.000Z",
+        },
+      },
+      outbound: {
+        gap: "accounting-cutoff-unverified",
+        reading: {
+          ...common,
+          sku: "B88327",
+          used: 1,
+          reportedThrough: "2026-11-28T00:00:00.000Z",
+        },
+      },
+    },
+  });
+  assert.equal(observed.length, 1);
+  assert.equal(responses.length, 0);
+});
+
+test("missing or invalid monthly coverage preserves independently usable meter observations", async () => {
+  const usage = {
+    skuPartNumber: "B91627",
+    unit: "10K Requests",
+    computedQuantity: 0.001,
+    timeUsageStarted: "2026-11-01T00:00:00Z",
+    timeUsageEnded: "2026-11-02T00:00:00Z",
+  };
+  const outbound = { ...usage, skuPartNumber: "B88327", unit: "GB" };
+  for (const [items, requests, transfer, headers] of [
+    [[usage], "accounting-cutoff-unverified", "usage-coverage-unverified"],
+    [
+      [usage, { ...outbound, unit: "GB Months" }],
+      "accounting-cutoff-unverified",
+      "usage-coverage-unverified",
+    ],
+    [
+      [usage, usage, outbound],
+      "usage-coverage-unverified",
+      "accounting-cutoff-unverified",
+    ],
+    [
+      [{ ...usage, computedQuantity: 0 }, outbound],
+      "usage-coverage-unverified",
+      "accounting-cutoff-unverified",
+    ],
+    [
+      [{ ...usage, computedQuantity: "0.001" }, outbound],
+      "usage-coverage-unverified",
+      "accounting-cutoff-unverified",
+    ],
+    [
+      [{ ...usage, timeUsageStarted: "2026-10-31T00:00:00Z" }, outbound],
+      "usage-coverage-unverified",
+      "accounting-cutoff-unverified",
+    ],
+    [
+      [usage, outbound, { ...outbound, skuPartNumber: "B93456" }],
+      "accounting-cutoff-unverified",
+      "outbound-scope-unverified",
+    ],
+    [
+      [usage, outbound],
+      "usage-coverage-unverified",
+      "usage-coverage-unverified",
+      { "opc-next-page": "page2" },
+    ],
+  ] as const) {
+    const collect = ociStorageEvidence(
+      { tenancy, region },
+      eligibility,
+      { async signHttpRequest() {} },
+      async (url, init) => {
+        if (init?.method === "POST") {
+          return Response.json(
+            { items },
+            { headers: { date: new Date(now).toUTCString(), ...headers } },
+          );
+        }
+        return String(url).includes("/regionSubscriptions")
+          ? Response.json(home)
+          : availability();
+      },
+      () => now,
+    );
+    const result = await collect();
+    assert.equal(result.reading?.usedBytes, 46_377);
+    assert.equal(result.monthly?.requests.gap, requests);
+    assert.equal(result.monthly?.outbound.gap, transfer);
+  }
+});
+
+test("the new UTC month has no elapsed day to query and does not reuse the previous period", async () => {
+  const monthStart = Date.parse("2026-12-01T00:00:00.000Z");
+  let posts = 0;
+  const collect = ociStorageEvidence(
+    { tenancy, region },
+    { ...eligibility, observedAt: iso(monthStart - 1_000) },
+    { async signHttpRequest() {} },
+    async (url, init) => {
+      if (init?.method === "POST") posts++;
+      if (String(url).includes("/regionSubscriptions"))
+        return Response.json(home);
+      return Response.json(
+        { used: 46_377, available: 21_474_790_103 },
+        {
+          headers: { date: new Date(monthStart).toUTCString() },
+        },
+      );
+    },
+    () => monthStart,
+  );
+  const result = await collect();
+  assert.equal(posts, 0);
+  assert.equal(result.reading?.usedBytes, 46_377);
+  assert.deepEqual(result.monthly, {
+    requests: { gap: "usage-coverage-unverified", reading: null },
+    outbound: { gap: "usage-coverage-unverified", reading: null },
+  });
 });
 
 test("only an in-window IMF-fixdate qualifies as OCI response time", async () => {
@@ -129,19 +324,37 @@ test("the pinned OCI signer signs both fixed GETs with the configured identity",
     keys.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     fingerprint,
   );
-  const responses = [Response.json(home), availability()];
+  const responses = [
+    Response.json(home),
+    availability(),
+    availability({ items: [] }),
+  ];
   const collect = ociStorageEvidence(
     { tenancy, region },
     eligibility,
     signer,
     async (_input, init) => {
-      assert.equal(init?.method, "GET");
+      const headers = new Headers(init?.headers);
+      if (init?.method === "POST") {
+        const body = String(init.body);
+        assert.equal(
+          headers.get("content-length"),
+          String(Buffer.byteLength(body)),
+        );
+        assert.equal(
+          headers.get("x-content-sha256"),
+          createHash("sha256").update(body).digest("base64"),
+        );
+      } else {
+        assert.equal(init?.method, "GET");
+      }
       const authorization = new Headers(init?.headers).get("authorization");
       assert.ok(
         authorization?.includes(`keyId="${tenancy}/${user}/${fingerprint}"`),
       );
       assert.ok(authorization?.includes("rsa-sha256"));
-      const response = responses.shift();
+      const response =
+        init?.method === "POST" ? responses.pop() : responses.shift();
       assert.ok(response);
       return response;
     },
@@ -161,7 +374,7 @@ test("stops for expired or mismatched plan evidence before an OCI call", async (
       ...eligibility,
       [String(key)]: value,
     });
-    assert.deepEqual(await collect(), {
+    assert.partialDeepStrictEqual(await collect(), {
       gap: "account-unverified",
       reading: null,
     });
@@ -222,7 +435,7 @@ test("keeps the reading unknown for partial regions, pagination, missing bytes a
   ];
   for (const { responses, gap, calls } of examples) {
     const { collect, urls } = collector(responses);
-    assert.deepEqual(await collect(), { gap, reading: null });
+    assert.partialDeepStrictEqual(await collect(), { gap, reading: null });
     assert.equal(urls.length, calls);
   }
 });

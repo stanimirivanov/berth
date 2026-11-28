@@ -8,7 +8,67 @@ import {
   ViewEncapsulation,
 } from "@angular/core";
 import { MatButtonModule } from "@angular/material/button";
-import type { StorageSnapshot } from "../../../../contracts/oci-storage";
+import {
+  type MonthlyGap,
+  type MonthlyMeter,
+  monthlyAllowance,
+  outboundZones,
+  type StorageSnapshot,
+} from "../../../../contracts/oci-storage";
+
+const monthlyMeters = [
+  {
+    meter: "requests",
+    title: "OCI Object Storage API requests",
+    unit: "requests",
+    divisor: 1,
+  },
+  {
+    meter: "outbound",
+    title: "OCI outbound transfer",
+    unit: "GB",
+    divisor: 1_000,
+  },
+] as const;
+
+/** Use the same warning thresholds for each qualified OCI allowance reading. */
+function warningBand(used: number, limit: number) {
+  const fraction = used / limit;
+  if (fraction >= 1) {
+    return "Limit reached (100% threshold reached)";
+  }
+  if (fraction >= 0.95) {
+    return "Near limit (95% threshold reached)";
+  }
+  return fraction >= 0.8 ? "Approaching limit (80% threshold reached)" : null;
+}
+
+/** Summarize the latest settled gap without implying that any unreported usage was zero. */
+function monthlyGapMessage(
+  meter: MonthlyMeter,
+  gap: MonthlyGap | null | undefined,
+) {
+  switch (gap) {
+    case "account-unverified":
+      return "Always Free account eligibility could not be verified.";
+    case "oci-unavailable":
+      return "OCI could not provide a monthly usage reading.";
+    case "response-time-unverified":
+      return "OCI did not return a current response time.";
+    case "usage-coverage-unverified":
+      return meter === "requests"
+        ? "OCI did not report verified tenancy-wide request usage for this period."
+        : "OCI did not report verified usage for the applicable outbound allowance.";
+    case "outbound-scope-unverified":
+      return "OCI reported multiple outbound pricing zones.";
+    case "accounting-cutoff-unverified":
+      return "OCI reports usage without a verified accounting cutoff.";
+    case null:
+      return null;
+    default:
+      return "No qualifying OCI monthly reading has been saved.";
+  }
+}
 
 /** Present the tenancy-wide reading and let the owner reread the saved result. */
 @Component({
@@ -22,6 +82,7 @@ import type { StorageSnapshot } from "../../../../contracts/oci-storage";
 export class OciStorageAllowance {
   readonly snapshot = input.required<StorageSnapshot | null>();
   readonly unavailable = input.required<boolean>();
+  readonly clock = input.required<number>();
   readonly expired = input.required<boolean>();
   readonly overdue = input.required<boolean>();
   readonly loading = input.required<boolean>();
@@ -41,17 +102,22 @@ export class OciStorageAllowance {
     }
     return this.overdue() ? "Collection overdue." : "Collection pending.";
   });
+  protected readonly previousCollectionStale = computed(() => {
+    const pending = this.pending();
+    return (
+      this.overdue() ||
+      pending?.startedAt === null ||
+      pending?.previousObservationStale === true
+    );
+  });
   protected readonly stale = computed(() => {
     const value = this.reading();
     const gap = this.snapshot()?.gap;
-    const pending = this.pending();
     return (
       value !== null &&
       (this.unavailable() ||
         this.expired() ||
-        this.overdue() ||
-        pending?.startedAt === null ||
-        pending?.previousObservationStale ||
+        this.previousCollectionStale() ||
         (gap != null &&
           (gap !== "accounting-cutoff-unverified" ||
             value.accountingCutoff !== null)))
@@ -116,13 +182,46 @@ export class OciStorageAllowance {
     if (!value?.accountingCutoff || this.stale()) {
       return null;
     }
-    const fraction = value.usedBytes / value.limitBytes;
-    if (fraction >= 1) {
-      return "Limit reached (100% threshold reached)";
-    }
-    if (fraction >= 0.95) {
-      return "Near limit (95% threshold reached)";
-    }
-    return fraction >= 0.8 ? "Approaching limit (80% threshold reached)" : null;
+    return warningBand(value.usedBytes, value.limitBytes);
   });
+
+  protected readonly monthly = computed(() =>
+    monthlyMeters.map((display) => {
+      const outcome = this.snapshot()?.monthly?.[display.meter];
+      const value = outcome?.reading ?? null;
+      const cutoff = value?.accountingCutoff ?? null;
+      const previousPeriod =
+        value && this.clock() >= Date.parse(value.periodEnd);
+      const expired = value && this.clock() >= Date.parse(value.expiresAt);
+      const gap = outcome?.gap;
+      const stale =
+        value &&
+        (this.unavailable() ||
+          expired ||
+          this.previousCollectionStale() ||
+          (gap != null &&
+            (gap !== "accounting-cutoff-unverified" || cutoff !== null)));
+      const limit = monthlyAllowance[display.meter];
+      const current = value && cutoff !== null && !stale;
+      let reason = monthlyGapMessage(display.meter, gap);
+      if (this.unavailable()) {
+        reason = "Saved OCI monthly evidence could not be read.";
+      } else if (previousPeriod) {
+        reason = "Previous billing period.";
+      } else if (expired) {
+        reason = "The saved OCI reading has expired.";
+      }
+      return {
+        ...display,
+        value,
+        status: stale ? "Stale" : current ? "Current" : "Unknown",
+        reason,
+        zone: value && value.sku !== "B91627" ? outboundZones[value.sku] : null,
+        remaining: current
+          ? Math.max(0, limit - value.used) / display.divisor
+          : null,
+        warning: current ? warningBand(value.used, limit) : null,
+      };
+    }),
+  );
 }

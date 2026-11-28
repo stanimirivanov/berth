@@ -89,6 +89,7 @@
 @if (owner.canRead()) {
   <berth-oci-storage-allowance
     [snapshot]="storage.snapshot()"
+    [clock]="storage.clock()"
     [expired]="storage.expired()"
     [overdue]="storage.overdue()"
     [unavailable]="storage.unavailable()"

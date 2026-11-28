@@ -28,6 +28,10 @@ function storagePanel(page: Page) {
   return page.getByRole("region", { name: "OCI Object Storage allowance" });
 }
 
+function refreshAllowances(page: Page) {
+  return page.getByRole("button", { name: "Refresh OCI allowances" });
+}
+
 async function connect(page: Page) {
   await page.getByLabel("Owner access token").fill(token);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
@@ -91,7 +95,7 @@ test("refreshing saved OCI storage shows the highest warning band and floors exh
   });
 
   const storage = storagePanel(page);
-  const refresh = storage.getByRole("button", { name: "Refresh OCI storage" });
+  const refresh = refreshAllowances(page);
   await connect(page);
   await expect(
     storage.getByText("15.999999999 GB", { exact: true }),
@@ -139,7 +143,7 @@ test("refreshing saved evidence preserves the last observation when coverage is 
   await openInfrastructure(page);
   await connect(page);
   const storage = storagePanel(page);
-  const refresh = storage.getByRole("button", { name: "Refresh OCI storage" });
+  const refresh = refreshAllowances(page);
 
   await expect(storage.getByText("Current", { exact: true })).toBeVisible();
   await expect(storage.getByText("1 GB", { exact: true })).toBeVisible();
@@ -212,7 +216,7 @@ test("returning to Infrastructure reads saved storage again and explains missing
   await expect(storage.getByText("Remaining allowance")).toHaveCount(0);
 
   saved = { attemptedAt: observedAt, gap: "oci-unavailable", reading: null };
-  await storage.getByRole("button", { name: "Refresh OCI storage" }).click();
+  await refreshAllowances(page).click();
   await expect(storage).toContainText(
     "OCI could not provide a storage reading.",
   );
@@ -261,7 +265,7 @@ test("reported-only bytes stay visible and headroom stays unknown when the obser
   await openInfrastructure(page);
   await connect(page);
   const storage = storagePanel(page);
-  const refresh = storage.getByRole("button", { name: "Refresh OCI storage" });
+  const refresh = refreshAllowances(page);
   const status = storage.getByRole("status");
 
   await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
@@ -364,7 +368,7 @@ test("a pending collection keeps its previous observation and becomes stale at i
       accountingCutoff: null,
     },
   };
-  await storage.getByRole("button", { name: "Refresh OCI storage" }).click();
+  await refreshAllowances(page).click();
   await expect(status).toContainText("Collection pending.");
   await expect(status.getByText("Unknown", { exact: true })).toBeVisible();
   await expect(storage.getByText("19 GB", { exact: true })).toBeVisible();
@@ -420,7 +424,7 @@ test("a new pending slot preserves the stale status of an overdue collection's p
   };
   await page.clock.setSystemTime(new Date(nextClaim));
   await page.clock.resume();
-  await storage.getByRole("button", { name: "Refresh OCI storage" }).click();
+  await refreshAllowances(page).click();
   await expect(status).toContainText("Collection pending.");
   await expect(status.getByText("Stale", { exact: true })).toBeVisible();
   await expect(storage.getByText("Previous observation")).toBeVisible();
@@ -447,7 +451,7 @@ test("a legacy unsettled slot shows an unknown outcome without treating prior us
   await connect(page);
   const storage = storagePanel(page);
   const status = storage.getByRole("status");
-  const refresh = storage.getByRole("button", { name: "Refresh OCI storage" });
+  const refresh = refreshAllowances(page);
 
   await expect(status).toContainText("Collection outcome unknown.");
   await expect(status.getByText("Stale", { exact: true })).toBeVisible();
@@ -525,7 +529,7 @@ for (const status of [401, 403]) {
     await expect(hostingRefresh).toBeVisible();
 
     denied = true;
-    await storage.getByRole("button", { name: "Refresh OCI storage" }).click();
+    await refreshAllowances(page).click();
     await expect(storage).toHaveCount(0);
     await expect(inventoryItem).toHaveCount(0);
     await expect(hostingRefresh).toHaveCount(0);
@@ -544,3 +548,102 @@ for (const status of [401, 403]) {
     }
   });
 }
+
+test("monthly OCI warnings and rollover are independent from storage and transfer", async ({
+  page,
+}) => {
+  const checkTime = "2026-11-30T23:55:00.000Z";
+  const periodStart = "2026-11-01T00:00:00.000Z";
+  const periodEnd = "2026-12-01T00:00:00.000Z";
+  const cutoff = "2026-11-30T23:54:00.000Z";
+  let used = 39_999;
+  let qualifiedOutbound = false;
+  let lastReadMethod = "";
+  await page.clock.install({ time: new Date(checkTime) });
+  await page.route(/\/api\/inventory\?/, (route) =>
+    route.fulfill({ json: inventoryPage([verified]) }),
+  );
+  await page.route("**/api/inventory/oci-storage", (route) => {
+    lastReadMethod = route.request().method();
+    const storage = storageReading();
+    const hasCutoff = {
+      source: "OCI Usage API",
+      coverage: "complete",
+      periodStart,
+      periodEnd,
+      observedAt: checkTime,
+      respondedAt: checkTime,
+      reportedThrough: cutoff,
+      accountingCutoff: cutoff,
+      expiresAt: periodEnd,
+    };
+    return route.fulfill({
+      json: {
+        attemptedAt: checkTime,
+        gap: null,
+        reading: {
+          ...storage.reading,
+          observedAt: checkTime,
+          respondedAt: checkTime,
+          accountingCutoff: cutoff,
+          expiresAt: "2026-12-01T01:00:00.000Z",
+        },
+        monthly: {
+          requests: {
+            gap: qualifiedOutbound ? "oci-unavailable" : null,
+            reading: { ...hasCutoff, sku: "B91627", used },
+          },
+          outbound: qualifiedOutbound
+            ? {
+                gap: null,
+                reading: { ...hasCutoff, sku: "B88327", used: 9_500_000 },
+              }
+            : { gap: "usage-coverage-unverified", reading: null },
+        },
+      },
+    });
+  });
+  await page.goto("/");
+  await connect(page);
+
+  const storage = storagePanel(page);
+  const requests = page.getByRole("region", {
+    name: "OCI Object Storage API requests",
+  });
+  const outbound = page.getByRole("region", { name: "OCI outbound transfer" });
+  await expect(storage.getByRole("status")).toContainText("Current");
+  await expect(requests.getByRole("status")).toContainText("Current");
+  await expect(outbound.getByRole("status")).toContainText("Unknown");
+  await expect(outbound).toContainText("Advisory");
+  await expect(requests).toContainText("10,001 requests");
+  await expect(requests).not.toContainText("threshold reached");
+  await expect(
+    requests.locator(`time[datetime="${periodStart}"]`),
+  ).toBeVisible();
+  const refresh = refreshAllowances(page);
+  for (const [amount, band] of [
+    [40_000, 80],
+    [47_500, 95],
+    [50_000, 100],
+  ]) {
+    used = amount;
+    await refresh.click();
+    await expect(requests).toContainText(`${band}% threshold reached`);
+  }
+  qualifiedOutbound = true;
+  await refresh.click();
+  await expect(outbound.getByRole("status")).toContainText("Current");
+  await expect(outbound).toContainText("North America, Europe and UK");
+  await expect(outbound).toContainText("500 GB");
+  await expect(outbound).toContainText("95% threshold reached");
+  await expect(requests.getByRole("status")).toContainText("Stale");
+  await expect(requests).not.toContainText("threshold reached");
+  expect(lastReadMethod).toBe("GET");
+  await page.clock.fastForward(5 * 60_000);
+  await expect(requests.getByRole("status")).toContainText("Stale");
+  await expect(requests).toContainText("Previous billing period");
+  await expect(requests).not.toContainText("threshold reached");
+  await expect(storage.getByRole("status")).toContainText("Current");
+  await expect(outbound.getByRole("status")).toContainText("Stale");
+  await expect(outbound).not.toContainText("threshold reached");
+});

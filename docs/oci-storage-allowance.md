@@ -1,18 +1,22 @@
-# OCI storage allowance
+# OCI allowances
 
-Infrastructure reads the saved tenancy observation from the owner-protected
+Infrastructure reads the saved tenancy allowance observations from the owner-protected
 `/api/inventory/oci-storage` route. Opening or refreshing Infrastructure reads
 PostgreSQL through the allowance Function. Only the scheduled collector reads
 OCI. The panel shows the reported bytes, source and observation time. When evidence
 also qualifies the accounting cutoff, it shows remaining bytes under the
 conservative decimal 20 GB Always Free allowance and the warning band. The managed bucket list and the hosting usage panel keep their own data.
 
-## Evidence and limits
+## Storage evidence and limits
 
 - The single OCI signing identity needs `inspect tenancies in tenancy` for
   `ListRegionSubscriptions` and `read resource-availability in tenancy` for
-  `GetResourceAvailability`. Use those read capabilities without bucket or
-  object permissions for this release. The same identity can receive separately
+  `GetResourceAvailability`. The monthly Usage API query uses the same signer.
+  Oracle documents `read usage-report in tenancy` for Cost Analysis and lists
+  `USAGE_ANALYSIS_READ` among the permissions for the `USAGE_ONLY` query.
+  Verify the applicable review-approved read policy before enabling monthly
+  collection. This release requires no bucket or object permissions.
+  [Cost Analysis API][cost-analysis] The same identity can receive separately
   reviewed, compartment-scoped lifecycle permissions in a write-enabled release.
 - Configure the identity's tenancy OCID, user OCID, home region, key fingerprint
   and RSA private key in the server-only `BERTH_OCI_TENANCY`, `BERTH_OCI_USER`,
@@ -52,6 +56,42 @@ conservative decimal 20 GB Always Free allowance and the warning band. The manag
   observation expires at the earlier of two hours after the OCI response time
   and expiry of the plan evidence.
 
+## Monthly request and transfer evidence
+
+- The collector queries `RequestSummarizedUsages` once for the configured
+  tenancy. It groups daily usage by billed SKU and unit across compartments and
+  services, starting at the current UTC month boundary and ending at the latest
+  elapsed UTC day boundary. There is no elapsed day on the first day of a month.
+  There is no request for the previous month. The request SKU is B91627 with a
+  50,000 monthly Always Free allowance. [Cost Analysis API][cost-analysis] ·
+  [OCI price list][prices]
+- Oracle defines outbound transfer by the origin's pricing zone. The query
+  includes B88327 (North America, Europe and UK), B93455 (APAC, Japan and South
+  America), and B93456 (Middle East and Africa). Each zone has a first 10 TB
+  monthly tier. A single reported zone can be shown as a dated subtotal across
+  OCI services. Multiple reported zones leave the displayed transfer allowance
+  Unknown. Current region subscriptions cannot establish historical billing
+  scope. [OCI price list][prices] · [Oracle service descriptions][service-descriptions]
+- Supported quantities are numeric `10K Requests` for B91627 and `GB` for the
+  outbound SKUs. The collector rounds each daily decimal upward to a whole
+  request or 0.001 provider GB before summing. It keeps the provider GB unit.
+  It rejects ambiguous `GB Months`, missing units, overlapping or out-of-window
+  rows, and paginated or saturated results. An absent meter or unqualified
+  zero leaves usage Unknown.
+- Cost Analysis data can appear up to 48 hours late. Its Usage API does not
+  certify completeness through the query end or the last returned interval.
+  The panel can show a subtotal and the end of the last reported interval.
+  These readings have partial coverage, no accounting cutoff, and Unknown
+  remaining allowance. Reported readings expire after two hours from the OCI
+  response time or sooner at plan evidence expiry or the month boundary.
+  [Cost Analysis API][cost-analysis]
+- The saved contract supports a defensibly closed period-to-date cutoff with
+  complete coverage. Synthetic fixtures exercise qualified amounts and warning
+  bands. A qualified reading expires within 24 hours of observation and at the
+  UTC month boundary at the latest. A failed refresh keeps the dated prior
+  reading Stale for that meter. One meter's failure leaves the other readings
+  usable when they independently qualify.
+
 ## Collection provenance
 
 The saved response keeps the latest scheduled slot (`attemptedAt`), its
@@ -84,10 +124,11 @@ no reading or the observation predates the slot.
 Run `pnpm build:oci-storage` to build the dedicated Neon bundle locally.
 Run `pnpm test:oci-storage-db` with `BERTH_TEST_POSTGRES_PORT` set to a fresh
 disposable loopback PostgreSQL instance to verify migration and slot admission.
-Apply migration 014 for a fresh database and migration 015 for collection
-provenance. Migration 014 expects a dedicated `berth_oci_storage_runtime` login
-with no granted roles and only grants the scheduled claim, settlement, and
-snapshot functions. Migration 015 preserves those grants. Bind `BERTH_OCI_STORAGE_DATABASE_URL`, matching any
+Apply migrations 014, 015 and 016 in order. Migration 014 expects a dedicated
+`berth_oci_storage_runtime` login with no granted roles and only grants the
+scheduled claim, settlement and snapshot functions. Migration 015 preserves
+those grants. Migration 016 adds the optional monthly observations and keeps
+the same runtime function signatures and permission boundary. Bind `BERTH_OCI_STORAGE_DATABASE_URL`, matching any
 injected database URLs, and a dedicated `BERTH_OCI_STORAGE_TOKEN` for the
 Function. Pages uses `BERTH_OCI_STORAGE_NEON_ORIGIN` and
 `BERTH_OCI_STORAGE_UPSTREAM_TOKEN` with the existing owner access bindings.
@@ -96,10 +137,11 @@ Use a distinct upstream token from History and Inventory.
 The schedule descriptor is hourly and disabled. Before enabling it in a
 separately authorized release, bind its exact ID in `BERTH_OCI_STORAGE_TRIGGER_ID`
 and verify that its Neon gateway strips caller-supplied invocation headers.
-An authorized slot can make at most two signed OCI GETs within four seconds,
-plus bounded database calls. A database claim suppresses duplicate delivery
-before OCI dispatch; the collector does not retry, follow redirects, or
-traverse pagination. No provisioned-resource write is exposed by the collector.
+An authorized slot can make at most two signed OCI GETs and one signed read-only
+Usage API POST within the same four-second deadline, plus bounded database
+calls. A database claim suppresses duplicate delivery before OCI dispatch. The
+collector makes one attempt per request, with a bounded response body and
+redirects and pagination disabled.
 
 [http-date]: https://httpwg.org/specs/rfc9110.html#http.date
 [free]: https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
@@ -108,3 +150,7 @@ traverse pagination. No provisioned-resource write is exposed by the collector.
 [hierarchy]: https://docs.oracle.com/en-us/iaas/Content/Quotas/Concepts/quota_policy_syntax.htm
 [response]: https://github.com/oracle/oci-typescript-sdk/blob/v2.146.0/lib/limits/lib/model/resource-availability.ts#L17-L49
 [historical]: https://github.com/stanimirivanov/berth/issues/76#issuecomment-7019614812
+
+[cost-analysis]: https://docs.oracle.com/en-us/iaas/Content/Billing/Concepts/costanalysisoverview.htm#using-the-api
+[prices]: https://www.oracle.com/asean/a/ocom/docs/corporate/pricing/oracle-paas-and-iaas-global-price-list.pdf
+[service-descriptions]: https://www.oracle.com/contracts/docs/paas_iaas_universal_credits_3940775.pdf

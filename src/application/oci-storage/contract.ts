@@ -1,16 +1,30 @@
 import type {
+  MonthlyEvidence,
+  MonthlyGap,
   StorageGap,
   StorageReading,
   StorageSnapshot,
 } from "../../../contracts/oci-storage.ts";
 
-export type { StorageSnapshot } from "../../../contracts/oci-storage.ts";
-export { storageAllowance } from "../../../contracts/oci-storage.ts";
+export type {
+  MonthlyEvidence,
+  MonthlyGap,
+  MonthlyOutcome,
+  MonthlyReading,
+  StorageSnapshot,
+  UsageSku,
+} from "../../../contracts/oci-storage.ts";
+export {
+  outboundZones,
+  storageAllowance,
+  usagePeriod,
+} from "../../../contracts/oci-storage.ts";
 
 /** One refresh returns qualified or provisional evidence, or an explicit gap. */
-export type StorageEvidence =
+export type StorageEvidence = (
   | { gap: null | "accounting-cutoff-unverified"; reading: StorageReading }
-  | { gap: Exclude<StorageGap, "accounting-cutoff-unverified">; reading: null };
+  | { gap: Exclude<StorageGap, "accounting-cutoff-unverified">; reading: null }
+) & { monthly?: MonthlyEvidence };
 
 /** The storage adapter owns slot admission and monotonic result settlement. */
 export interface StorageRepository {
@@ -21,3 +35,8 @@ export interface StorageRepository {
 
 /** The scheduled collector obtains one bounded evidence outcome for the configured tenancy. */
 export type StorageCollector = () => Promise<StorageEvidence>;
+
+/** Record an unavailable shared query without manufacturing observations or qualified zeroes. */
+export function missingMonthlyEvidence(gap: MonthlyGap): MonthlyEvidence {
+  return { requests: { gap, reading: null }, outbound: { gap, reading: null } };
+}

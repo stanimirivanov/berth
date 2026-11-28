@@ -123,7 +123,13 @@ export function storageRepository(
     async finish(attemptedAt: string, evidence: StorageEvidence) {
       await query(
         "SELECT berth_oci_allowances.finish_storage($1, $2, $3, $4) AS result",
-        [attemptedAt, evidence.gap, evidence.reading],
+        [
+          attemptedAt,
+          evidence.gap,
+          evidence.monthly === undefined
+            ? evidence.reading
+            : { storage: evidence.reading, monthly: evidence.monthly },
+        ],
       );
     },
   };

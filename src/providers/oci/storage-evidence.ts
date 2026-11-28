@@ -5,11 +5,15 @@ import {
   SimpleAuthenticationDetailsProvider,
 } from "oci-common";
 import {
+  type MonthlyEvidence,
+  missingMonthlyEvidence,
   type StorageCollector,
   type StorageEvidence,
   storageAllowance,
+  usagePeriod,
 } from "../../application/oci-storage/contract.ts";
 import { boundedJson, untilAborted } from "../../http/bounded-json.ts";
+import { monthlyUsageReport } from "./monthly-usage-report.ts";
 
 /** The OCI connection is bound to the same tenancy and home region as the plan evidence. */
 export interface StorageTarget {
@@ -18,6 +22,18 @@ export interface StorageTarget {
 }
 
 const hour = 3_600_000;
+const day = 24 * hour;
+
+/** Validate what OCI served independently of when that data may have been accounted. */
+function responseTime(date: string | null, started: number, observed: number) {
+  const responded = Date.parse(date ?? "");
+  return Number.isFinite(responded) &&
+    responded >= started - 30_000 &&
+    responded <= observed &&
+    new Date(responded).toUTCString() === date
+    ? responded
+    : null;
+}
 
 /** Validate and construct the restricted OCI signer without loading environment or files. */
 export function storageEvidenceSigner(
@@ -119,7 +135,7 @@ function isSingleHomeRegion(value: unknown, region: string) {
   );
 }
 
-/** Obtain at most two signed GETs in one deadline. An incomplete regional scope stays unknown. */
+/** Obtain independent storage and monthly outcomes under one deadline and the same OCI identity. */
 export function ociStorageEvidence(
   target: StorageTarget,
   eligibility: unknown,
@@ -138,37 +154,52 @@ export function ociStorageEvidence(
   );
   limits.searchParams.set("compartmentId", target.tenancy);
 
-  /** Only fixed-endpoint JSON GETs can enter the signed transport. */
-  async function inspect(uri: string, signal: AbortSignal) {
-    const request = { uri, method: "GET" as const, headers: new Headers() };
+  const usage = `https://usageapi.${target.region}.oci.oraclecloud.com/20200107/usage?limit=${monthlyUsageReport.limit}`;
+
+  /** Dispatch only the two fixed GETs or the fixed, read-only Usage API POST. */
+  async function inspect(uri: string, signal: AbortSignal, body?: string) {
+    const headers = new Headers();
+    const request =
+      body === undefined
+        ? { uri, method: "GET" as const, headers }
+        : { uri, method: "POST" as const, headers, body };
     await untilAborted(signal, () => signer.signHttpRequest(request));
     const response = await untilAborted(signal, () =>
       send(uri, {
         method: request.method,
-        headers: request.headers,
+        headers,
+        ...(body === undefined ? {} : { body }),
         cache: "no-store",
         redirect: "error",
         signal,
       }),
     );
-    if (response.status !== 200 || response.headers.get("opc-next-page")) {
+    if (response.status !== 200 || response.headers.has("opc-next-page")) {
       void response.body?.cancel().catch(() => {});
       if (response.status === 200 || response.status === 404)
         return { value: null, date: null };
       throw Error("OCI evidence unavailable");
     }
     return {
-      value: await boundedJson(response.body, signal, 8192),
+      value:
+        body === undefined
+          ? await boundedJson(response.body, signal, 8192)
+          : await boundedJson(
+              response.body,
+              signal,
+              256 * 1024,
+              monthlyUsageReport.parse,
+            ),
       date: response.headers.get("date"),
     };
   }
 
-  return async (): Promise<StorageEvidence> => {
-    const started = now();
-    const accountUntil = eligibilityExpiry(eligibility, target, started);
-    if (started >= accountUntil)
-      return { gap: "account-unverified", reading: null };
-    const signal = AbortSignal.timeout(4000);
+  /** Follow only the fixed home-region storage path after its local scope check. */
+  async function storage(
+    started: number,
+    accountUntil: number,
+    signal: AbortSignal,
+  ): Promise<StorageEvidence> {
     let regionVerified = false;
     try {
       const regions = await inspect(identity, signal);
@@ -177,18 +208,13 @@ export function ociStorageEvidence(
       regionVerified = true;
       const result = await inspect(limits.href, signal);
       const used = usedBytes(result.value);
-      const responded = Date.parse(result.date ?? "");
       const observed = now();
+      const responded = responseTime(result.date, started, observed);
       if (observed >= accountUntil)
         return { gap: "account-unverified", reading: null };
       if (used === undefined)
         return { gap: "storage-coverage-unverified", reading: null };
-      if (
-        !Number.isFinite(responded) ||
-        responded < started - 30_000 ||
-        responded > observed ||
-        new Date(responded).toUTCString() !== result.date
-      )
+      if (responded === null)
         return { gap: "response-time-unverified", reading: null };
       return {
         // The date establishes response time. Limits supplies no accounting watermark.
@@ -211,5 +237,76 @@ export function ociStorageEvidence(
         reading: null,
       };
     }
+  }
+
+  /** Ask for elapsed UTC days only. The interval and familiar SKU do not certify completeness. */
+  async function monthly(
+    started: number,
+    accountUntil: number,
+    signal: AbortSignal,
+  ): Promise<MonthlyEvidence> {
+    const period = usagePeriod(started);
+    const start = Date.parse(period.periodStart);
+    const end = Date.parse(period.periodEnd);
+    const through = Math.floor(started / day) * day;
+    if (start >= through)
+      return missingMonthlyEvidence("usage-coverage-unverified");
+    try {
+      const result = await inspect(
+        usage,
+        signal,
+        JSON.stringify({
+          tenantId: target.tenancy,
+          timeUsageStarted: period.periodStart,
+          timeUsageEnded: new Date(through).toISOString(),
+          granularity: "DAILY",
+          queryType: "USAGE_ONLY",
+          isAggregateByTime: false,
+          groupBy: ["skuPartNumber", "unit"],
+          filter: {
+            operator: "OR",
+            dimensions: monthlyUsageReport.skus.map((value) => ({
+              key: "skuPartNumber",
+              value,
+            })),
+          },
+        }),
+      );
+      const observed = now();
+      const responded = responseTime(result.date, started, observed);
+      if (observed >= accountUntil)
+        return missingMonthlyEvidence("account-unverified");
+      if (observed >= end || result.value === null)
+        return missingMonthlyEvidence("usage-coverage-unverified");
+      if (responded === null || responded < through)
+        return missingMonthlyEvidence("response-time-unverified");
+      return monthlyUsageReport.project(result.value, through, {
+        ...period,
+        respondedAt: new Date(responded).toISOString(),
+        observedAt: new Date(observed).toISOString(),
+        expiresAt: new Date(
+          Math.min(responded + 2 * hour, accountUntil, end),
+        ).toISOString(),
+      });
+    } catch {
+      return missingMonthlyEvidence("oci-unavailable");
+    }
+  }
+
+  return async (): Promise<StorageEvidence> => {
+    const started = now();
+    const accountUntil = eligibilityExpiry(eligibility, target, started);
+    if (started >= accountUntil)
+      return {
+        gap: "account-unverified",
+        reading: null,
+        monthly: missingMonthlyEvidence("account-unverified"),
+      };
+    const signal = AbortSignal.timeout(4000);
+    const [storageResult, monthlyResult] = await Promise.all([
+      storage(started, accountUntil, signal),
+      monthly(started, accountUntil, signal),
+    ]);
+    return { ...storageResult, monthly: monthlyResult };
   };
 }

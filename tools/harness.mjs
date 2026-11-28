@@ -12,6 +12,7 @@ const runtimePackages = {
   "src/application/oci-storage/contract.ts": [],
   "src/application/oci-storage/index.ts": [],
   "src/providers/oci/storage-evidence.ts": ["node:crypto", "oci-common"],
+  "src/providers/oci/monthly-usage-report.ts": [],
   "src/storage/postgres/oci-storage.ts": [],
   "src/application/retry/contract.ts": ["effect"],
   "src/application/retry/continuation.ts": ["effect"],
@@ -86,8 +87,12 @@ const applicationImports = /** @type {Record<string, readonly string[]>} */ ({
     "src/http/bounded-json.ts",
   ],
   "src/providers/oci/storage-evidence.ts": [
+    "src/providers/oci/monthly-usage-report.ts",
     "src/application/oci-storage/contract.ts",
     "src/http/bounded-json.ts",
+  ],
+  "src/providers/oci/monthly-usage-report.ts": [
+    "src/application/oci-storage/contract.ts",
   ],
   "src/storage/postgres/oci-storage.ts": [
     "contracts/oci-storage.ts",

@@ -21,6 +21,7 @@ export async function boundedJson(
   body: ReadableStream<Uint8Array> | null,
   signal: AbortSignal,
   maxBytes: number,
+  parse: (text: string) => unknown = JSON.parse,
 ): Promise<unknown> {
   if (!body) throw Error("JSON body required");
   const reader = body.getReader();
@@ -30,7 +31,7 @@ export async function boundedJson(
     for (let chunks = 0; chunks < 128; chunks++) {
       const part = await untilAborted(signal, () => reader.read());
       if (part.done)
-        return JSON.parse(
+        return parse(
           new TextDecoder("utf-8", { fatal: true }).decode(
             bytes.subarray(0, offset),
           ),
