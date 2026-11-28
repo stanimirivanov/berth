@@ -44,12 +44,14 @@ export class OciStorageAllowance {
   protected readonly stale = computed(() => {
     const value = this.reading();
     const gap = this.snapshot()?.gap;
+    const pending = this.pending();
     return (
       value !== null &&
       (this.unavailable() ||
         this.expired() ||
         this.overdue() ||
-        this.pending()?.startedAt === null ||
+        pending?.startedAt === null ||
+        pending?.previousObservationStale ||
         (gap != null &&
           (gap !== "accounting-cutoff-unverified" ||
             value.accountingCutoff !== null)))

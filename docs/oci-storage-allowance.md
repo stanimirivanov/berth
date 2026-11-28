@@ -69,12 +69,15 @@ becomes overdue after ten seconds from claim. This covers the collector's
 four-second bound, one second for a new database connection, two queries of up
 to 1.5 seconds each during finish, and margin for dispatch and cleanup. Overdue
 status marks a retained reading Stale and suppresses headroom and warnings.
-The deadline governs the display. A finish can settle only its own latest claim.
+A new claim that replaces an overdue or unknown-age claim keeps the previous
+observation Stale during collection. A finish can settle only its own latest claim.
 
 Earlier response shapes remain readable. A legacy row settled before upgrade
 has a known scheduled slot. A legacy unsettled row has an unknown claim time,
 deadline, and last settled slot. The panel displays its collection outcome as
-unknown and treats any retained reading as Stale.
+unknown and treats any retained reading as Stale. In an earlier response with
+no collection provenance, a slot without a gap is also unsettled if it has
+no reading or the observation predates the slot.
 
 ## Local verification and release prerequisites
 

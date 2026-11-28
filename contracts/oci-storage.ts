@@ -24,7 +24,11 @@ export interface StorageReading {
 /** Schedule provenance for the latest claim and the previous settled outcome. */
 export interface StorageProvenance {
   lastSettledAttemptAt: string | null;
-  pending: { startedAt: string | null; overdueAt: string | null } | null;
+  pending: {
+    startedAt: string | null;
+    overdueAt: string | null;
+    previousObservationStale?: true;
+  } | null;
 }
 
 /** The latest slot, latest settled gap and last retained reading can describe different attempts. */
@@ -111,9 +115,11 @@ function decodeProvenance(
     }
     return { lastSettledAttemptAt, pending: null };
   }
-  const { startedAt, overdueAt } = record(pending);
+  const { startedAt, overdueAt, previousObservationStale } = record(pending);
   if (
     (lastSettledAttemptAt !== null && lastSettledAttemptAt >= attemptedAt) ||
+    (previousObservationStale !== undefined &&
+      previousObservationStale !== true) ||
     (!(startedAt === null && overdueAt === null) &&
       (!timestamp(startedAt) ||
         !timestamp(overdueAt) ||
@@ -122,7 +128,14 @@ function decodeProvenance(
   ) {
     throw Error("Invalid pending storage collection");
   }
-  return { lastSettledAttemptAt, pending: { startedAt, overdueAt } };
+  return {
+    lastSettledAttemptAt,
+    pending: {
+      startedAt,
+      overdueAt,
+      ...(previousObservationStale ? { previousObservationStale } : {}),
+    },
+  };
 }
 
 /** Decode the saved result at each trust boundary and discard unknown attributes. */
@@ -145,12 +158,24 @@ export function decodeStorageSnapshot(value: unknown): StorageSnapshot {
   if (observation?.accountingCutoff === null && gap === null) {
     throw Error("Storage accounting cutoff is missing");
   }
+  let collection: StorageProvenance | undefined;
+  if (provenance !== undefined) {
+    collection = decodeProvenance(provenance, attemptedAt);
+  } else if (
+    attemptedAt !== null &&
+    gap === null &&
+    (!observation || observation.observedAt < attemptedAt)
+  ) {
+    // A settled success requires an observation at or after its slot, and a settled failure has a gap.
+    collection = {
+      lastSettledAttemptAt: null,
+      pending: { startedAt: null, overdueAt: null },
+    };
+  }
   return {
     attemptedAt,
     gap,
     reading: observation,
-    ...(provenance === undefined
-      ? {}
-      : { provenance: decodeProvenance(provenance, attemptedAt) }),
+    ...(collection === undefined ? {} : { provenance: collection }),
   };
 }

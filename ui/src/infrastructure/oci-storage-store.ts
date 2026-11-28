@@ -65,11 +65,21 @@ export const OciStorageStore = signalStore(
       if (!Number.isFinite(deadline)) {
         return;
       }
-      const delay = Math.min(2_147_483_647, Math.max(0, deadline - Date.now()));
-      const timer = setTimeout(
-        () => patchState(store, { clock: Date.now() }),
-        delay,
-      );
+      let timer: ReturnType<typeof setTimeout>;
+
+      /** Re-arm the same deadline when a bounded delay or clock change wakes the timer early. */
+      function schedule(now: number) {
+        const delay = Math.min(2_147_483_647, Math.max(0, deadline - now));
+        timer = setTimeout(() => {
+          const clock = Date.now();
+          patchState(store, { clock });
+          if (clock < deadline) {
+            schedule(clock);
+          }
+        }, delay);
+      }
+
+      schedule(Date.now());
       onCleanup(() => clearTimeout(timer));
     });
 

@@ -8,7 +8,8 @@ END $$;
 
 ALTER TABLE berth_oci_allowances.storage
   ADD COLUMN last_settled_attempt_at timestamptz,
-  ADD COLUMN claimed_at timestamptz;
+  ADD COLUMN claimed_at timestamptz,
+  ADD COLUMN previous_observation_stale boolean NOT NULL DEFAULT false;
 -- A legacy pending slot overwrote the previous slot timestamp. Leave both times unknown.
 UPDATE berth_oci_allowances.storage SET last_settled_attempt_at = attempted_at WHERE settled;
 
@@ -25,7 +26,8 @@ AS $$
         'pending', CASE WHEN NOT settled THEN jsonb_build_object(
           'startedAt', to_char(claimed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
           'overdueAt', to_char((claimed_at + interval '10 seconds') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-        ) END
+        ) || CASE WHEN previous_observation_stale THEN '{"previousObservationStale":true}'::jsonb
+                  ELSE '{}'::jsonb END END
       ))
       FROM berth_oci_allowances.storage WHERE tenancy = target),
     '{"attemptedAt":null,"gap":null,"reading":null}'::jsonb
@@ -46,7 +48,12 @@ BEGIN
   INSERT INTO berth_oci_allowances.storage AS state (tenancy, attempted_at, claimed_at)
     VALUES (target, delivery_at, clock_timestamp())
     ON CONFLICT (tenancy) DO UPDATE
-      SET attempted_at = delivery_at, claimed_at = clock_timestamp(), settled = false
+      SET attempted_at = delivery_at, claimed_at = clock_timestamp(), settled = false,
+        -- Compare the old claim at the same millisecond precision exposed by storage_snapshot.
+        previous_observation_stale = NOT state.settled AND (
+          state.previous_observation_stale OR state.claimed_at IS NULL OR
+          date_trunc('milliseconds', state.claimed_at) <= clock_timestamp() - interval '10 seconds'
+        )
       WHERE date_trunc('hour', state.attempted_at, 'UTC') < date_trunc('hour', delivery_at, 'UTC')
     RETURNING true INTO claimed;
   RETURN COALESCE(claimed, false);
@@ -101,6 +108,7 @@ BEGIN
         ELSE COALESCE(successful_reading, reading) END,
       last_settled_attempt_at = delivery_at,
       claimed_at = NULL,
+      previous_observation_stale = false,
       settled = true
     WHERE tenancy = target AND attempted_at = delivery_at AND NOT settled;
   RETURN FOUND;
