@@ -1004,3 +1004,26 @@ test("OCI storage adapters share a neutral wire contract with no dependencies", 
     );
   }
 });
+
+test("OCI monthly usage report parsing stays within the fixed allowance collector", () => {
+  const parser = "src/providers/oci/monthly-usage-report.ts";
+  const collector = "src/providers/oci/storage-evidence.ts";
+  const application = "src/application/oci-storage/contract.ts";
+  const files = {
+    [parser]: 'import "../../application/oci-storage/contract.ts";',
+    [collector]: 'import "./monthly-usage-report.ts";',
+    [application]: "",
+  };
+  assert.deepEqual(analyze(files), []);
+  for (const [file, source] of Object.entries({
+    [parser]: 'import "oci-common";',
+    [application]: 'import "../../providers/oci/monthly-usage-report.ts";',
+  })) {
+    assert.ok(
+      analyze({ ...files, [file]: source }).some(
+        (finding) => finding.file === file && finding.rule === "architecture",
+      ),
+      file,
+    );
+  }
+});

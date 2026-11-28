@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { Client } from "pg";
 import { ociStorageApi } from "../../src/application/oci-storage/api.ts";
+import type { MonthlyEvidence } from "../../src/application/oci-storage/contract.ts";
 import { storageRepository } from "../../src/storage/postgres/oci-storage.ts";
 import { onRequest } from "../../ui/functions/api/inventory/oci-storage.ts";
 
@@ -53,6 +54,9 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
     );
     await owner.query(
       await readFile("migrations/015_oci_storage_provenance.sql", "utf8"),
+    );
+    await owner.query(
+      await readFile("migrations/016_oci_monthly_usage.sql", "utf8"),
     );
     const unrelatedFunctions = await owner.query(
       `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -108,7 +112,11 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       "REVOKE SELECT ON berth_oci_allowances.storage FROM berth_oci_storage_runtime",
     );
 
-    const first = new Date().toISOString();
+    // Keep the simulated slots in one UTC minute inside the database's live claim window.
+    const fixtureTime = Math.floor(Date.now() / 60_000) * 60_000 - 30_000;
+    const fixtureSlot = (seconds: number) =>
+      new Date(fixtureTime + seconds * 1000).toISOString();
+    const first = fixtureSlot(0);
     assert.deepEqual(
       (
         await Promise.all([repository.claim(first), repository.claim(first)])
@@ -175,7 +183,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       "UPDATE berth_oci_allowances.storage SET attempted_at = attempted_at - interval '1 hour' WHERE tenancy = $1",
       [tenancy],
     );
-    const next = new Date().toISOString();
+    const next = fixtureSlot(1);
     assert.equal(await repository.claim(next), true);
     await repository.finish(first, { gap: "oci-unavailable", reading: null });
     const pendingResponse = await readSaved();
@@ -209,7 +217,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
        WHERE tenancy = $1`,
       [tenancy],
     );
-    const rollover = new Date().toISOString();
+    const rollover = fixtureSlot(2);
     assert.equal(await repository.claim(rollover), true);
     await repository.finish(next, { gap: "oci-unavailable", reading: null });
     const replacement = await (await readSaved()).json();
@@ -228,7 +236,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
        WHERE tenancy = $1`,
       [tenancy],
     );
-    const inherited = new Date().toISOString();
+    const inherited = fixtureSlot(3);
     assert.equal(await repository.claim(inherited), true);
     await repository.finish(rollover, {
       gap: "oci-unavailable",
@@ -254,7 +262,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       reading,
       provenance: { lastSettledAttemptAt: inherited, pending: null },
     });
-    const legacyReplacement = new Date().toISOString();
+    const legacyReplacement = fixtureSlot(4);
     const migrated = makeRepository(legacyPending);
     assert.equal(await migrated.claim(legacyReplacement), true);
     const migratedSnapshot = await migrated.read();
@@ -267,7 +275,36 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
       "UPDATE berth_oci_allowances.storage SET attempted_at = attempted_at - interval '1 hour' WHERE tenancy = $1",
       [tenancy],
     );
-    const delivery = new Date().toISOString();
+    const delivery = fixtureSlot(5);
+    const date = new Date(fixtureTime);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+    const periodStart = new Date(Date.UTC(year, month, 1)).toISOString();
+    const periodEnd = new Date(Date.UTC(year, month + 1, 1)).toISOString();
+    const monthly = {
+      requests: {
+        gap: null,
+        reading: {
+          sku: "B91627",
+          used: 40_000,
+          source: "OCI Usage API",
+          coverage: "complete",
+          periodStart,
+          periodEnd,
+          observedAt: delivery,
+          respondedAt: delivery,
+          reportedThrough: delivery,
+          accountingCutoff: delivery,
+          expiresAt: new Date(
+            Math.min(
+              Date.parse(delivery) + 24 * 3_600_000,
+              Date.parse(periodEnd),
+            ),
+          ).toISOString(),
+        },
+      },
+      outbound: { gap: "usage-coverage-unverified", reading: null },
+    } satisfies MonthlyEvidence;
     const api = ociStorageApi(
       upstreamToken,
       repository,
@@ -280,6 +317,7 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
         assert.equal(current.provenance?.lastSettledAttemptAt, inherited);
         return {
           gap: null,
+          monthly,
           reading: {
             ...reading,
             observedAt: delivery,
@@ -330,6 +368,86 @@ test("one hourly claim survives duplicate delivery and a failed refresh preserve
     assert.equal(snapshot.reading.accountingCutoff, delivery);
     assert.deepEqual(snapshot.provenance, {
       lastSettledAttemptAt: delivery,
+      pending: null,
+    });
+    assert.deepEqual(snapshot.monthly, monthly);
+    await assert.rejects(
+      restricted.query(
+        "SELECT berth_oci_allowances.finish_storage_base($1,$2,$3,$4)",
+        [tenancy, delivery, null, null],
+      ),
+      { code: "42501" },
+    );
+    await assert.rejects(
+      restricted.query(
+        "SELECT berth_oci_allowances.retain_monthly_meter($1,$2,$3,$4)",
+        ["requests", null, null, delivery],
+      ),
+      { code: "42501" },
+    );
+    await owner.query(
+      "UPDATE berth_oci_allowances.storage SET attempted_at = attempted_at - interval '1 hour' WHERE tenancy = $1",
+      [tenancy],
+    );
+    const update = fixtureSlot(6);
+    assert.equal(await repository.claim(update), true);
+    await assert.rejects(
+      repository.finish(update, {
+        gap: "oci-unavailable",
+        reading: null,
+        monthly: {
+          ...monthly,
+          requests: {
+            gap: null,
+            reading: { ...monthly.requests.reading, sku: "B88327" },
+          },
+        },
+      }),
+      /Invalid monthly OCI reading/,
+    );
+    const previous = await repository.read();
+    assert.ok(previous.provenance?.pending);
+    assert.deepEqual(previous.monthly, monthly);
+    const reported = {
+      ...monthly.requests.reading,
+      used: 100,
+      observedAt: update,
+      respondedAt: update,
+      accountingCutoff: null,
+      coverage: "partial",
+      expiresAt: new Date(
+        Math.min(Date.parse(update) + 7_200_000, Date.parse(periodEnd)),
+      ).toISOString(),
+    } as const;
+    await repository.finish(update, {
+      gap: "oci-unavailable",
+      reading: null,
+      monthly: {
+        requests: { gap: "accounting-cutoff-unverified", reading: reported },
+        outbound: {
+          gap: null,
+          reading: {
+            ...monthly.requests.reading,
+            sku: "B88327",
+            used: 0,
+            observedAt: update,
+            respondedAt: update,
+          },
+        },
+      },
+    });
+    const mixed = await (await readSaved()).json();
+    assert.equal(mixed.gap, "oci-unavailable");
+    assert.equal(mixed.reading.accountingCutoff, delivery);
+    assert.deepEqual(mixed.monthly.requests, {
+      gap: "accounting-cutoff-unverified",
+      reading: monthly.requests.reading,
+    });
+    assert.equal(mixed.monthly.outbound.gap, null);
+    assert.equal(mixed.monthly.outbound.reading.sku, "B88327");
+    assert.equal(mixed.monthly.outbound.reading.used, 0);
+    assert.deepEqual(mixed.provenance, {
+      lastSettledAttemptAt: update,
       pending: null,
     });
   } finally {

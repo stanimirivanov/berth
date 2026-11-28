@@ -7,7 +7,14 @@ berth-oci-storage-allowance {
     border: 1px solid var(--line);
     padding: 1rem;
   }
+  .oci-monthly-panel {
+    border-block-start: 1px solid var(--line);
+    margin-block-start: 1rem;
+  }
   h2 {
+    margin: 0;
+  }
+  #oci-collection-status:empty {
     margin: 0;
   }
   dt {

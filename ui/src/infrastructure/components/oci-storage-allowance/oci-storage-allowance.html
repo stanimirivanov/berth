@@ -1,70 +1,136 @@
-<section class="oci-storage-panel" aria-labelledby="oci-storage-title">
-  <h2 id="oci-storage-title">OCI Object Storage allowance</h2>
-  <p>Shared across eligible storage tiers in the tenancy, including buckets outside Berth.</p>
-  <p role="status">
-    @if (loading()) {
-      Loading saved storage evidence…
-    } @else {
-      <strong>{{ status() }}</strong>
-      @if (reason(); as message) { {{ message }} }
-      @if (collectionStatus(); as collection) { {{ collection }} }
-    }
-  </p>
-  @if (reading(); as value) {
-    @if (pending()) {
-      <h3>Previous observation</h3>
-    }
-    <dl>
-      <dt>{{ status() === "Current" ? "Used storage" : "Last reported usage" }}</dt>
-      <dd>{{ value.usedBytes / gigabyte | number: "1.0-9" }} GB</dd>
-      <dt>Remaining allowance</dt>
-      <dd>
-        @if (remaining() !== null) {
-          {{ remaining() | number: "1.0-9" }} GB
-        } @else {
-          Unknown
+<section class="oci-storage-panel" aria-labelledby="oci-allowance-title">
+  <h2 id="oci-allowance-title">OCI allowances</h2>
+  <p id="oci-collection-status" role="status">{{ collectionMessage() }}</p>
+  <section aria-labelledby="oci-storage-title" [attr.aria-describedby]="collectionMessage() ? 'oci-collection-status' : null">
+    <h3 id="oci-storage-title">OCI Object Storage allowance</h3>
+    <p>Shared across eligible storage tiers in the tenancy, including buckets outside Berth.</p>
+    <p role="status">
+      @if (loading()) {
+        Loading saved storage evidence…
+      } @else {
+        <strong>{{ status() }}</strong>
+        @if (reason(); as message) { {{ message }} }
+      }
+    </p>
+    @if (reading(); as value) {
+      @if (pending()) {
+        <h4>Previous observation</h4>
+      }
+      <dl>
+        <dt>{{ status() === "Current" ? "Used storage" : "Last reported usage" }}</dt>
+        <dd>{{ value.usedBytes / gigabyte | number: "1.0-9" }} GB</dd>
+        <dt>Remaining allowance</dt>
+        <dd>
+          @if (remaining() !== null) {
+            {{ remaining() | number: "1.0-9" }} GB
+          } @else {
+            Unknown
+          }
+        </dd>
+        <dt>Source</dt>
+        <dd>{{ value.source }}</dd>
+        <dt>Observed</dt>
+        <dd><time [attr.datetime]="value.observedAt">{{ value.observedAt | date: "medium" : "UTC" }} UTC</time></dd>
+        <dt>OCI response time</dt>
+        <dd><time [attr.datetime]="value.respondedAt">{{ value.respondedAt | date: "medium" : "UTC" }} UTC</time></dd>
+        @if (value.accountingCutoff; as cutoff) {
+          <dt>Accounting cutoff</dt>
+          <dd><time [attr.datetime]="cutoff">{{ cutoff | date: "medium" : "UTC" }} UTC</time></dd>
         }
-      </dd>
-      <dt>Source</dt>
-      <dd>{{ value.source }}</dd>
-      <dt>Observed</dt>
-      <dd><time [attr.datetime]="value.observedAt">{{ value.observedAt | date: "medium" : "UTC" }} UTC</time></dd>
-      <dt>OCI response time</dt>
-      <dd><time [attr.datetime]="value.respondedAt">{{ value.respondedAt | date: "medium" : "UTC" }} UTC</time></dd>
-      @if (value.accountingCutoff; as cutoff) {
-        <dt>Accounting cutoff</dt>
-        <dd><time [attr.datetime]="cutoff">{{ cutoff | date: "medium" : "UTC" }} UTC</time></dd>
+        <dt>Observation expiry</dt>
+        <dd><time [attr.datetime]="value.expiresAt">{{ value.expiresAt | date: "medium" : "UTC" }} UTC</time></dd>
+      </dl>
+      @if (warning(); as message) {
+        <p class="oci-storage-warning"><strong>{{ message }}</strong></p>
       }
-      <dt>Observation expiry</dt>
-      <dd><time [attr.datetime]="value.expiresAt">{{ value.expiresAt | date: "medium" : "UTC" }} UTC</time></dd>
-    </dl>
-    @if (warning(); as message) {
-      <p class="oci-storage-warning"><strong>{{ message }}</strong></p>
     }
-  }
-  @if (snapshot()?.provenance?.lastSettledAttemptAt; as settledAt) {
-    <p>Last settled collection slot <time [attr.datetime]="settledAt">{{ settledAt | date: "medium" : "UTC" }} UTC</time></p>
-  }
-  @if (pending(); as attempt) {
-    @if (settledReason(); as result) {
-      <p><strong>Last settled result</strong> {{ result }}</p>
+    @if (snapshot()?.provenance?.lastSettledAttemptAt; as settledAt) {
+      <p>Last settled collection slot <time [attr.datetime]="settledAt">{{ settledAt | date: "medium" : "UTC" }} UTC</time></p>
     }
-    <dl>
-      @if (snapshot()?.attemptedAt; as attemptedAt) {
-        <dt>Unsettled collection slot</dt>
-        <dd><time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></dd>
+    @if (pending(); as attempt) {
+      @if (settledReason(); as result) {
+        <p><strong>Last settled result</strong> {{ result }}</p>
       }
-      @if (attempt.startedAt; as startedAt) {
-        <dt>Collection started</dt>
-        <dd><time [attr.datetime]="startedAt">{{ startedAt | date: "medium" : "UTC" }} UTC</time></dd>
+      <dl>
+        @if (snapshot()?.attemptedAt; as attemptedAt) {
+          <dt>Unsettled collection slot</dt>
+          <dd><time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></dd>
+        }
+        @if (attempt.startedAt; as startedAt) {
+          <dt>Collection started</dt>
+          <dd><time [attr.datetime]="startedAt">{{ startedAt | date: "medium" : "UTC" }} UTC</time></dd>
+        }
+        @if (attempt.overdueAt; as overdueAt) {
+          <dt>Collection deadline</dt>
+          <dd><time [attr.datetime]="overdueAt">{{ overdueAt | date: "medium" : "UTC" }} UTC</time></dd>
+        }
+      </dl>
+    } @else if (legacyAttempt(); as attemptedAt) {
+      <p>Recorded collection slot <time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></p>
+    }
+  </section>
+
+  @for (meter of monthly(); track meter.meter) {
+    <section class="oci-monthly-panel" [attr.aria-labelledby]="'oci-' + meter.meter + '-title'" [attr.aria-describedby]="collectionMessage() ? 'oci-collection-status' : null">
+      <h3 [id]="'oci-' + meter.meter + '-title'">{{ meter.title }}</h3>
+      @if (meter.meter === "requests") {
+        <p>Monthly request usage across the tenancy, including use outside Berth.</p>
+      } @else {
+        <p>Advisory. Each pricing zone covers applicable outbound transfer across OCI services.</p>
+        @if (meter.zone; as zone) {
+          <p>Origin zone: {{ zone }}</p>
+        }
       }
-      @if (attempt.overdueAt; as overdueAt) {
-        <dt>Collection deadline</dt>
-        <dd><time [attr.datetime]="overdueAt">{{ overdueAt | date: "medium" : "UTC" }} UTC</time></dd>
+      <p role="status">
+        @if (loading()) {
+          Loading saved usage evidence…
+        } @else {
+          <strong>{{ meter.status }}</strong>
+          @if (meter.reason; as reason) { {{ reason }} }
+        }
+      </p>
+      @if (meter.reading; as value) {
+        @if (pending()) {
+          <h4>Previous observation</h4>
+        }
+        <dl>
+          <dt>{{ meter.status === "Current" ? "Used allowance" : "Last reported usage" }}</dt>
+          <dd>{{ value.used / meter.divisor | number: "1.0-3" }} {{ meter.unit }}</dd>
+          <dt>Remaining allowance</dt>
+          <dd>
+            @if (meter.remaining !== null) {
+              {{ meter.remaining | number: "1.0-3" }} {{ meter.unit }}
+            } @else {
+              Unknown
+            }
+          </dd>
+          <dt>Source</dt>
+          <dd>{{ value.source }}</dd>
+          <dt>UTC billing period</dt>
+          <dd>
+            <time [attr.datetime]="value.periodStart">{{ value.periodStart | date: "mediumDate" : "UTC" }}</time>
+            to
+            <time [attr.datetime]="value.periodEnd">{{ value.periodEnd | date: "mediumDate" : "UTC" }}</time>
+          </dd>
+          <dt>Observed</dt>
+          <dd><time [attr.datetime]="value.observedAt">{{ value.observedAt | date: "medium" : "UTC" }} UTC</time></dd>
+          <dt>OCI response time</dt>
+          <dd><time [attr.datetime]="value.respondedAt">{{ value.respondedAt | date: "medium" : "UTC" }} UTC</time></dd>
+          @if (value.accountingCutoff; as cutoff) {
+            <dt>Accounting cutoff</dt>
+            <dd><time [attr.datetime]="cutoff">{{ cutoff | date: "medium" : "UTC" }} UTC</time></dd>
+          } @else {
+            <dt>End of last reported interval</dt>
+            <dd><time [attr.datetime]="value.reportedThrough">{{ value.reportedThrough | date: "medium" : "UTC" }} UTC</time></dd>
+          }
+          <dt>Observation expiry</dt>
+          <dd><time [attr.datetime]="value.expiresAt">{{ value.expiresAt | date: "medium" : "UTC" }} UTC</time></dd>
+        </dl>
+        @if (meter.warning; as warning) {
+          <p class="oci-storage-warning"><strong>{{ warning }}</strong></p>
+        }
       }
-    </dl>
-  } @else if (legacyAttempt(); as attemptedAt) {
-    <p>Recorded collection slot <time [attr.datetime]="attemptedAt">{{ attemptedAt | date: "medium" : "UTC" }} UTC</time></p>
+    </section>
   }
-  <button mat-stroked-button type="button" [disabled]="loading()" (click)="refresh.emit()">Refresh OCI storage</button>
+  <button mat-stroked-button type="button" [disabled]="loading()" (click)="refresh.emit()">Refresh OCI allowances</button>
 </section>

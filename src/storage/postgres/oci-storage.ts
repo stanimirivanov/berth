@@ -110,7 +110,7 @@ export function storageRepository(
         ),
       );
     },
-    /** Charge one refresh slot durably before performing either OCI read. */
+    /** Charge one refresh slot durably before issuing any OCI reads for the collection. */
     async claim(attemptedAt: string) {
       const result = await query(
         "SELECT berth_oci_allowances.claim_storage($1, $2) AS result",
@@ -123,7 +123,13 @@ export function storageRepository(
     async finish(attemptedAt: string, evidence: StorageEvidence) {
       await query(
         "SELECT berth_oci_allowances.finish_storage($1, $2, $3, $4) AS result",
-        [attemptedAt, evidence.gap, evidence.reading],
+        [
+          attemptedAt,
+          evidence.gap,
+          evidence.monthly === undefined
+            ? evidence.reading
+            : { storage: evidence.reading, monthly: evidence.monthly },
+        ],
       );
     },
   };
